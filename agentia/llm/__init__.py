@@ -72,11 +72,11 @@ class LLMBackend:
     ) -> ChatCompletion[MessageStream] | ChatCompletion[AssistantMessage]:
         if stream:
             return ChatCompletion(
-                self.tools._agent, self._chat_completion(messages, stream=True)
+                self.tools._agent, self._chat_completion(messages, stream=True)  # type: ignore
             )
         else:
             return ChatCompletion(
-                self.tools._agent, self._chat_completion(messages, stream=False)
+                self.tools._agent, self._chat_completion(messages, stream=False)  # type: ignore
             )
 
     async def _on_new_chat_message(self, msg: Message):
@@ -109,7 +109,7 @@ class LLMBackend:
 
     async def _chat_completion(
         self, messages: Sequence[Message], stream: bool
-    ) -> AsyncGenerator[AssistantMessage | MessageStream, None]:
+    ) -> AsyncGenerator[MessageStream, None] | AsyncGenerator[AssistantMessage, None]:
         for m in messages:
             self.log.info(f"{m}")
             self.history.add(m)

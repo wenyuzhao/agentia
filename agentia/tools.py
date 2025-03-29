@@ -71,6 +71,8 @@ class ToolRegistry:
                 self.__add_function(t)
             elif isinstance(t, Plugin):
                 self.__add_plugin(t)
+            else:
+                raise ValueError(f"Invalid tool type: {type(t)}")
         names = ", ".join([f"{k}" for k in self.__functions.keys()])
         self._agent.log.debug(f"Registered Tools: {names}")
 

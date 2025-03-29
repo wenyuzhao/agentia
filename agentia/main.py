@@ -28,7 +28,15 @@ def repl(agent: str):
 @app.command(help="Start the web app server")
 def serve(agent: str):
     __check_group()
-    raise NotImplementedError("not implemented yet")
+    import streamlit.web.bootstrap
+    from pathlib import Path
+    import os
+
+    os.environ["AGENTIA_AGENT"] = agent
+
+    entry = Path(__file__).parent / "utils" / "app" / "app.py"
+
+    streamlit.web.bootstrap.run(str(entry), False, [], {})
 
 
 @app.callback()

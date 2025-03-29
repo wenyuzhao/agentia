@@ -79,7 +79,11 @@ else:
 
 @dataclass
 class ChatCompletion(Generic[M]):
-    def __init__(self, agent: "Agent", agen: AsyncGenerator[M, None]) -> None:
+    def __init__(
+        self,
+        agent: "Agent",
+        agen: AsyncGenerator[M, None],
+    ) -> None:
         super().__init__()
         self.__agen = agen
         self.__agent = agent
