@@ -4,7 +4,7 @@ from typing import Any, AsyncGenerator, Literal, Sequence, overload
 
 from ..tools import ToolRegistry
 from ..message import AssistantMessage, Message, MessageStream
-from ..agent import ChatCompletion
+from ..agent import ChatCompletion, Event
 from ..history import History
 
 from dataclasses import dataclass
@@ -59,24 +59,64 @@ class LLMBackend:
 
     @overload
     def chat_completion(
-        self, messages: Sequence[Message], stream: Literal[False] = False
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[False] = False,
+        events: Literal[False] = False,
     ) -> ChatCompletion[AssistantMessage]: ...
 
     @overload
     def chat_completion(
-        self, messages: Sequence[Message], stream: Literal[True]
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[True],
+        events: Literal[False] = False,
     ) -> ChatCompletion[MessageStream]: ...
 
+    @overload
     def chat_completion(
-        self, messages: Sequence[Message], stream: bool = False
-    ) -> ChatCompletion[MessageStream] | ChatCompletion[AssistantMessage]:
-        if stream:
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[False] = False,
+        events: Literal[True],
+    ) -> ChatCompletion[AssistantMessage | Event]: ...
+
+    @overload
+    def chat_completion(
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[True],
+        events: Literal[True],
+    ) -> ChatCompletion[MessageStream | Event]: ...
+
+    def chat_completion(
+        self, messages: Sequence[Message], *, stream: bool = False, events: bool = False
+    ) -> (
+        ChatCompletion[MessageStream]
+        | ChatCompletion[AssistantMessage]
+        | ChatCompletion[MessageStream | Event]
+        | ChatCompletion[AssistantMessage | Event]
+    ):
+        a = self.tools._agent
+        if stream and events:
             return ChatCompletion(
-                self.tools._agent, self._chat_completion(messages, stream=True)  # type: ignore
+                a, self._chat_completion(messages, stream=True, events=True)  # type: ignore
+            )
+        elif stream:
+            return ChatCompletion(
+                a, self._chat_completion(messages, stream=True, events=False)  # type: ignore
+            )
+        elif events:
+            return ChatCompletion(
+                a, self._chat_completion(messages, stream=False, events=True)  # type: ignore
             )
         else:
             return ChatCompletion(
-                self.tools._agent, self._chat_completion(messages, stream=False)  # type: ignore
+                self.tools._agent, self._chat_completion(messages, stream=False, events=False)  # type: ignore
             )
 
     async def _on_new_chat_message(self, msg: Message):
@@ -94,22 +134,53 @@ class LLMBackend:
 
     async def _chat_completion_request(
         self, messages: Sequence[Message], stream: bool
-    ) -> Message | MessageStream:
-        raise NotImplementedError
+    ) -> AssistantMessage | MessageStream:
+        raise NotImplementedError()
 
     @overload
     async def _chat_completion(
-        self, messages: Sequence[Message], stream: Literal[False]
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[False],
+        events: Literal[False],
     ) -> AsyncGenerator[AssistantMessage, None]: ...
 
     @overload
     async def _chat_completion(
-        self, messages: Sequence[Message], stream: Literal[True]
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[True],
+        events: Literal[False],
     ) -> AsyncGenerator[MessageStream, None]: ...
 
+    @overload
     async def _chat_completion(
-        self, messages: Sequence[Message], stream: bool
-    ) -> AsyncGenerator[MessageStream, None] | AsyncGenerator[AssistantMessage, None]:
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[False],
+        events: Literal[True],
+    ) -> AsyncGenerator[AssistantMessage | Event, None]: ...
+
+    @overload
+    async def _chat_completion(
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: Literal[True],
+        events: Literal[True],
+    ) -> AsyncGenerator[MessageStream | Event, None]: ...
+
+    async def _chat_completion(
+        self, messages: Sequence[Message], *, stream: bool, events: bool
+    ) -> (
+        AsyncGenerator[MessageStream, None]
+        | AsyncGenerator[AssistantMessage, None]
+        | AsyncGenerator[MessageStream | Event, None]
+        | AsyncGenerator[AssistantMessage | Event, None]
+    ):
         for m in messages:
             self.log.info(f"{m}")
             self.history.add(m)
@@ -137,7 +208,8 @@ class LLMBackend:
                     self.history.add(event)
                     count += 1
                 else:
-                    yield event
+                    if events:
+                        yield event
             trimmed_history = self.history.get_for_inference(keep_last=count + 1)
             # Submit results
             message: AssistantMessage

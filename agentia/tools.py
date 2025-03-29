@@ -308,21 +308,21 @@ class ToolRegistry:
             name = t.function.name
             info = self.__functions[name]
 
-            await self._agent._emit_tool_call_event(
-                ToolCallEvent(
-                    agent=self._agent, tool=info, id=t.id, function=t.function
-                )
+            event = ToolCallEvent(
+                agent=self._agent, tool=info, id=t.id, function=t.function
             )
+            await self._agent._emit_tool_call_event(event)
+            yield event
             raw_result = await self.call_function(t.function, tool_id=t.id)
-            await self._agent._emit_tool_call_event(
-                ToolCallEvent(
-                    agent=self._agent,
-                    tool=info,
-                    id=t.id,
-                    function=t.function,
-                    result=raw_result,
-                )
+            event = ToolCallEvent(
+                agent=self._agent,
+                tool=info,
+                id=t.id,
+                function=t.function,
+                result=raw_result,
             )
+            await self._agent._emit_tool_call_event(event)
+            yield event
             if not isinstance(raw_result, str):
                 result = json.dumps(raw_result)
             else:

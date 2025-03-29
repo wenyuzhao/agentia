@@ -38,8 +38,6 @@ if TYPE_CHECKING:
     from .plugins import Plugin
     from .llm import ModelOptions
 
-M = TypeVar("M", AssistantMessage, MessageStream)
-
 _global_cache_dir = None
 
 
@@ -66,6 +64,8 @@ class CommunicationEvent:
     response: str | None = None
 
 
+Event: TypeAlias = ToolCallEvent | CommunicationEvent
+
 ToolCallEventListener = Callable[[ToolCallEvent], Any]
 CommunicationEventListener = Callable[[CommunicationEvent], Any]
 
@@ -75,6 +75,15 @@ if "OPENAI_BASE_URL" in os.environ:
     DEFAULT_MODEL = DEFAULT_MODEL_OPENAI
 else:
     DEFAULT_MODEL = DEFAULT_MODEL_OPENROUTER
+
+
+M = TypeVar(
+    "M",
+    AssistantMessage,
+    MessageStream,
+    AssistantMessage | Event,
+    MessageStream | Event,
+)
 
 
 @dataclass
@@ -522,26 +531,63 @@ class Agent:
 
     @overload
     def chat_completion(
-        self, messages: Sequence[Message] | str, stream: Literal[False] = False
+        self,
+        messages: Sequence[Message] | str,
+        *,
+        stream: Literal[False] = False,
+        events: Literal[False] = False,
     ) -> ChatCompletion[AssistantMessage]: ...
 
     @overload
     def chat_completion(
-        self, messages: Sequence[Message] | str, stream: Literal[True]
+        self,
+        messages: Sequence[Message] | str,
+        *,
+        stream: Literal[True],
+        events: Literal[False] = False,
     ) -> ChatCompletion[MessageStream]: ...
+
+    @overload
+    def chat_completion(
+        self,
+        messages: Sequence[Message] | str,
+        *,
+        stream: Literal[False] = False,
+        events: Literal[True],
+    ) -> ChatCompletion[AssistantMessage | Event]: ...
+
+    @overload
+    def chat_completion(
+        self,
+        messages: Sequence[Message] | str,
+        *,
+        stream: Literal[True],
+        events: Literal[True],
+    ) -> ChatCompletion[MessageStream | Event]: ...
 
     def chat_completion(
         self,
         messages: Sequence[Message] | str,
+        *,
         stream: bool = False,
-    ) -> ChatCompletion[MessageStream] | ChatCompletion[AssistantMessage]:
+        events: bool = False,
+    ) -> (
+        ChatCompletion[MessageStream]
+        | ChatCompletion[AssistantMessage]
+        | ChatCompletion[MessageStream | Event]
+        | ChatCompletion[AssistantMessage | Event]
+    ):
         if isinstance(messages, str):
             messages = [UserMessage(messages)]
         self.__load_files(messages)
-        if stream:
-            return self.__backend.chat_completion(messages, stream=True)
+        if stream and events:
+            return self.__backend.chat_completion(messages, stream=True, events=True)
+        elif stream:
+            return self.__backend.chat_completion(messages, stream=True, events=False)
+        elif events:
+            return self.__backend.chat_completion(messages, stream=False, events=True)
         else:
-            return self.__backend.chat_completion(messages, stream=False)
+            return self.__backend.chat_completion(messages, stream=False, events=False)
 
     def __load_files(self, messages: Sequence[Message]):
         old_messages = [m for m in messages]
