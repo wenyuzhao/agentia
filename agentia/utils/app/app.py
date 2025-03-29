@@ -35,6 +35,8 @@ messages_container = st.container()
 def display_message(message: Message):
     if message.role not in ["user", "assistant"]:
         return
+    if isinstance(message, AssistantMessage) and message.tool_calls:
+        return
     with messages_container.chat_message(message.role):
         if isinstance(message, AssistantMessage) and message.reasoning:
             with st.expander("💭 Thinking"):
@@ -72,27 +74,40 @@ if prompt := st.chat_input(
 
     # Call the model and stream the response
     async def write_stream():
-        stream = agent.chat_completion(messages=[user_message], stream=True)
+        stream = agent.chat_completion(
+            messages=[user_message], stream=True, events=True
+        )
         async for response in stream:
             if isinstance(response, MessageStream):
                 wrapper = messages_container.empty()
                 with wrapper:
                     with wrapper.chat_message("assistant"):
-                        # Stream thinking
-                        if response.reasoning:
-                            t = st.expander("💭 Thinking", expanded=True)
-                            msg = t.empty()
+                        with st.spinner("", show_time=True):
+                            # Stream thinking
+                            thinking_wrapper = messages_container.empty()
+                            with thinking_wrapper:
+                                if response.reasoning:
+                                    t = thinking_wrapper.expander(
+                                        "💭 Thinking", expanded=True
+                                    )
+                                    msg = t.empty()
+                                    streamed_text = ""
+                                    async for s in response.reasoning:
+                                        streamed_text += s
+                                        msg.markdown(streamed_text)
+                                    if streamed_text == "":
+                                        thinking_wrapper.empty()
+                            # Stream content
+                            msg = st.empty()
                             streamed_text = ""
-                            async for s in response.reasoning:
+                            async for s in response:
                                 streamed_text += s
                                 msg.markdown(streamed_text)
-                        # Stream content
-                        msg = st.empty()
-                        streamed_text = ""
-                        async for s in response:
-                            streamed_text += s
-                            msg.markdown(streamed_text)
-                        msg = await response.wait_for_completion()
+                    m = await response.wait_for_completion()
+                    if m.tool_calls:
+                        wrapper.empty()
+            else:
+                print(response)
         st.empty()
 
     asyncio.run(write_stream())
