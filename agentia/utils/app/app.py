@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 import asyncio
 import streamlit as st
 
+from agentia.agent import ToolCallEvent
 from agentia.decorators import tool
 from agentia.plugins import ALL_PLUGINS
 from agentia.message import ContentPartImage, ContentPartText
@@ -11,7 +12,7 @@ from agentia import (
     Agent,
     Message,
     MessageStream,
-    ToolCallEvent,
+    Event,
     UserMessage,
     AssistantMessage,
 )
@@ -32,8 +33,8 @@ else:
 messages_container = st.container()
 
 
-def display_message(message: Message):
-    if message.role not in ["user", "assistant"]:
+def display_message(message: Message | Event):
+    if isinstance(message, Event) or message.role not in ["user", "assistant"]:
         return
     if isinstance(message, AssistantMessage) and message.tool_calls:
         return
@@ -51,7 +52,8 @@ def display_message(message: Message):
             st.markdown(message.content)
 
 
-for message in agent.history.get_messages():
+for message in agent.history.get():
+    # print(message)
     display_message(message)
 
 # Chatbox
@@ -107,7 +109,11 @@ if prompt := st.chat_input(
                     if m.tool_calls:
                         wrapper.empty()
             else:
-                print(response)
+                if isinstance(response, ToolCallEvent) and response.result is None:
+                    st.toast(
+                        ":blue-badge[:material/star: TOOL] "
+                        + response.tool.display_name
+                    )
         st.empty()
 
     asyncio.run(write_stream())

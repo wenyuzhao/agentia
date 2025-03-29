@@ -27,6 +27,7 @@ from .agent import (
     ToolCallEventListener,
     UserConsentHandler,
     ToolCallEvent,
+    Event,
 )
 from .llm import ModelOptions
 from . import utils
