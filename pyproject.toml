@@ -18,6 +18,7 @@ dependencies = [
     "python-slugify>=8.0.4,<9",
     "tiktoken>=0.8.0,<0.9",
     "pydantic>=2.10.4",
+    "shortuuid>=1.0.13",
 ]
 
 [project.urls]

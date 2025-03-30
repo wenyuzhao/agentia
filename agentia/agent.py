@@ -1,12 +1,9 @@
-import asyncio
 from datetime import datetime
 import logging
 import shutil
 from typing import (
     Annotated,
-    Callable,
     AsyncGenerator,
-    Coroutine,
     Literal,
     Optional,
     TypeVar,
@@ -17,11 +14,11 @@ from typing import (
 )
 import shelve
 import uuid
-import rich
 from slugify import slugify
 import weakref
 import uuid
 import os
+import shortuuid
 
 from agentia import MSG_LOGGER
 
@@ -131,59 +128,39 @@ class ChatCompletion(Generic[M]):
     def __await__(self):
         return self.__await_impl().__await__()
 
-    async def dump(self):
-        await self.__agent.init()
-
-        def print_name_and_icon(name: str, icon: str | None):
-            name_and_icon = f"[{icon} {name}]" if icon else f"[{name}]"
-            rich.print(f"[bold blue]{name_and_icon}[/bold blue]")
-
-        async for msg in self.__agen:
-            if isinstance(msg, Message):
-                print_name_and_icon(self.__agent.name, self.__agent.icon)
-                print(msg.content)
-            if isinstance(msg, MessageStream):
-                name_printed = False
-                outputed = False
-                async for delta in msg:
-                    if delta == "":
-                        continue
-                    if not name_printed:
-                        print_name_and_icon(self.__agent.name, self.__agent.icon)
-                        name_printed = True
-                    outputed = True
-                    print(delta, end="", flush=True)
-                if outputed:
-                    print()
-
 
 class Agent:
     def __init__(
         self,
-        name: str = "default",
+        # Agent ID
         id: str | None = None,
+        # Identity and instructions
+        name: str | None = None,
         icon: str | None = None,
         description: str | None = None,
-        model: Annotated[str | None, f"Default to {DEFAULT_MODEL}"] = None,
-        tools: Optional["Tools"] = None,
-        options: Optional["ModelOptions"] = None,
-        api_key: str | None = None,
         instructions: str | None = None,
-        debug: bool = False,
+        user: str | None = None,
+        # Cooperation
         colleagues: list["Agent"] | None = None,
+        # Knowledge base
         knowledge_base: Union["KnowledgeBase", bool, Path, None] = None,
-        language: str | None = None,
+        # Model and tools
+        model: Annotated[str | None, f"Default to {DEFAULT_MODEL}"] = None,
+        options: Optional["ModelOptions"] = None,
+        tools: Optional["Tools"] = None,
+        api_key: str | None = None,
+        debug: bool = False,
     ):
-        from .llm import LLMBackend, ModelOptions
         from .tools import ToolRegistry
 
         # Init simple fields
         self.__is_initialized = False
-        name = name.strip()
-        if name == "":
-            raise ValueError("Agent name cannot be empty.")
+        if name is not None:
+            name = name.strip()
+            if name == "":
+                raise ValueError("Agent name cannot be empty.")
         self.name = name
-        self.id = slugify((id or name.lower()).strip())
+        self.id = slugify((id or shortuuid.uuid()[:16]).strip())
 
         timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         self.session_id = self.id + "-" + timestamp + "-" + str(uuid.uuid4())
@@ -192,18 +169,6 @@ class Agent:
         if debug:
             self.log.setLevel(logging.DEBUG)
         model = model or DEFAULT_MODEL
-        if ":" in model:
-            provider = model.split(":")[0]
-            model = model.split(":")[1]
-        elif "OPENAI_BASE_URL" in os.environ:
-            provider = "openai"
-        else:
-            provider = "openrouter"
-        assert provider in [
-            "openai",
-            "openrouter",
-            "deepseek",
-        ], f"Unknown provider: {provider}"
         self.description = description
         self.colleagues: dict[str, "Agent"] = {}
         self.context: Any = None
@@ -213,13 +178,22 @@ class Agent:
             _get_global_cache_dir() / "sessions" / f"{self.session_id}"
         )
         self.__tools = ToolRegistry(self, tools)
+        # Generate instructions
         self.__instructions = instructions
-        if self.name is not None:
+        if self.name and not self.description:
+            self.__instructions = f"YOUR ARE {self.name}\n\n{self.__instructions or ''}"
+        elif self.description and not self.name:
             self.__instructions = (
-                f"YOUR NAME: {self.name}\n\n{self.__instructions or ''}"
+                f"YOUR DESCRIPTION: {self.description}\n\n{self.__instructions or ''}"
             )
-        if language is not None:
-            self.__instructions = f"YOUR PREFERRED SPEAKING LANGUAGE: {language}\n\n{self.__instructions or ''}"
+        elif self.description and self.name:
+            self.__instructions = f"YOUR ARE {self.name}, {self.description}\n\n{self.__instructions or ''}"
+        if user:
+            self.__instructions = f"{self.__instructions or ''}\n\nYOU ARE NOW TALKING TO THE USER.\nMY INFO (THE USER): {user}"
+        else:
+            self.__instructions = (
+                f"YOU ARE NOW TALKING TO THE USER.\n{self.__instructions or ''}"
+            )
         # Init colleagues
         if colleagues is not None and len(colleagues) > 0:
             self.__init_cooperation(colleagues)
@@ -233,36 +207,7 @@ class Agent:
         self.__init_memory()
         # Init history and backend
         self.__history = History(instructions=self.__instructions)
-        if provider == "openai":
-            from .llm.openai import OpenAIBackend
-
-            self.__backend: LLMBackend = OpenAIBackend(
-                model=model,
-                tools=self.__tools,
-                options=options or ModelOptions(),
-                history=self.__history,
-                api_key=api_key,
-            )
-        elif provider == "deepseek":
-            from .llm.deepseek import DeepSeekBackend
-
-            self.__backend: LLMBackend = DeepSeekBackend(
-                model=model,
-                tools=self.__tools,
-                options=options or ModelOptions(),
-                history=self.__history,
-                api_key=api_key,
-            )
-        else:
-            from .llm.openrouter import OpenRouterBackend
-
-            self.__backend: LLMBackend = OpenRouterBackend(
-                model=model,
-                tools=self.__tools,
-                options=options or ModelOptions(),
-                history=self.__history,
-                api_key=api_key,
-            )
+        self.__init_backend(model, options, api_key)
 
         weakref.finalize(self, Agent.__sweeper, self.session_id)
 
@@ -308,40 +253,96 @@ class Agent:
         for c in self.colleagues.values():
             await c.init()
 
+    def __init_backend(
+        self, model: str, options: Optional["ModelOptions"], api_key: str | None
+    ):
+        from .llm import LLMBackend, ModelOptions
+
+        if ":" in model:
+            provider = model.split(":")[0]
+            model = model.split(":")[1]
+        elif "OPENAI_BASE_URL" in os.environ:
+            provider = "openai"
+        else:
+            provider = "openrouter"
+        assert provider in [
+            "openai",
+            "openrouter",
+            "deepseek",
+        ], f"Unknown provider: {provider}"
+        if provider == "openai":
+            from .llm.openai import OpenAIBackend
+
+            self.__backend: LLMBackend = OpenAIBackend(
+                model=model,
+                tools=self.__tools,
+                options=options or ModelOptions(),
+                history=self.__history,
+                api_key=api_key,
+            )
+        elif provider == "deepseek":
+            from .llm.deepseek import DeepSeekBackend
+
+            self.__backend: LLMBackend = DeepSeekBackend(
+                model=model,
+                tools=self.__tools,
+                options=options or ModelOptions(),
+                history=self.__history,
+                api_key=api_key,
+            )
+        else:
+            from .llm.openrouter import OpenRouterBackend
+
+            self.__backend: LLMBackend = OpenRouterBackend(
+                model=model,
+                tools=self.__tools,
+                options=options or ModelOptions(),
+                history=self.__history,
+                api_key=api_key,
+            )
+
     def __add_colleague(self, colleague: "Agent"):
+        if colleague.name is None:
+            raise ValueError("Agent name is required for cooperation.")
+        if colleague.description is None:
+            raise ValueError("Agent description is required for cooperation.")
         if colleague.id in self.colleagues:
             return
-        self.colleagues[colleague.name] = colleague
+        self.colleagues[colleague.id] = colleague
         # Add a tool to dispatch a job to one colleague
-        agent_names = [agent.name for agent in self.colleagues.values()]
+        agent_ids = [agent.id for agent in self.colleagues.values()]
         leader = self
-        description = "Send a message or dispatch a job to a agent, and get the response from them. Note that the agent does not have any context expect what you explicitly told them, so give them the details as precise and as much as possible. Agents cannot contact each other, please coordinate the jobs and information between them properly by yourself when necessary. Here are a list of agents with their description:\n"
+        description = f"Send a message or dispatch a job to a person below as yourself ({leader.name}), and get the response from them. Note that the person does not have any context except what you explicitly told them, so give them the details as precise and as much as possible. They cannot contact each other, not the user, please coordinate everything between them properly by yourself. Here are a list of people with their description:\n"
         for agent in self.colleagues.values():
-            description += f" * {agent.name}: {agent.description}\n"
+            description += (
+                f" * ID={agent.id} NAME={agent.name} -- {agent.description}\n"
+            )
 
         from .decorators import tool
+        from .tools import ToolResult
 
-        @tool(name="_communiate", description=description)
+        @tool(name="Communicate with Agents", description=description)
         async def communiate(
-            agent: Annotated[
-                Annotated[str, agent_names],
-                "The name of the agent to communicate with. This must be one of the provided colleague names.",
+            id: Annotated[
+                Annotated[str, agent_ids],
+                "The id of the people to communicate with. This must be one of the provided ID.",
             ],
             message: Annotated[
-                str, "The message to send to the agent, or the job details."
+                str,
+                "The message to send, or the job details. You must send the message as yourself, not someone else.",
             ],
         ):
-            self.log.info(f"COMMUNICATE {leader.name} -> {agent}: {repr(message)}")
+            self.log.info(f"COMMUNICATE {leader.id} -> {id}: {repr(message)}")
 
-            target = self.colleagues[agent]
+            target = self.colleagues[id]
             cid = uuid.uuid4().hex
-            # yield CommunicationEvent(
-            #     id=cid, parent=leader, child=target, message=message
-            # )
+            yield CommunicationEvent(
+                id=cid, parent=leader, child=target, message=message
+            )
             response = target.chat_completion(
                 [
                     SystemMessage(
-                        f"{leader.name} is directly talking to you right now. ({leader.name}: {leader.description})",
+                        f"{leader.name} is directly talking to you ({target.name}) right now, not the user.\n\n{leader.name}'s INFO: {leader.description}\n\nYou are now talking and replying to {leader.name} not the user.",
                     ),
                     UserMessage(message),
                 ]
@@ -351,23 +352,32 @@ class Agent:
                 if isinstance(
                     m, Union[UserMessage, SystemMessage, AssistantMessage, ToolMessage]
                 ):
-                    self.log.info(
-                        f"RESPONSE {leader.name} <- {agent}: {repr(m.content)}"
-                    )
+                    self.log.info(f"RESPONSE {leader.id} <- {id}: {repr(m.content)}")
                     # results.append(m.to_json())
                     last_message = m.content
-                    # yield CommunicationEvent(
-                    #     id=cid,
-                    #     parent=leader,
-                    #     child=target,
-                    #     message=message,
-                    #     response=m.content,
-                    # )
-            return last_message
+            yield CommunicationEvent(
+                id=cid,
+                parent=leader,
+                child=target,
+                message=message,
+                response=last_message,
+            )
+            raise ToolResult(
+                {
+                    "response": last_message,
+                    "description": f"This is the response from {target.name} and it is sent to you ({leader.name}), not the user.",
+                }
+            )
 
         self.__tools._add_dispatch_tool(communiate)
 
     def __init_cooperation(self, colleagues: list["Agent"]):
+        if len(colleagues) == 0:
+            return
+        if self.name is None:
+            raise ValueError("Agent name is required for cooperation.")
+        if self.description is None:
+            raise ValueError("Agent description is required for cooperation.")
         # Leader can dispatch jobs to colleagues
         for colleague in colleagues:
             self.__add_colleague(colleague)

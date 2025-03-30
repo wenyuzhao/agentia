@@ -24,6 +24,7 @@ class AgentConfig(BaseModel):
     icon: str | None = None
     knowledge_base: str | bool = False
     colleagues: list[str] = Field(default_factory=list)
+    user: str | None = None
 
 
 PluginsConfig = dict[str, bool | dict[str, Any]]
@@ -125,6 +126,7 @@ def __load_agent_from_config(
         knowledge_base=(
             Path(knowledge_base) if isinstance(knowledge_base, str) else knowledge_base
         ),
+        user=config.agent.user,
     )
     agent.original_config = config
     pending.remove(file)

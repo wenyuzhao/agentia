@@ -115,6 +115,7 @@ if prompt := st.chat_input(
             else:
                 if isinstance(response, ToolCallEvent) and response.result is None:
                     display_message(response)
+                print(response)
         messages_container.empty()
 
     asyncio.run(write_stream())
