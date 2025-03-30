@@ -7,7 +7,7 @@ import traceback
 class CodePlugin(Plugin):
     @tool
     def execute(self, python_code: Annotated[str, "The python code to run."]):
-        """Execute a math expression and return the result. The expression must be an valid python expression that can be execuated by `eval()`."""
+        """Execute python code and return the result. The expression must be an valid python expression that can be execuated by `eval()`."""
         from contextlib import redirect_stdout
         import io
 

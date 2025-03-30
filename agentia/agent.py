@@ -321,7 +321,7 @@ class Agent:
         from .decorators import tool
         from .tools import ToolResult
 
-        @tool(name="Communicate with Agents", description=description)
+        @tool(name="_communiate", description=description)
         async def communiate(
             id: Annotated[
                 Annotated[str, agent_ids],

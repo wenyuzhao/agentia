@@ -3,6 +3,7 @@ import os, dotenv
 import asyncio
 import streamlit as st
 
+from agentia.agent import CommunicationEvent
 from agentia.message import ContentPartImage, ContentPartText
 from agentia import (
     Agent,
@@ -30,7 +31,7 @@ else:
 messages_container = st.container()
 
 
-def display_message(message: Message | Event):
+def display_message(message: Message | Event, expanded=False):
     match message:
         case m if (
             isinstance(m, Message) and m.role in ["user", "assistant"] and m.content
@@ -47,11 +48,24 @@ def display_message(message: Message | Event):
                             st.markdown(part.content)
                 else:
                     st.markdown(m.content)
-        case m if isinstance(m, ToolCallEvent) and m.result is None:
+        case m if (
+            isinstance(m, ToolCallEvent)
+            and m.result is None
+            and m.tool.name != "_communiate"
+        ):
             with messages_container.chat_message("assistant"):
-                st.write(
-                    f":blue-badge[:material/smart_toy: **TOOL:**&nbsp;&nbsp;&nbsp;{m.tool.display_name}]"
+                title = f":blue-badge[:material/smart_toy: **TOOL:**&nbsp;&nbsp;&nbsp;{m.tool.display_name}]"
+                st.write(title)
+        case m if isinstance(m, CommunicationEvent):
+            with messages_container.chat_message("assistant"):
+                comm = (
+                    f"{m.parent.name} <- {m.child.name}"
+                    if m.response
+                    else f"{m.parent.name} -> {m.child.name}"
                 )
+                title = f":blue[:material/smart_toy: **COMMUNICATE:**&nbsp;&nbsp;&nbsp;{comm}]"
+                with st.expander(title, expanded=expanded):
+                    st.write(m.message if not m.response else m.response)
 
 
 for message in agent.history.get():
@@ -113,8 +127,8 @@ if prompt := st.chat_input(
                     if m.tool_calls:
                         wrapper.empty()
             else:
-                if isinstance(response, ToolCallEvent) and response.result is None:
-                    display_message(response)
+                if isinstance(response, ToolCallEvent | CommunicationEvent):
+                    display_message(response, expanded=True)
                 print(response)
         messages_container.empty()
 
