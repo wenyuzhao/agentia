@@ -1,9 +1,10 @@
-from typing import Any
-import yaml
+from typing import Annotated, Any
+import tomllib
 from pathlib import Path
 
 from agentia.agent import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
+from pydantic import AfterValidator, BaseModel, Field
 
 AGENTS_SEARCH_PATHS = [
     Path.cwd(),
@@ -13,13 +14,46 @@ AGENTS_SEARCH_PATHS = [
 ]
 
 
+class AgentConfig(BaseModel):
+    name: str
+    icon: str | None = None
+    instructions: str | None = None
+    description: str | None = None
+    language: str | None = None
+    model: str | None = None
+    icon: str | None = None
+    knowledge_base: str | bool = False
+    colleagues: list[str] = Field(default_factory=list)
+
+
+PluginsConfig = dict[str, bool | dict[str, Any]]
+
+
+def check_plugins(configs: PluginsConfig) -> PluginsConfig:
+    for name, config in configs.items():
+        if config is False or config is None:
+            continue
+        if name not in ALL_PLUGINS:
+            raise ValueError(f"Unknown plugin: {name}")
+        config = config if isinstance(config, dict) else {}
+        ALL_PLUGINS[name].validate_config(config)
+    return configs
+
+
+class Config(BaseModel):
+    agent: AgentConfig
+    plugins: Annotated[PluginsConfig, AfterValidator(check_plugins)] = Field(
+        default_factory=dict
+    )
+
+
 def __get_config_path(cwd: Path, id: str):
     id = id.strip()
     possible_paths = []
-    if id.endswith(".yaml") or id.endswith(".yml"):
+    if id.endswith(".toml"):
         possible_paths.append(id)
     else:
-        possible_paths.extend([f"{id}.yaml", f"{id}.yml"])
+        possible_paths.append(f"{id}.toml")
     for s in possible_paths:
         p = Path(s)
         if not p.is_absolute():
@@ -30,26 +64,23 @@ def __get_config_path(cwd: Path, id: str):
 
 
 def __create_tools(
-    config: dict[str, Any], parent_tool_configs: dict[str, Any]
+    config: Config, parent_plugins_config: PluginsConfig
 ) -> tuple[list[Plugin], dict[str, Any]]:
     tools: list[Plugin] = []
     tool_configs = {}
-    if "tools" in config:
-        if not isinstance(config["tools"], dict):
-            raise ValueError("Invalid tools configuration: must be a dictionary")
-        for name, c in config["tools"].items():
-            if name not in ALL_PLUGINS:
-                raise ValueError(f"Unknown tool: {name}")
-            PluginCls = ALL_PLUGINS[name]
-            if not (c is None or isinstance(c, dict)):
-                raise ValueError(
-                    f"Invalid config for tool {name}: must be a dict or null"
-                )
-            if c is None and name in parent_tool_configs:
-                c = parent_tool_configs[name]
-            c = c or {}
-            tool_configs[name] = c
-            tools.append(PluginCls(config=c))
+    for name, c in config.plugins.items():
+        if c == False or c is None:
+            continue
+        if name not in ALL_PLUGINS:
+            raise ValueError(f"Unknown tool: {name}")
+        PluginCls = ALL_PLUGINS[name]
+        if not (c is None or isinstance(c, dict)):
+            raise ValueError(f"Invalid config for tool {name}: must be a dict or null")
+        if c is None and name in parent_plugins_config:
+            c = parent_plugins_config[name]
+        c = c if isinstance(c, dict) else {}
+        tool_configs[name] = c
+        tools.append(PluginCls(config=c))
     return tools, tool_configs
 
 
@@ -63,7 +94,7 @@ def __load_agent_from_config(
     # Load the configuration file
     assert file.exists()
     file = file.resolve()
-    config = yaml.safe_load(file.read_text())
+    config = Config(**tomllib.loads(file.read_text()))
     # Already loaded?
     if file in pending:
         raise ValueError(f"Circular dependency detected: {file.stem}")
@@ -74,24 +105,22 @@ def __load_agent_from_config(
     tools, tool_configs = __create_tools(config, parent_tool_configs)
     # Load colleagues
     colleagues: list[Agent] = []
-    if "colleagues" in config:
-        for child_id in config["colleagues"]:
-            child_path = __get_config_path(file.parent, child_id)
-            colleague = __load_agent_from_config(
-                child_path, pending, agents, tool_configs
-            )
-            colleagues.append(colleague)
+    for child_id in config.agent.colleagues:
+        child_path = __get_config_path(file.parent, child_id)
+        colleague = __load_agent_from_config(child_path, pending, agents, tool_configs)
+        colleagues.append(colleague)
     # Create agent
-    knowledge_base: str | bool = config.get("knowledge_base", False)
-    agent_id = config.get("id", file.stem)
+
+    knowledge_base: str | bool = config.agent.knowledge_base
+    agent_id = file.stem
     agent = Agent(
-        name=config.get("name"),
         id=agent_id,
-        icon=config.get("icon"),
-        description=config.get("description"),
-        model=config.get("model"),
+        name=config.agent.name,
+        icon=config.agent.icon,
+        description=config.agent.description,
+        model=config.agent.model,
         tools=tools,
-        instructions=config.get("instructions"),
+        instructions=config.agent.instructions,
         colleagues=colleagues,
         knowledge_base=(
             Path(knowledge_base) if isinstance(knowledge_base, str) else knowledge_base
@@ -109,22 +138,19 @@ def load_agent_from_config(name: str | Path) -> Agent:
         if not name.exists():
             raise FileNotFoundError(f"Agent config not found: {name}")
         config_path = name.resolve()
-    elif name.endswith(".yaml") or name.endswith(".yml"):
+    elif name.endswith(".toml"):
         # name is also a path
         config_path = Path(name)
         if not config_path.exists() or not config_path.is_file():
             raise FileNotFoundError(f"Agent config not found: {name}")
         config_path = config_path.resolve()
-    elif (s := Path(name).suffix) and s not in [".yaml", ".yml"]:
+    elif (s := Path(name).suffix) and s != ".toml":
         raise ValueError(f"Invalid agent path: {name}")
     else:
         # If the name is a string, we need to find the configuration file from a list of search paths
         config_path = None
         for dir in AGENTS_SEARCH_PATHS:
-            if (file := dir / f"{name}.yaml").exists():
-                config_path = file
-                break
-            if (file := dir / f"{name}.yml").exists():
+            if (file := dir / f"{name}.toml").exists():
                 config_path = file
                 break
         if config_path is None:

@@ -172,6 +172,7 @@ class Agent:
         debug: bool = False,
         colleagues: list["Agent"] | None = None,
         knowledge_base: Union["KnowledgeBase", bool, Path, None] = None,
+        language: str | None = None,
     ):
         from .llm import LLMBackend, ModelOptions
         from .tools import ToolRegistry
@@ -213,6 +214,12 @@ class Agent:
         )
         self.__tools = ToolRegistry(self, tools)
         self.__instructions = instructions
+        if self.name is not None:
+            self.__instructions = (
+                f"YOUR NAME: {self.name}\n\n{self.__instructions or ''}"
+            )
+        if language is not None:
+            self.__instructions = f"YOUR PREFERRED SPEAKING LANGUAGE: {language}\n\n{self.__instructions or ''}"
         # Init colleagues
         if colleagues is not None and len(colleagues) > 0:
             self.__init_cooperation(colleagues)
@@ -302,7 +309,7 @@ class Agent:
             await c.init()
 
     def __add_colleague(self, colleague: "Agent"):
-        if colleague.name in self.colleagues:
+        if colleague.id in self.colleagues:
             return
         self.colleagues[colleague.name] = colleague
         # Add a tool to dispatch a job to one colleague

@@ -1,12 +1,8 @@
 import base64
 import os, dotenv
-from typing import Annotated, Literal
 import asyncio
 import streamlit as st
 
-from agentia.agent import ToolCallEvent
-from agentia.decorators import tool
-from agentia.plugins import ALL_PLUGINS
 from agentia.message import ContentPartImage, ContentPartText
 from agentia import (
     Agent,
@@ -15,6 +11,7 @@ from agentia import (
     Event,
     UserMessage,
     AssistantMessage,
+    ToolCallEvent,
 )
 from agentia.utils.config import load_agent_from_config
 
@@ -34,7 +31,6 @@ messages_container = st.container()
 
 
 def display_message(message: Message | Event):
-    print(message)
     match message:
         case m if (
             isinstance(m, Message) and m.role in ["user", "assistant"] and m.content
@@ -62,11 +58,13 @@ for message in agent.history.get():
     # print(message)
     display_message(message)
 
+
 # Chatbox
 
 if prompt := st.chat_input(
     "Enter your message", accept_file=True, file_type=["png", "jpeg", "jpg"]
 ):
+    messages_container.empty()
     if len(prompt.files) > 0:
         content = []
         for file in prompt.files:
@@ -117,6 +115,6 @@ if prompt := st.chat_input(
             else:
                 if isinstance(response, ToolCallEvent) and response.result is None:
                     display_message(response)
-        st.empty()
+        messages_container.empty()
 
     asyncio.run(write_stream())

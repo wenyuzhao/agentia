@@ -38,6 +38,9 @@ class Plugin:
     async def init(self):
         pass
 
+    @classmethod
+    def validate_config(cls, config: dict[str, Any]): ...
+
     def on_new_chat_message(self, msg: Message) -> Any: ...
 
 

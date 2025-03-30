@@ -17,6 +17,7 @@ dependencies = [
     "llama-index-vector-stores-chroma>=0.4.1,<0.5",
     "python-slugify>=8.0.4,<9",
     "tiktoken>=0.8.0,<0.9",
+    "pydantic>=2.10.4",
 ]
 
 [project.urls]
