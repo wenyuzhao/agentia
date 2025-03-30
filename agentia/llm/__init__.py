@@ -209,6 +209,7 @@ class LLMBackend:
                     count += 1
                 else:
                     if events:
+                        self.history.add(event)
                         yield event
             trimmed_history = self.history.get_for_inference(keep_last=count + 1)
             # Submit results

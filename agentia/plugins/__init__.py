@@ -6,6 +6,17 @@ if TYPE_CHECKING:
     from ..agent import Agent
 
 
+class ToolResult(BaseException):
+    __result: Any
+
+    def __init__(self, result: Any):
+        self.__result = result
+
+    @property
+    def result(self) -> Any:
+        return self.__result
+
+
 class Plugin:
     NAME: str | None
 

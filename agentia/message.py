@@ -256,7 +256,7 @@ class ToolMessage:
         return data
 
 
-Message: TypeAlias = Union[UserMessage, SystemMessage, AssistantMessage, ToolMessage]
+Message: TypeAlias = UserMessage | SystemMessage | AssistantMessage | ToolMessage
 
 
 class MessageStream:

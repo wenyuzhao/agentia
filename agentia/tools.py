@@ -7,6 +7,7 @@ import types
 from typing import (
     Annotated,
     Any,
+    AsyncGenerator,
     Callable,
     Literal,
     Sequence,
@@ -18,11 +19,11 @@ from typing import (
 
 import rich
 
-from agentia.agent import ToolCallEvent
+from agentia.agent import CommunicationEvent, Event, ToolCallEvent, UserConsentEvent
 
 from .message import JSON, FunctionCall, Message, Role, ToolCall, ToolMessage
 
-from .plugins import Plugin
+from .plugins import Plugin, ToolResult
 from pydantic import BaseModel
 
 
@@ -95,7 +96,10 @@ class ToolRegistry:
     def add_client_tools(self, tools: list[ClientTool]):
         async def call_client_tool(tool_name: str, **kwargs):
             tool = next(t for t in tools if t.name == tool_name)
-            return await self._agent._client_tool_call(tool_name, kwargs)
+            # return await self._agent._client_tool_call(tool_name, kwargs)
+            raise NotImplementedError(
+                "Client tools are not supported yet. Please use the plugin system."
+            )
 
         for t in tools:
             if t.name in self.__functions:
@@ -262,9 +266,11 @@ class ToolRegistry:
                     raise ValueError(f"{other} is not supported")
         return p_args, kw_args
 
-    async def call_function_raw(
-        self, name: str, args: JSON, tool_id: str | None
-    ) -> Any:
+    async def call_function(
+        self, function_call: FunctionCall, tool_id: str | None
+    ) -> AsyncGenerator[UserConsentEvent | CommunicationEvent, None]:
+        name = function_call.name
+        args = function_call.arguments
         args_s = ""
         if isinstance(args, dict):
             for k, v in args.items():
@@ -275,31 +281,46 @@ class ToolRegistry:
         self._agent.log.info(f"TOOL#{tool_id} {name} {args_s}")
         # key = func_name if not func_name.startswith("functions.") else func_name[10:]
         if name not in self.__functions:
-            return {"error": f"Tool `{name}` not found"}
+            raise ToolResult({"error": f"Tool `{name}` not found"})
         func = self.__functions[name].callable
-        raw_args = args
         args, kw_args = self.__filter_args(func, args)
         try:
             result_or_coroutine = func(*args, **kw_args)
-            if inspect.iscoroutine(result_or_coroutine):
+            if inspect.isasyncgen(result_or_coroutine):
+                try:
+                    while True:
+                        yielded = await anext(result_or_coroutine)
+                        if isinstance(yielded, UserConsentEvent | CommunicationEvent):
+                            yield yielded
+                        if isinstance(yielded, ToolResult):
+                            result = yielded.result
+                            break
+                except StopAsyncIteration as e:
+                    result = {}
+                except ToolResult as e:
+                    result = e.result
+            elif inspect.isgenerator(result_or_coroutine):
+                try:
+                    while True:
+                        yielded = next(result_or_coroutine)
+                        if isinstance(yielded, UserConsentEvent | CommunicationEvent):
+                            yield yielded
+                        if isinstance(yielded, ToolResult):
+                            result = yielded.result
+                            break
+                except StopIteration as e:
+                    result = e.value
+                except ToolResult as e:
+                    result = e.result
+            elif inspect.iscoroutine(result_or_coroutine):
                 result = await result_or_coroutine
             else:
                 result = result_or_coroutine
         except BaseException as e:
-            # print(e)
-            raise e
-            result = {"error": f"Failed to run tool `{name}`: {e}"}
+            raise ToolResult({"error": f"Failed to run tool `{name}`: {e}"}) from e
         result_s = json.dumps(result)
         self._agent.log.info(f"TOOL#{tool_id} {name} -> {result_s}")
-        return result
-
-    async def call_function(
-        self, function_call: FunctionCall, tool_id: str | None
-    ) -> Any:
-        func_name = function_call.name
-        arguments = function_call.arguments
-        result = await self.call_function_raw(func_name, arguments, tool_id)
-        return result
+        raise ToolResult(result)
 
     async def call_tools(self, tool_calls: Sequence[ToolCall]):
         for t in tool_calls:
@@ -311,9 +332,13 @@ class ToolRegistry:
             event = ToolCallEvent(
                 agent=self._agent, tool=info, id=t.id, function=t.function
             )
-            await self._agent._emit_tool_call_event(event)
             yield event
-            raw_result = await self.call_function(t.function, tool_id=t.id)
+            raw_result = {}
+            try:
+                async for e in self.call_function(t.function, tool_id=t.id):
+                    yield e
+            except ToolResult as e:
+                raw_result = e.result
             event = ToolCallEvent(
                 agent=self._agent,
                 tool=info,
@@ -321,7 +346,6 @@ class ToolRegistry:
                 function=t.function,
                 result=raw_result,
             )
-            await self._agent._emit_tool_call_event(event)
             yield event
             if not isinstance(raw_result, str):
                 result = json.dumps(raw_result)

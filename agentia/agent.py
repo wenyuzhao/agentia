@@ -64,10 +64,15 @@ class CommunicationEvent:
     response: str | None = None
 
 
-Event: TypeAlias = ToolCallEvent | CommunicationEvent
+@dataclass
+class UserConsentEvent:
+    id: str
+    message: str
+    response: bool | None = None
 
-ToolCallEventListener = Callable[[ToolCallEvent], Any]
-CommunicationEventListener = Callable[[CommunicationEvent], Any]
+
+Event: TypeAlias = ToolCallEvent | CommunicationEvent | UserConsentEvent
+
 
 DEFAULT_MODEL_OPENROUTER = "openai/gpt-4o-mini"
 DEFAULT_MODEL_OPENAI = "gpt-4o-mini"
@@ -152,9 +157,6 @@ class ChatCompletion(Generic[M]):
                     print()
 
 
-UserConsentHandler = Callable[[str], bool | Coroutine[Any, Any, bool]]
-
-
 class Agent:
     def __init__(
         self,
@@ -211,13 +213,6 @@ class Agent:
         )
         self.__tools = ToolRegistry(self, tools)
         self.__instructions = instructions
-        # Event handlers
-        self.__user_consent_handler: UserConsentHandler | None = None
-        self.__on_tool_start: Callable[[ToolCallEvent], Any] | None = None
-        self.__on_tool_end: Callable[[ToolCallEvent], Any] | None = None
-        self.__on_communication_start: Callable[[CommunicationEvent], Any] | None = None
-        self.__on_communication_end: Callable[[CommunicationEvent], Any] | None = None
-        self.__on_client_tool_call: Callable[[str, Any], Any] | None = None
         # Init colleagues
         if colleagues is not None and len(colleagues) > 0:
             self.__init_cooperation(colleagues)
@@ -306,79 +301,6 @@ class Agent:
         for c in self.colleagues.values():
             await c.init()
 
-    async def request_for_user_consent(self, message: str) -> bool:
-        if self.__user_consent_handler is not None:
-            result = self.__user_consent_handler(message)
-            if asyncio.iscoroutine(result):
-                return await result
-            return result
-        return True
-
-    def on_response_start(self, listener: Callable[[str], Any]):
-        """Fire when a response starts"""
-        self.__on_response_start = listener
-        return listener
-
-    def on_user_consent(self, listener: UserConsentHandler):
-        """Fire when user consent is required"""
-        self.__user_consent_handler = listener
-        return listener
-
-    def on_tool_start(self, listener: Callable[[ToolCallEvent], Any]):
-        """Fire when a tool call starts"""
-        self.__on_tool_start = listener
-        return listener
-
-    def on_tool_end(self, listener: Callable[[ToolCallEvent], Any]):
-        """Fire when a tool call ends"""
-        self.__on_tool_end = listener
-        return listener
-
-    def on_commuication_start(self, listener: Callable[[CommunicationEvent], Any]):
-        """Fire when a communication between agents starts"""
-        self.__on_communication_start = listener
-        return listener
-
-    def on_commuication_end(self, listener: Callable[[CommunicationEvent], Any]):
-        """Fire when a communication between agents ends"""
-        self.__on_communication_end = listener
-        return listener
-
-    def on_client_tool_call(self, listener: Callable[[str, Any], Any]):
-        """Fire when a client tool call is required"""
-        self.__on_client_tool_call = listener
-        return listener
-
-    async def _client_tool_call(self, name: str, args: Any):
-        if self.__on_client_tool_call is None:
-            raise ValueError("Client tool call is not enabled.")
-        result = self.__on_client_tool_call(name, args)
-        if asyncio.iscoroutine(result):
-            return await result
-        return result
-
-    async def _emit_tool_call_event(self, event: ToolCallEvent):
-        async def call_listener(listener: ToolCallEventListener):
-            result = listener(event)
-            if asyncio.iscoroutine(result):
-                await result
-
-        if event.result is None and self.__on_tool_start is not None:
-            await call_listener(self.__on_tool_start)
-        if event.result is not None and self.__on_tool_end is not None:
-            await call_listener(self.__on_tool_end)
-
-    async def _emit_communication_event(self, event: CommunicationEvent):
-        async def call_listener(listener: CommunicationEventListener):
-            result = listener(event)
-            if asyncio.iscoroutine(result):
-                await result
-
-        if event.response is None and self.__on_communication_start is not None:
-            await call_listener(self.__on_communication_start)
-        if event.response is not None and self.__on_communication_end is not None:
-            await call_listener(self.__on_communication_end)
-
     def __add_colleague(self, colleague: "Agent"):
         if colleague.name in self.colleagues:
             return
@@ -406,9 +328,9 @@ class Agent:
 
             target = self.colleagues[agent]
             cid = uuid.uuid4().hex
-            await self._emit_communication_event(
-                CommunicationEvent(id=cid, parent=leader, child=target, message=message)
-            )
+            # yield CommunicationEvent(
+            #     id=cid, parent=leader, child=target, message=message
+            # )
             response = target.chat_completion(
                 [
                     SystemMessage(
@@ -419,21 +341,21 @@ class Agent:
             )
             last_message = ""
             async for m in response:
-                if isinstance(m, Message):
+                if isinstance(
+                    m, Union[UserMessage, SystemMessage, AssistantMessage, ToolMessage]
+                ):
                     self.log.info(
                         f"RESPONSE {leader.name} <- {agent}: {repr(m.content)}"
                     )
                     # results.append(m.to_json())
                     last_message = m.content
-                    await self._emit_communication_event(
-                        CommunicationEvent(
-                            id=cid,
-                            parent=leader,
-                            child=target,
-                            message=message,
-                            response=m.content,
-                        )
-                    )
+                    # yield CommunicationEvent(
+                    #     id=cid,
+                    #     parent=leader,
+                    #     child=target,
+                    #     message=message,
+                    #     response=m.content,
+                    # )
             return last_message
 
         self.__tools._add_dispatch_tool(communiate)

@@ -39,7 +39,7 @@ class History:
 
     @staticmethod
     def __trim_and_filter(
-        msgs: list[Message | "Event"],
+        msgs: list[Union[Message, "Event"]],
         token_limit: int = 120000,
         keep_first=0,
         keep_last=0,

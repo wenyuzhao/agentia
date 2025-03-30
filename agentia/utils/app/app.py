@@ -34,22 +34,28 @@ messages_container = st.container()
 
 
 def display_message(message: Message | Event):
-    if isinstance(message, Event) or message.role not in ["user", "assistant"]:
-        return
-    if isinstance(message, AssistantMessage) and message.tool_calls:
-        return
-    with messages_container.chat_message(message.role):
-        if isinstance(message, AssistantMessage) and message.reasoning:
-            with st.expander("💭 Thinking"):
-                st.markdown(message.reasoning)
-        if isinstance(message.content, list):
-            for part in message.content:
-                if isinstance(part, ContentPartImage):
-                    st.image(part.url)
-                elif isinstance(part, ContentPartText):
-                    st.markdown(part.content)
-        else:
-            st.markdown(message.content)
+    print(message)
+    match message:
+        case m if (
+            isinstance(m, Message) and m.role in ["user", "assistant"] and m.content
+        ):
+            with messages_container.chat_message(m.role):
+                if isinstance(m, AssistantMessage) and m.reasoning:
+                    with st.expander("💭 Thinking"):
+                        st.markdown(m.reasoning)
+                if isinstance(m.content, list):
+                    for part in m.content:
+                        if isinstance(part, ContentPartImage):
+                            st.image(part.url)
+                        elif isinstance(part, ContentPartText):
+                            st.markdown(part.content)
+                else:
+                    st.markdown(m.content)
+        case m if isinstance(m, ToolCallEvent) and m.result is None:
+            with messages_container.chat_message("assistant"):
+                st.write(
+                    f":blue-badge[:material/smart_toy: **TOOL:**&nbsp;&nbsp;&nbsp;{m.tool.display_name}]"
+                )
 
 
 for message in agent.history.get():
@@ -110,10 +116,7 @@ if prompt := st.chat_input(
                         wrapper.empty()
             else:
                 if isinstance(response, ToolCallEvent) and response.result is None:
-                    st.toast(
-                        ":blue-badge[:material/star: TOOL] "
-                        + response.tool.display_name
-                    )
+                    display_message(response)
         st.empty()
 
     asyncio.run(write_stream())

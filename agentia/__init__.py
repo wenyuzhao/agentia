@@ -24,8 +24,6 @@ from . import plugins
 from .agent import (
     Agent,
     ChatCompletion,
-    ToolCallEventListener,
-    UserConsentHandler,
     ToolCallEvent,
     Event,
 )
@@ -56,8 +54,6 @@ __all__ = [
     "Agent",
     "Tools",
     "ChatCompletion",
-    "ToolCallEventListener",
-    "UserConsentHandler",
     "ToolCallEvent",
     "ModelOptions",
     "ToolCall",
