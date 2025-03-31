@@ -19,6 +19,7 @@ dependencies = [
     "tiktoken>=0.8.0,<0.9",
     "pydantic>=2.10.4",
     "shortuuid>=1.0.13",
+    "rich>=14.0.0",
 ]
 
 [project.urls]
@@ -34,8 +35,8 @@ dev = [
     "pytest>=7.3.2,<8",
     "pytest-asyncio>=0.21.1,<0.22",
 ]
-tools = ["pymstodo>=0.2.0", "dataforseo-client>=1.0.40", "markdownify>=0.13.1"]
-all = [{ include-group = "tools" }, "rich>=13.9.4", "streamlit>=1.44.0"]
+plugins = ["pymstodo>=0.2.0", "dataforseo-client>=1.0.45", "markdownify>=1.1.0"]
+all = [{ include-group = "plugins" }, "streamlit>=1.44.0"]
 
 [tool.hatch.build.targets.sdist]
 include = ["agentia"]

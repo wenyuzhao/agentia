@@ -4,7 +4,7 @@ import asyncio
 import streamlit as st
 import shelve
 
-from agentia.agent import AgentInfo, CommunicationEvent
+from agentia.agent import CommunicationEvent
 from agentia.message import ContentPartImage, ContentPartText
 from agentia import (
     Agent,
@@ -15,8 +15,7 @@ from agentia import (
     AssistantMessage,
     ToolCallEvent,
 )
-from agentia.utils.config import load_agent_from_config, find_all_agents
-from agentia.utils.app.utils import flex, session_record
+from agentia.utils.app.utils import session_record
 
 dotenv.load_dotenv()
 
@@ -95,7 +94,11 @@ with st.sidebar:
     selected_agent = st.selectbox(
         "**Agent:**",
         options=ALL_AGENTS,
-        format_func=lambda a: (f"{a.icon} {a.name}" if a.icon else a.name),
+        format_func=lambda a: (
+            f"{a.config.agent.icon} {a.config.agent.name}"
+            if a.config.agent.icon
+            else a.config.agent.name
+        ),
         index=initial_agent_index,
     )
     if selected_agent and selected_agent.id != agent.id:

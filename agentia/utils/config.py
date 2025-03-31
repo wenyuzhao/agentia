@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Annotated, Any
 import tomllib
 from pathlib import Path
@@ -151,6 +150,7 @@ def __load_agent_from_config(
         session_id=session_id,
     )
     agent.original_config = config
+    agent.original_config_path = file.resolve()
     # Load history
     if persist and session_id:
         agent.load()
@@ -184,6 +184,8 @@ def load_agent_from_config(
                 break
         if config_path is None:
             raise FileNotFoundError(f"Agent config not found: {name}")
+    if config_path.stem.startswith(("_", ".", "-")):
+        raise ValueError(f"Invalid agent file name: {config_path.stem}")
     return __load_agent_from_config(config_path, set(), {}, {}, persist, session_id)
 
 
@@ -196,18 +198,21 @@ def find_all_agents() -> list[AgentInfo]:
         for file in path.glob("*.toml"):
             if file.stem in agents:
                 continue
-            doc = tomllib.loads(file.read_text())
-            try:
-                doc = Config(**doc)
-            except ValidationError as e:
+            if file.stem.startswith(("_", ".", "-")):
                 continue
+            doc = tomllib.loads(file.read_text())
+            if not isinstance(doc, dict) or "agent" not in doc:
+                continue
+            try:
+                config = Config(**doc)
+            except ValidationError as e:
+                raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
             agent_info = AgentInfo(
                 id=file.stem,
-                name=doc.agent.name,
-                icon=doc.agent.icon,
-                description=doc.agent.description,
+                config=config,
+                config_path=file.resolve().relative_to(Path.cwd()),
             )
             agents[file.stem] = agent_info
     agents_list = list(agents.values())
-    agents_list.sort(key=lambda x: x.name)
+    agents_list.sort(key=lambda x: x.config.agent.name)
     return agents_list

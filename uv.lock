@@ -19,6 +19,7 @@ dependencies = [
     { name = "python-slugify" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "rich" },
     { name = "shortuuid" },
     { name = "tiktoken" },
     { name = "typer" },
@@ -29,7 +30,6 @@ all = [
     { name = "dataforseo-client" },
     { name = "markdownify" },
     { name = "pymstodo" },
-    { name = "rich" },
     { name = "streamlit" },
 ]
 dev = [
@@ -38,7 +38,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
-tools = [
+plugins = [
     { name = "dataforseo-client" },
     { name = "markdownify" },
     { name = "pymstodo" },
@@ -54,6 +54,7 @@ requires-dist = [
     { name = "python-slugify", specifier = ">=8.0.4,<9" },
     { name = "pyyaml", specifier = ">=6.0.2,<7" },
     { name = "requests", specifier = ">=2.31.0,<3" },
+    { name = "rich", specifier = ">=14.0.0" },
     { name = "shortuuid", specifier = ">=1.0.13" },
     { name = "tiktoken", specifier = ">=0.8.0,<0.9" },
     { name = "typer", specifier = ">=0.12.5,<0.13" },
@@ -61,10 +62,9 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 all = [
-    { name = "dataforseo-client", specifier = ">=1.0.40" },
-    { name = "markdownify", specifier = ">=0.13.1" },
+    { name = "dataforseo-client", specifier = ">=1.0.45" },
+    { name = "markdownify", specifier = ">=1.1.0" },
     { name = "pymstodo", specifier = ">=0.2.0" },
-    { name = "rich", specifier = ">=13.9.4" },
     { name = "streamlit", specifier = ">=1.44.0" },
 ]
 dev = [
@@ -73,9 +73,9 @@ dev = [
     { name = "pytest", specifier = ">=7.3.2,<8" },
     { name = "pytest-asyncio", specifier = ">=0.21.1,<0.22" },
 ]
-tools = [
-    { name = "dataforseo-client", specifier = ">=1.0.40" },
-    { name = "markdownify", specifier = ">=0.13.1" },
+plugins = [
+    { name = "dataforseo-client", specifier = ">=1.0.45" },
+    { name = "markdownify", specifier = ">=1.1.0" },
     { name = "pymstodo", specifier = ">=0.2.0" },
 ]
 
@@ -903,7 +903,7 @@ wheels = [
 
 [[package]]
 name = "huggingface-hub"
-version = "0.29.3"
+version = "0.30.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
@@ -914,9 +914,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/f9/851f34b02970e8143d41d4001b2d49e54ef113f273902103823b8bc95ada/huggingface_hub-0.29.3.tar.gz", hash = "sha256:64519a25716e0ba382ba2d3fb3ca082e7c7eb4a2fc634d200e8380006e0760e5", size = 390123 }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/b1/b6a403e31a806d3b2560adf73b60881330b954d4000fdfb6b0e3beac5f90/huggingface_hub-0.30.0.tar.gz", hash = "sha256:21ac16bc79c950dc058fad6f25e6e13444d878cc504e386d3a9b83096b3851cb", size = 400791 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/0c/37d380846a2e5c9a3c6a73d26ffbcfdcad5fc3eacf42fdf7cff56f2af634/huggingface_hub-0.29.3-py3-none-any.whl", hash = "sha256:0b25710932ac649c08cdbefa6c6ccb8e88eef82927cacdb048efb726429453aa", size = 468997 },
+    { url = "https://files.pythonhosted.org/packages/05/54/ab179a3cbc6cb285b34dfb1686176db4c3e7d9634b23cabf5aff0d00c776/huggingface_hub-0.30.0-py3-none-any.whl", hash = "sha256:17470b2b0f902209beb0344d659a18c48b69bc202af27c1cfc814d637807322f", size = 481128 },
 ]
 
 [[package]]

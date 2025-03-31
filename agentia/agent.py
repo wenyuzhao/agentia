@@ -6,6 +6,7 @@ from typing import (
     AsyncGenerator,
     Literal,
     Optional,
+    Type,
     TypeVar,
     Any,
     Generic,
@@ -13,6 +14,8 @@ from typing import (
     TYPE_CHECKING,
 )
 import shelve
+import rich
+import rich.panel
 from slugify import slugify
 import weakref
 import uuid
@@ -22,6 +25,7 @@ import shortuuid
 from agentia import MSG_LOGGER
 
 if TYPE_CHECKING:
+    from agentia.utils.config import Config
     from agentia.knowledge_base import KnowledgeBase
 
 from .message import *
@@ -45,9 +49,8 @@ def _get_global_cache_dir() -> Path:
 @dataclass
 class AgentInfo:
     id: str
-    name: str
-    icon: str | None = None
-    description: str | None = None
+    config_path: Path
+    config: "Config"
 
 
 @dataclass
@@ -203,7 +206,8 @@ class Agent:
         self.description = description
         self.colleagues: dict[str, "Agent"] = {}
         self.context: Any = None
-        self.original_config: Any = None
+        self.original_config: Optional["Config"] = None
+        self.original_config_path: Optional[Path] = None
         self.agent_data_folder = _get_global_cache_dir() / "agents" / f"{self.id}"
         self.session_data_folder = (
             _get_global_cache_dir() / "sessions" / f"{self.session_id}"
@@ -256,6 +260,7 @@ class Agent:
 
     def open_configs_file(self):
         cache_file = self.agent_data_folder / "configs"
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
         return shelve.open(cache_file)
 
     @staticmethod
@@ -276,13 +281,27 @@ class Agent:
 
         init_logging(level)
 
-    async def init(self):
+    async def init(self, silent: bool = False):
         if self.__is_initialized:
             return
         self.__is_initialized = True
-        await self.__backend.tools.init()
+        await self.__init_plugins(silent)
         for c in self.colleagues.values():
             await c.init()
+
+    async def __init_plugins(self, silent: bool):
+        agent_path = (
+            self.original_config_path.relative_to(Path.cwd())
+            if self.original_config_path
+            else ""
+        )
+        header = f"[bold blue]Configuring plugins:[/bold blue] [blue]{self.id}[/blue] [dim italic]{agent_path}[/dim italic]"
+
+        if not silent:
+            rich.print(rich.panel.Panel.fit(header))
+        await self.__backend.tools.init(silent)
+        if not silent:
+            rich.print()
 
     def __init_backend(
         self, model: str, options: Optional["ModelOptions"], api_key: str | None
@@ -477,7 +496,9 @@ class Agent:
         return knowledge_base
 
     def __init_memory(self):
-        mem_plugin = self.get_plugin("Memory")
+        from .plugins.memory import MemoryPlugin
+
+        mem_plugin = self.get_plugin(MemoryPlugin)
         if mem_plugin is None:
             return
 
@@ -496,8 +517,8 @@ class Agent:
     def reset(self):
         self.history.reset()
 
-    def get_plugin(self, name: str) -> Optional["Plugin"]:
-        return self.__tools.get_plugin(name)
+    def get_plugin(self, type: Type["Plugin"]) -> Optional["Plugin"]:
+        return self.__tools.get_plugin(type)
 
     @overload
     def chat_completion(

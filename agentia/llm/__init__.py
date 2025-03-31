@@ -123,9 +123,6 @@ class LLMBackend:
                 self.tools._agent, self._chat_completion(messages, stream=False, events=False)  # type: ignore
             )
 
-    async def _on_new_chat_message(self, msg: Message):
-        await self.tools.on_new_chat_message(msg)
-
     @overload
     async def _chat_completion_request(
         self, messages: list[Message], stream: Literal[False]
@@ -188,7 +185,6 @@ class LLMBackend:
         for m in messages:
             self.log.info(f"{m}")
             self.history.add(m)
-            await self._on_new_chat_message(m)
         # First completion request
         message: AssistantMessage
         trimmed_history = self.history.get_for_inference()
@@ -202,7 +198,6 @@ class LLMBackend:
                 yield message
         self.history.add(message)
         self.log.info(f"{message}")
-        await self._on_new_chat_message(message)
         # Run tools and submit results until convergence
         while len(message.tool_calls) > 0:
             # Run tools
@@ -230,4 +225,3 @@ class LLMBackend:
                     yield message
             self.history.add(message)
             self.log.info(f"{message}")
-            await self._on_new_chat_message(message)

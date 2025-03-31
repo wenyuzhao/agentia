@@ -19,6 +19,13 @@ class ToolResult(BaseException):
 
 class Plugin:
     NAME: str | None
+    _BUILTIN_ID: str | None = None
+
+    @property
+    def id(self) -> str:
+        if self._BUILTIN_ID:
+            return self._BUILTIN_ID
+        return self.name.lower()
 
     def __init__(self, config: Any = None):
         if hasattr(self, "NAME") and self.NAME:
@@ -40,8 +47,6 @@ class Plugin:
 
     @classmethod
     def validate_config(cls, config: dict[str, Any]): ...
-
-    def on_new_chat_message(self, msg: Message) -> Any: ...
 
 
 def __import_plugins() -> dict[str, Type[Plugin]]:
@@ -69,16 +74,23 @@ def __import_plugins() -> dict[str, Type[Plugin]]:
             "vision": vision.VisionPlugin,
             "web": web.WebPlugin,
         }
-    except ImportError:
+    except ImportError as e:
+        # raise e
         return {}
 
 
 ALL_PLUGINS = __import_plugins()
 
+for name, cls in ALL_PLUGINS.items():
+    cls._BUILTIN_ID = name
+
 
 def register_plugin(name: str) -> Callable[[Type[Plugin]], Type[Plugin]]:
+    assert name not in ALL_PLUGINS, f"Plugin {name} already registered"
+
     def wrapper(cls: Type[Plugin]):
         ALL_PLUGINS[name] = cls
+        cls._BUILTIN_ID = name
         return cls
 
     return wrapper

@@ -12,6 +12,7 @@ from typing import (
     Literal,
     Sequence,
     TYPE_CHECKING,
+    Type,
     Union,
     get_args,
     get_origin,
@@ -65,7 +66,7 @@ class ClientTool(BaseModel):
 class ToolRegistry:
     def __init__(self, agent: "Agent", tools: Tools | None = None) -> None:
         self.__functions: dict[str, ToolInfo] = {}
-        self.__plugins: dict[str, Plugin] = {}
+        self.__plugins: list[Plugin] = []
         self._agent = agent
         for t in tools or []:
             if inspect.isfunction(t):
@@ -77,14 +78,19 @@ class ToolRegistry:
         names = ", ".join([f"{k}" for k in self.__functions.keys()])
         self._agent.log.debug(f"Registered Tools: {names}")
 
-    async def init(self):
-        for p in self.__plugins.values():
+    async def init(self, silent: bool):
+        for p in self.__plugins:
+            # if p.init.__code__ == Plugin.init.__code__:
+            #     continue  # No need to initialize
+            if not silent:
+                rich.print(f"[bold blue]>[/bold blue] [blue]{p.id}[/blue]")
             try:
                 await p.init()
             except Exception as e:
-                rich.print(
-                    f"[red bold]Failed to initialize plugin {p.name}[/red bold][red]: {e}[/red]"
-                )
+                if not silent:
+                    rich.print(
+                        f"[red bold]Failed to initialize plugin `{p.id}`[/red bold][red]: {e}[/red]"
+                    )
                 raise e
 
     def _add_dispatch_tool(self, f: Callable[..., Any]):
@@ -203,30 +209,28 @@ class ToolRegistry:
 
     def __add_plugin(self, p: Plugin):
         # Add all functions from the plugin
+        plugin_name = p.name
         for _n, method in inspect.getmembers(p, predicate=inspect.ismethod):
             if not getattr(method, IS_TOOL_TAG, False):
                 continue
-            clsname = p.__class__.__name__
-            if clsname.endswith("Plugin"):
-                clsname = clsname[:-6]
             tool_info = self.__add_function(method)
-            if not tool_info.name.startswith(clsname + "__"):
+            if not tool_info.name.startswith(plugin_name + "__"):
                 old_name = tool_info.name
-                tool_info.name = clsname + "__" + tool_info.name
+                tool_info.name = plugin_name + "__" + tool_info.name
                 if not hasattr(tool_info, DISPLAY_NAME_TAG):
-                    tool_info.display_name = clsname + "@" + tool_info.display_name
+                    tool_info.display_name = plugin_name + "@" + tool_info.display_name
                 del self.__functions[old_name]
                 self.__functions[tool_info.name] = tool_info
         # Add the plugin to the list of plugins
-        clsname = p.__class__.__name__
-        if clsname.endswith("Plugin"):
-            clsname = clsname[:-6]
-        self.__plugins[clsname] = p
+        self.__plugins.append(p)
         # Call the plugin's register method
         p._register(self._agent)
 
-    def get_plugin(self, name: str) -> Plugin | None:
-        return self.__plugins.get(name)
+    def get_plugin(self, type: Type[Plugin]) -> Plugin | None:
+        for p in self.__plugins:
+            if isinstance(p, type):
+                return p
+        return None
 
     def is_empty(self) -> bool:
         return len(self.__functions) == 0
@@ -363,10 +367,3 @@ class ToolRegistry:
             else:
                 raise NotImplementedError("legacy functions not supported")
             yield result_msg
-            await self.on_new_chat_message(result_msg)
-
-    async def on_new_chat_message(self, msg: Message):
-        for p in self.__plugins.values():
-            result = p.on_new_chat_message(msg)
-            if inspect.iscoroutine(result):
-                await result

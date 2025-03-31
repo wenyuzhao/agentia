@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from agentia.agent import (
     Agent,
     ChatCompletion,
@@ -9,7 +10,7 @@ from agentia.agent import (
 )
 from agentia.message import Message, UserMessage
 from agentia.utils.config import load_agent_from_config
-import rich
+import rich, rich.panel
 import dotenv
 
 dotenv.load_dotenv()
@@ -57,6 +58,10 @@ async def __dump(agent: Agent, completion: ChatCompletion[MessageStream | Event]
 
 async def __run_async(agent: Agent):
     await agent.init()
+    assert agent.original_config_path
+    config_path = agent.original_config_path.relative_to(Path.cwd())
+    header = f"[bold blue]RUNNING:[/bold blue] [blue]{agent.id}[/blue] [dim italic]{config_path}[/dim italic]"
+    rich.print(rich.panel.Panel.fit(header))
     while True:
         try:
             console = rich.console.Console()

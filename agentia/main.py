@@ -1,5 +1,9 @@
 import typer
 import agentia.utils
+import asyncio
+from pathlib import Path
+from agentia import Agent
+import dotenv
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -21,19 +25,30 @@ def __check_group():
 
 @app.command(help="Start the command line REPL")
 def repl(agent: str):
-    __check_group()
+    dotenv.load_dotenv()
     agentia.utils.repl.run(agent)
 
 
 @app.command(help="Start the web app server")
 def serve():
     __check_group()
+
     import streamlit.web.bootstrap
-    from pathlib import Path
+
+    dotenv.load_dotenv()
 
     entry = Path(__file__).parent / "utils" / "app" / "app.py"
 
     streamlit.web.bootstrap.run(str(entry), False, [], {})
+
+
+@app.command(help="Setup plugins for all agents")
+def setup():
+    dotenv.load_dotenv()
+    ALL_AGENTS = Agent.get_all_agents()
+    for agent_info in ALL_AGENTS:
+        agent = Agent.load_from_config(agent_info.id)
+        asyncio.run(agent._Agent__init_plugins())  # type: ignore
 
 
 @app.callback()
