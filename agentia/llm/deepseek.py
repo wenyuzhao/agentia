@@ -1,6 +1,6 @@
 import os
 from agentia.history import History
-from . import ModelOptions
+from . import ModelOptions, LLMBackend
 from ..tools import ToolRegistry
 from .openai import OpenAIBackend
 

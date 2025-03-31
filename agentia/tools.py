@@ -330,7 +330,12 @@ class ToolRegistry:
             info = self.__functions[name]
 
             event = ToolCallEvent(
-                agent=self._agent, tool=info, id=t.id, function=t.function
+                id=t.id,
+                agent=self._agent.id,
+                name=info.name,
+                display_name=info.display_name,
+                description=info.description,
+                parameters=info.parameters,
             )
             yield event
             raw_result = {}
@@ -340,10 +345,12 @@ class ToolRegistry:
             except ToolResult as e:
                 raw_result = e.result
             event = ToolCallEvent(
-                agent=self._agent,
-                tool=info,
                 id=t.id,
-                function=t.function,
+                agent=self._agent.id,
+                name=info.name,
+                display_name=info.display_name,
+                description=info.description,
+                parameters=info.parameters,
                 result=raw_result,
             )
             yield event

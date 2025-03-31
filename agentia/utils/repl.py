@@ -42,16 +42,16 @@ async def __dump(agent: Agent, completion: ChatCompletion[MessageStream | Event]
             if (
                 isinstance(msg, ToolCallEvent)
                 and msg.result is None
-                and msg.tool.name != "_communicate"
+                and msg.name != "_communicate"
             ):
                 rich.print(
-                    f"[magenta][[bold]✨ TOOL:[/bold] {msg.tool.display_name}][/magenta]"
+                    f"[magenta][[bold]✨ TOOL:[/bold] {msg.display_name}][/magenta]"
                 )
             elif isinstance(msg, CommunicationEvent):
-                p, c = msg.parent, msg.child
+                c = agent.colleagues[msg.child].name
                 direction = "->" if msg.response is None else "<-"
                 rich.print(
-                    f"[magenta][[bold]✨ COMMUNICATE:[/bold] {p.name} {direction} {c.name}][/magenta] [dim]{msg.message}[/dim]"
+                    f"[magenta][[bold]✨ COMMUNICATE:[/bold] {agent.name} {direction} {c}][/magenta] [dim]{msg.message}[/dim]"
                 )
 
 
@@ -73,6 +73,6 @@ async def __run_async(agent: Agent):
 
 def run(agent: Agent | str):
     if isinstance(agent, str):
-        agent = load_agent_from_config(agent)
+        agent = load_agent_from_config(agent, persist=False, session_id=None)
 
     asyncio.run(__run_async(agent))

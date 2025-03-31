@@ -1,10 +1,12 @@
+from dataclasses import dataclass
 from typing import Annotated, Any
 import tomllib
 from pathlib import Path
+import shelve
 
-from agentia.agent import Agent
+from agentia.agent import Agent, AgentInfo, _get_global_cache_dir
 from agentia.plugins import ALL_PLUGINS, Plugin
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 AGENTS_SEARCH_PATHS = [
     Path.cwd(),
@@ -90,12 +92,17 @@ def __load_agent_from_config(
     pending: set[Path],
     agents: dict[Path, Agent],
     parent_tool_configs: dict[str, Any],
+    persist: bool,
+    session_id: str | None,
 ):
     """Load a bot from a configuration file"""
     # Load the configuration file
     assert file.exists()
     file = file.resolve()
-    config = Config(**tomllib.loads(file.read_text()))
+    try:
+        config = Config(**tomllib.loads(file.read_text()))
+    except ValidationError as e:
+        raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
     # Already loaded?
     if file in pending:
         raise ValueError(f"Circular dependency detected: {file.stem}")
@@ -106,9 +113,22 @@ def __load_agent_from_config(
     tools, tool_configs = __create_tools(config, parent_tool_configs)
     # Load colleagues
     colleagues: list[Agent] = []
+    colleague_session_ids: dict[str, str] = {}
+    if persist and session_id:
+        with shelve.open(
+            _get_global_cache_dir() / "sessions" / session_id / "history"
+        ) as db:
+            colleague_session_ids: dict[str, str] = db.get("colleagues", {})
     for child_id in config.agent.colleagues:
         child_path = __get_config_path(file.parent, child_id)
-        colleague = __load_agent_from_config(child_path, pending, agents, tool_configs)
+        colleague = __load_agent_from_config(
+            child_path,
+            pending,
+            agents,
+            tool_configs,
+            persist,
+            colleague_session_ids.get(child_id) if persist else None,
+        )
         colleagues.append(colleague)
     # Create agent
 
@@ -127,14 +147,21 @@ def __load_agent_from_config(
             Path(knowledge_base) if isinstance(knowledge_base, str) else knowledge_base
         ),
         user=config.agent.user,
+        persist=persist,
+        session_id=session_id,
     )
     agent.original_config = config
+    # Load history
+    if persist and session_id:
+        agent.load()
     pending.remove(file)
     agents[file] = agent
     return agent
 
 
-def load_agent_from_config(name: str | Path) -> Agent:
+def load_agent_from_config(
+    name: str | Path, persist: bool, session_id: str | None
+) -> Agent:
     """Load a bot from a configuration file"""
     if isinstance(name, Path):
         if not name.exists():
@@ -157,4 +184,30 @@ def load_agent_from_config(name: str | Path) -> Agent:
                 break
         if config_path is None:
             raise FileNotFoundError(f"Agent config not found: {name}")
-    return __load_agent_from_config(config_path, set(), {}, {})
+    return __load_agent_from_config(config_path, set(), {}, {}, persist, session_id)
+
+
+def find_all_agents() -> list[AgentInfo]:
+    """Find all agents in the search paths"""
+    agents: dict[str, AgentInfo] = {}
+    for path in AGENTS_SEARCH_PATHS:
+        if not path.exists():
+            continue
+        for file in path.glob("*.toml"):
+            if file.stem in agents:
+                continue
+            doc = tomllib.loads(file.read_text())
+            try:
+                doc = Config(**doc)
+            except ValidationError as e:
+                continue
+            agent_info = AgentInfo(
+                id=file.stem,
+                name=doc.agent.name,
+                icon=doc.agent.icon,
+                description=doc.agent.description,
+            )
+            agents[file.stem] = agent_info
+    agents_list = list(agents.values())
+    agents_list.sort(key=lambda x: x.name)
+    return agents_list

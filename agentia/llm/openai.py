@@ -65,6 +65,9 @@ class OpenAIBackend(LLMBackend):
         self.extra_body: dict[str, Any] = {}
         self.has_reasoning = False
 
+    def get_api_key(self) -> str:
+        return self.client.api_key
+
     @overload
     async def _chat_completion_request(
         self, messages: Sequence[Message], stream: Literal[False]

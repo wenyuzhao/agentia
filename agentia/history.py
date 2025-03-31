@@ -1,6 +1,8 @@
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
-
+import shelve
 import tiktoken
+
 from .message import BaseMessage, Message, SystemMessage
 
 ENCODING = tiktoken.encoding_for_model("gpt-4o-mini")
@@ -13,13 +15,18 @@ class History:
     def __init__(self, instructions: str | None) -> None:
         self._instructions = instructions
         self.__messages: list[Union[Message, "Event"]] = []
+        self.summary = None
+        self.__first_conversation_finished = False
         self.reset()
 
-    def get_for_inference(self, keep_last=0) -> list[Message]:
+    def update_summary(self, summary: str) -> None:
+        self.summary = summary
+
+    def get_for_inference(self) -> list[Message]:
         """
         Get the recent messages for inference
         """
-        messages = History.__trim_and_filter(self.__messages, keep_last=keep_last)
+        messages = History.__filter(self.__messages)
         return messages
 
     def reset(self):
@@ -38,62 +45,85 @@ class History:
         return self.__messages
 
     @staticmethod
-    def __trim_and_filter(
+    def __filter(
         msgs: list[Union[Message, "Event"]],
-        token_limit: int = 120000,
-        keep_first=0,
-        keep_last=0,
     ) -> list[Message]:
-        from .message import ContentPartText
+        """
+        Filter out non-message events
+        """
+        return [m for m in msgs if isinstance(m, Message)]
 
-        first_system_message = None
-        if len(msgs) > 0 and isinstance(msgs[0], SystemMessage):
-            first_system_message = msgs[0]
-            other_messages = msgs[1:]
-            if keep_first > 0:
-                keep_first -= 1
-        else:
-            other_messages = msgs
-        head_msgs = []
-        if keep_first > 0:
-            head_msgs = other_messages[:keep_first]
-            other_messages = other_messages[keep_first:]
-        tail_msgs = []
-        if keep_last > 0:
-            tail_msgs = other_messages[-keep_last:]
-            other_messages = other_messages[:-keep_last]
+    def _first_conversation_just_finished(self) -> bool:
+        from .message import AssistantMessage, UserMessage
 
-        def count_tokens(m: Message) -> int:
-            if isinstance(m.content, str):
-                return len(ENCODING.encode(m.content))
-            elif isinstance(m.content, list):
-                tokens = 0
-                for part in m.content:
-                    if isinstance(part, ContentPartText):
-                        tokens += len(ENCODING.encode(part.content))
-                return tokens
-            return 0
+        if self.__first_conversation_finished:
+            return False
+        has_assistant = (
+            len([m for m in self.__messages if isinstance(m, AssistantMessage)]) > 0
+        )
+        has_user = len([m for m in self.__messages if isinstance(m, UserMessage)]) > 0
+        finished = has_assistant and has_user
+        self.__first_conversation_finished = finished
+        return finished
 
-        msgs2: list[Message] = []
-        tokens = 0
-        if first_system_message is not None:
-            msgs2.append(first_system_message)
-            tokens += count_tokens(first_system_message)
-        for m in head_msgs:
-            if not isinstance(m, Message):
-                continue
-            msgs2.append(m)
-            tokens += count_tokens(m)
-        for m in tail_msgs:
-            if not isinstance(m, Message):
-                continue
-            tokens += count_tokens(m)
-        for m in other_messages:
-            if not isinstance(m, Message):
-                continue
-            tokens += count_tokens(m)
-            if tokens > token_limit:
-                break
-            msgs2.append(m)
-        msgs2.extend([m for m in tail_msgs if isinstance(m, Message)])
-        return msgs2
+    def _save(self, path: Path) -> None:
+        """
+        Save the history to a file
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        from .message import AssistantMessage
+
+        with shelve.open(path) as db:
+            db["messages"] = self.__messages
+            if self.summary:
+                db["summary"] = self.summary
+
+    def _load(self, path: Path) -> None:
+        """
+        Load the history from a file
+        """
+        if not path.exists():
+            return
+        with shelve.open(path) as db:
+            self.__messages = db["messages"]
+            self.summary = db.get("summary", None)
+
+    def get_formatted_history(self) -> str:
+        """
+        Get the formatted history for display
+        """
+        from .message import (
+            UserMessage,
+            AssistantMessage,
+            ToolMessage,
+            ContentPartText,
+            ContentPartImage,
+        )
+        from .agent import (
+            Event,
+            ToolCallEvent,
+            CommunicationEvent,
+            UserConsentEvent,
+        )
+
+        S = ""
+        for m in self.__messages:
+            match m:
+                case UserMessage(content=content):
+                    if isinstance(content, str):
+                        S += f"@USER:\n{content}"
+                    else:
+                        S += "@USER:\n"
+                        for p in content:
+                            if isinstance(p, ContentPartText):
+                                S += f"  - {p.content}\n"
+                            elif isinstance(p, ContentPartImage):
+                                S += f"  - {p.url}\n"
+                case AssistantMessage(content=content, tool_calls=tool_calls):
+                    S += f"@ASSISTANT:\n{content}\n"
+                    if tool_calls:
+                        S += "  - TOOL CALLS:\n"
+                        for t in tool_calls:
+                            S += f"    - [{t.id}] {t.function.name}\n"
+
+        return S

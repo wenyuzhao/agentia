@@ -15,7 +15,7 @@ def __check_group():
         import streamlit
     except ImportError:
         raise RuntimeError(
-            "Agentia REPL is not supported. You may need to reinstall agentia with all dependencies: `pip install agentia[all]`"
+            "Agentia REPL is not supported. You may need to reinstall agentia with all dependencies: `pipx install agentia[all]`"
         )
 
 
@@ -26,13 +26,10 @@ def repl(agent: str):
 
 
 @app.command(help="Start the web app server")
-def serve(agent: str):
+def serve():
     __check_group()
     import streamlit.web.bootstrap
     from pathlib import Path
-    import os
-
-    os.environ["AGENTIA_AGENT"] = agent
 
     entry = Path(__file__).parent / "utils" / "app" / "app.py"
 

@@ -13,7 +13,6 @@ from typing import (
     TYPE_CHECKING,
 )
 import shelve
-import uuid
 from slugify import slugify
 import weakref
 import uuid
@@ -44,19 +43,36 @@ def _get_global_cache_dir() -> Path:
 
 
 @dataclass
-class ToolCallEvent:
-    agent: "Agent"
-    tool: "ToolInfo"
+class AgentInfo:
     id: str
-    function: FunctionCall
+    name: str
+    icon: str | None = None
+    description: str | None = None
+
+
+@dataclass
+class SessionInfo:
+    id: str
+    agent: str
+    title: str | None = None
+
+
+@dataclass
+class ToolCallEvent:
+    id: str
+    agent: str
+    name: str
+    display_name: str
+    description: str
+    parameters: dict[str, Any]
     result: Any | None = None
 
 
 @dataclass
 class CommunicationEvent:
     id: str
-    parent: "Agent"
-    child: "Agent"
+    parent: str
+    child: str
     message: str
     response: str | None = None
 
@@ -99,23 +115,25 @@ class ChatCompletion(Generic[M]):
         self.__agen = agen
         self.__agent = agent
 
+    async def __save_history(self):
+        if not self.__agent.persist:
+            return
+        await self.__agent.save()
+
     async def __anext__(self) -> M:
         await self.__agent.init()
-        return await self.__agen.__anext__()
+        try:
+            return await self.__agen.__anext__()
+        except StopAsyncIteration as e:
+            await self.__save_history()
+            raise StopAsyncIteration from e
 
     def __aiter__(self):
         return self
 
-    async def messages(self) -> AsyncGenerator[M, None]:
-        await self.__agent.init()
-        async for event in self:
-            if isinstance(event, Message) or isinstance(event, MessageStream):
-                yield event
-
     async def __await_impl(self) -> str:
-        await self.__agent.init()
         last_message = ""
-        async for msg in self.__agen:
+        async for msg in self:
             if isinstance(msg, Message):
                 assert isinstance(msg.content, str)
                 last_message = msg.content
@@ -150,6 +168,9 @@ class Agent:
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
         debug: bool = False,
+        # Session recovery
+        persist: bool = False,
+        session_id: str | None = None,
     ):
         from .tools import ToolRegistry
 
@@ -163,7 +184,17 @@ class Agent:
         self.id = slugify((id or shortuuid.uuid()[:16]).strip())
 
         timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-        self.session_id = self.id + "-" + timestamp + "-" + str(uuid.uuid4())
+        if persist:
+            self.session_id = session_id or (
+                self.id + "-" + timestamp + "-" + str(shortuuid.uuid()[:16])
+            )
+        else:
+            if session_id:
+                raise ValueError("Session ID cannot be set when persist is False.")
+            self.session_id = (
+                self.id + "-" + timestamp + "-" + str(shortuuid.uuid()[:16])
+            )
+        self.persist = persist
         self.icon = icon
         self.log = MSG_LOGGER.getChild(self.id)
         if debug:
@@ -209,19 +240,19 @@ class Agent:
         self.__history = History(instructions=self.__instructions)
         self.__init_backend(model, options, api_key)
 
-        weakref.finalize(self, Agent.__sweeper, self.session_id)
+        weakref.finalize(self, Agent.__sweeper, self.session_id, self.persist)
 
     @staticmethod
-    def __sweeper(session_id: str):
-        session_dir = _get_global_cache_dir() / "sessions" / f"{session_id}"
-        if session_dir.exists():
+    def __sweeper(session_id: str, persist: bool):
+        session_dir = _get_global_cache_dir() / "sessions" / session_id
+        if session_dir.exists() and not persist:
             shutil.rmtree(session_dir)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.__sweeper(self.session_id)
+        self.__sweeper(self.session_id, self.persist)
 
     def open_configs_file(self):
         cache_file = self.agent_data_folder / "configs"
@@ -337,7 +368,7 @@ class Agent:
             target = self.colleagues[id]
             cid = uuid.uuid4().hex
             yield CommunicationEvent(
-                id=cid, parent=leader, child=target, message=message
+                id=cid, parent=leader.id, child=target.id, message=message
             )
             response = target.chat_completion(
                 [
@@ -357,8 +388,8 @@ class Agent:
                     last_message = m.content
             yield CommunicationEvent(
                 id=cid,
-                parent=leader,
-                child=target,
+                parent=leader.id,
+                child=target.id,
                 message=message,
                 response=last_message,
             )
@@ -588,7 +619,113 @@ class Agent:
         return agents
 
     @staticmethod
-    def load_from_config(config: str | Path):
+    def load_from_config(
+        config: str | Path, persist: bool = False, session_id: str | None = None
+    ):
         from .utils.config import load_agent_from_config
 
-        return load_agent_from_config(config)
+        return load_agent_from_config(config, persist, session_id)
+
+    def load(self, colleagues=True):
+        if not self.persist:
+            return
+        history_file = self.session_data_folder / "history"
+        if not history_file.exists():
+            return
+        self.history._load(history_file)
+        if colleagues:
+            with shelve.open(history_file) as db:
+                for k, v in db.get("colleagues", {}).items():
+                    colleague = self.colleagues.get(k)
+                    if colleague is None:
+                        continue
+                    colleague.session_id = v
+                    colleague.load(colleagues=False)
+
+    async def save(self):
+        if not self.persist:
+            return
+        # History
+        history_file = self.session_data_folder / "history"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        if self.history._first_conversation_just_finished():
+            await self.summarise()
+        self.history._save(history_file)
+        # Colleagues session IDs
+        with shelve.open(history_file) as db:
+            db["colleagues"] = {
+                k: v.session_id for k, v in self.colleagues.items() if v.persist
+            }
+        # Save summary
+        config_file = self.session_data_folder / "config"
+        with shelve.open(config_file) as db:
+            db["title"] = self.history.summary
+            db["agent"] = self.id
+
+    @staticmethod
+    def get_all_sessions(agent: str) -> list[SessionInfo]:
+        sessions_dir = _get_global_cache_dir() / "sessions"
+        if not sessions_dir.exists():
+            return []
+        sessions: list[SessionInfo] = []
+        for entry in sessions_dir.iterdir():
+            if entry.is_dir():
+                session_id = entry.stem
+                if session := Agent.load_session_info(session_id):
+                    if not agent or session.agent == agent:
+                        sessions.append(session)
+        # Sort in descending order
+        sessions.sort(reverse=True, key=lambda x: x.id)
+        return sessions
+
+    @staticmethod
+    def delete_session(id: str):
+        """Delete a session"""
+        session_dir = _get_global_cache_dir() / "sessions" / id
+        if not session_dir.exists():
+            return
+        shutil.rmtree(session_dir)
+
+    def get_session_info(self) -> SessionInfo:
+        """Get the session info"""
+        return SessionInfo(
+            id=self.session_id, agent=self.id, title=self.history.summary
+        )
+
+    @staticmethod
+    def load_session_info(session: str) -> SessionInfo | None:
+        """Get the session info"""
+        session_dir = _get_global_cache_dir() / "sessions" / session
+        if not session_dir.exists():
+            return None
+        config_file = session_dir / "config"
+        if not config_file.exists():
+            return None
+        with shelve.open(config_file) as db:
+            sess_title = db.get("title", None)
+            sess_agent = db["agent"]
+        return SessionInfo(id=session, agent=sess_agent, title=sess_title)
+
+    @staticmethod
+    def get_all_agents() -> list[AgentInfo]:
+        from agentia.utils.config import find_all_agents
+
+        return find_all_agents()
+
+    @staticmethod
+    def global_cache_dir():
+        """Get the global cache directory"""
+        return _get_global_cache_dir()
+
+    async def summarise(self) -> str:
+        """
+        Summarise the history as a short title
+        """
+        agent = Agent(
+            instructions="You need to summarise the following conversation as a short title. Just output the title, no other text, no quotes around it. The title should be short and precise, and it should be a single line. The title should not contain any other text.",
+            model="openai/gpt-4o-mini",
+        )
+        conversation = self.history.get_formatted_history()
+        result = await agent.chat_completion(conversation)
+        self.history.update_summary(result)
+        return result

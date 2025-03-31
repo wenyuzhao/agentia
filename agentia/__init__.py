@@ -21,12 +21,7 @@ from .message import (
 )
 from .plugins import Plugin, ALL_PLUGINS
 from . import plugins
-from .agent import (
-    Agent,
-    ChatCompletion,
-    ToolCallEvent,
-    Event,
-)
+from .agent import Agent, ChatCompletion, ToolCallEvent, Event, AgentInfo
 from .llm import ModelOptions
 from . import utils
 from .tools import Tools
@@ -55,6 +50,8 @@ __all__ = [
     "Tools",
     "ChatCompletion",
     "ToolCallEvent",
+    "Event",
+    "AgentInfo",
     "ModelOptions",
     "ToolCall",
     "ContentPart",
