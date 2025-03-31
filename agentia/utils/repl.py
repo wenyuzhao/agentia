@@ -1,8 +1,58 @@
 import asyncio
-from agentia.agent import Agent, ToolCallEvent, CommunicationEvent
+from agentia.agent import (
+    Agent,
+    ChatCompletion,
+    Event,
+    ToolCallEvent,
+    CommunicationEvent,
+    MessageStream,
+)
 from agentia.message import Message, UserMessage
 from agentia.utils.config import load_agent_from_config
 import rich
+import dotenv
+
+dotenv.load_dotenv()
+
+
+async def __dump(agent: Agent, completion: ChatCompletion[MessageStream | Event]):
+    def print_name_and_icon(name: str | None, icon: str | None, end: str = "\n"):
+        name = name or "Agent"
+        name_and_icon = f"[{icon} {name}]" if icon else f"[{name}]"
+        rich.print(f"[bold blue]{name_and_icon}[/bold blue]", end=end, flush=True)
+
+    async for msg in completion:
+        if isinstance(msg, Message):
+            print_name_and_icon(agent.name, agent.icon)
+            print(msg.content)
+        elif isinstance(msg, MessageStream):
+            name_printed = False
+            outputed = False
+            async for delta in msg:
+                if delta == "":
+                    continue
+                if not name_printed:
+                    print_name_and_icon(agent.name, agent.icon)
+                    name_printed = True
+                outputed = True
+                print(delta, end="", flush=True)
+            if outputed:
+                print()
+        elif isinstance(msg, ToolCallEvent | CommunicationEvent):
+            if (
+                isinstance(msg, ToolCallEvent)
+                and msg.result is None
+                and msg.tool.name != "_communicate"
+            ):
+                rich.print(
+                    f"[magenta][[bold]✨ TOOL:[/bold] {msg.tool.display_name}][/magenta]"
+                )
+            elif isinstance(msg, CommunicationEvent):
+                p, c = msg.parent, msg.child
+                direction = "->" if msg.response is None else "<-"
+                rich.print(
+                    f"[magenta][[bold]✨ COMMUNICATE:[/bold] {p.name} {direction} {c.name}][/magenta] [dim]{msg.message}[/dim]"
+                )
 
 
 async def __run_async(agent: Agent):
@@ -15,41 +65,14 @@ async def __run_async(agent: Agent):
                 break
         except EOFError:
             break
-        response = agent.chat_completion([UserMessage(prompt)], stream=True)
-        await response.dump()
+        response = agent.chat_completion(
+            [UserMessage(prompt)], stream=True, events=True
+        )
+        await __dump(agent, response)
 
 
 def run(agent: Agent | str):
     if isinstance(agent, str):
         agent = load_agent_from_config(agent)
-
-    def tool_start(e: ToolCallEvent):
-        agent = f"{e.agent.icon} {e.agent.name}" if e.agent.icon else f"{e.agent.name}"
-        tool = e.tool.display_name
-        if tool == "_communiate":
-            return
-        rich.print(f"[bold magenta][{agent}][/bold magenta] [magenta]{tool}[/magenta]")
-
-    def communication_start(e: CommunicationEvent):
-        p, c = e.parent, e.child
-        from_agent = f"{p.icon} {p.name}" if p.icon else f"{p.name}"
-        to_agent = f"{c.icon} {c.name}" if c.icon else f"{c.name}"
-        rich.print(
-            f"[bold magenta][{from_agent} -> {to_agent}][/bold magenta] [bright_black]{e.message}[/bright_black]"
-        )
-
-    def communication_end(e: CommunicationEvent):
-        p, c = e.parent, e.child
-        from_agent = f"{p.icon} {p.name}" if p.icon else f"{p.name}"
-        to_agent = f"{c.icon} {c.name}" if c.icon else f"{c.name}"
-        rich.print(
-            f"[bold magenta][{from_agent} <- {to_agent}][/bold magenta] [bright_black]{e.response}[/bright_black]"
-        )
-
-    all_agents = agent.all_agents()
-    for a in all_agents:
-        a.on_tool_start(tool_start)
-        a.on_commuication_start(communication_start)
-        a.on_commuication_end(communication_end)
 
     asyncio.run(__run_async(agent))
