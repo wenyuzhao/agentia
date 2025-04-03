@@ -28,7 +28,7 @@ async def test_function_call():
         stream=True,
     )
     all_assistant_content = ""
-    async for stream in response.messages():
+    async for stream in response:
         print("stream: ", stream)
         content = ""
         async for delta in stream:

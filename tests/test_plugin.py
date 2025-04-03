@@ -32,7 +32,7 @@ async def test_weather_and_memory_plugin():
         [UserMessage(content="What is the weather like in boston?")]
     )
     all_assistant_content: str = ""
-    async for msg in response.messages():
+    async for msg in response:
         if msg.role == "assistant":
             assert msg.content is None or isinstance(msg.content, str)
             all_assistant_content += msg.content or ""
