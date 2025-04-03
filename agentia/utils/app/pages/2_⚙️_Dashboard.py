@@ -1,4 +1,5 @@
-import asyncio
+import os
+from pathlib import Path
 import streamlit as st
 import copy
 import tomlkit
@@ -8,18 +9,51 @@ from agentia import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
 import agentia.utils.app.utils as utils
 from agentia.utils.config import ALL_RECOMMENDED_MODELS, Config
+from slugify import slugify
 
 st.set_page_config(initial_sidebar_state="collapsed")
-
-st.write("# Dashboard")
 
 
 ALL_AGENTS = Agent.get_all_agents()
 
+
+def new_agent():
+    st.write("#### Create a new agent:")
+    name = st.text_input("name", label_visibility="collapsed").strip()
+    if st.button("Create", type="primary", disabled=name == ""):
+        id = slugify(name)
+        doc = tomlkit.document()
+        table = tomlkit.table()
+        table.add("name", name)
+        doc.add("agent", table)
+        configs_dir = Path.cwd() / "agents"
+        if "AGENTIA_NEW_AGENT_DIR" in os.environ:
+            configs_dir = Path(os.environ["AGENTIA_NEW_AGENT_DIR"])
+        configs_dir.mkdir(parents=True, exist_ok=True)
+        with open(configs_dir / f"{id}.toml", "w+") as fp:
+            tomlkit.dump(doc, fp)
+        st.query_params["agent"] = id
+        if "initial_agent" in st.session_state:
+            del st.session_state["initial_agent"]
+        if "initial_doc" in st.session_state:
+            del st.session_state["initial_doc"]
+        st.rerun()
+
+
+@st.dialog("New Agent")
+def new_agent_dialog():
+    new_agent()
+
+
 if "agent" in st.query_params:
     init_agent_id = st.query_params.get("agent", "")
-else:
+elif len(ALL_AGENTS) > 0:
     init_agent_id = ALL_AGENTS[0].id
+else:
+    st.divider()
+    new_agent()
+    st.stop()
+
 # Load initial agent
 if "initial_agent" not in st.session_state:
     st.session_state["initial_agent"] = Agent.load_from_config(
@@ -34,8 +68,15 @@ if "initial_doc" not in st.session_state:
 init_doc: tomlkit.TOMLDocument = st.session_state["initial_doc"]
 
 
+col1, col2 = st.columns([4, 1], vertical_alignment="bottom")
+with col1:
+    st.write("# Dashboard")
+with col2:
+    if st.button("New Agent", use_container_width=True, type="primary"):
+        new_agent_dialog()
+
 selected_agent = st.selectbox(
-    "**Agent:**",
+    "**Select an Agent:**",
     options=ALL_AGENTS,
     format_func=lambda a: (
         f"{a.config.agent.icon} {a.config.agent.name}"
