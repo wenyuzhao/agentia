@@ -57,6 +57,8 @@ assert init_agent.config and agent.config_path
 assert agent.config and agent.config_path
 
 
+st.write("")
+
 settings_tab, plugins_tab = st.tabs(
     ["🤖&nbsp;&nbsp;&nbsp;**Agent Settings**", "🧩&nbsp;&nbsp;&nbsp;**Plugins**"]
 )
@@ -69,15 +71,18 @@ def render_settings_tab():
     config = agent.config
     new_config = copy.deepcopy(config)
 
-    new_config.agent.name = st.text_input("Name", init_config.agent.name)
-    new_config.agent.icon = st.text_input("Icon", init_config.agent.icon)
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        new_config.agent.icon = st.text_input("Icon", init_config.agent.icon)
+    with col2:
+        new_config.agent.name = st.text_input("Name", init_config.agent.name)
     new_config.agent.description = st.text_input(
         "Description", init_config.agent.description
     )
     if new_config.agent.description and new_config.agent.description.strip() == "":
         new_config.agent.description = ""
     new_config.agent.instructions = st.text_area(
-        "Instructions", init_config.agent.instructions
+        "Instructions", init_config.agent.instructions, height=256
     )
     if new_config.agent.instructions and new_config.agent.instructions.strip() == "":
         new_config.agent.instructions = ""
@@ -96,7 +101,6 @@ def render_settings_tab():
     if new_config.agent.model == "(default)":
         new_config.agent.model = None
 
-    st.write(config.agent.name)
     if st.button("Save", type="primary"):
         # Save new config
         assert agent.config_path
@@ -117,16 +121,19 @@ def render_settings_tab():
                 else:
                     doc["agent"][field] = value  # type: ignore
 
-        update_string_field("name", required=True)
-        update_string_field("icon")
-        update_string_field("description")
-        update_string_field("instructions")
-        update_string_field("model")
-        update_string_field("user")
+        try:
+            update_string_field("name", required=True)
+            update_string_field("icon")
+            update_string_field("description")
+            update_string_field("instructions")
+            update_string_field("model")
+            update_string_field("user")
 
-        with open(agent.config_path, "w") as fp:
-            tomlkit.dump(doc, fp)
-            print("Saved")
+            with open(agent.config_path, "w") as fp:
+                tomlkit.dump(doc, fp)
+                st.rerun()
+        except ValueError as e:
+            st.error("ERROR: " + str(e))
 
 
 with settings_tab:
@@ -145,39 +152,41 @@ def render_plugins_tab():
     # Current enabled plugins
     curr_enabled = agent.config.get_enabled_plugins()
 
+    st.write("###### Enabled Plugins")
     new_enabled = sorted(
-        st.multiselect("Enabled Plugins", all_plugins, default=init_enabled)
+        st.multiselect(
+            "", all_plugins, default=init_enabled, label_visibility="collapsed"
+        )
     )
 
     if new_enabled != curr_enabled:
         doc["agent"]["plugins"] = new_enabled  # type: ignore
         with open(agent.config_path, "w") as fp:
             tomlkit.dump(doc, fp)
-            print("Saved")
             st.rerun()
 
     # Configs
 
-    st.write("#### Plugin Configs")
+    st.write("")
+    st.write("###### Plugin Configs")
 
     for p in all_plugins:
         P = ALL_PLUGINS[p]
-        if P.__options__ and P.__options__.__code__ != Plugin.__options__.__code__:
-            with st.expander(P.NAME or p):
-                init_configs: Container = init_doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
-                curr_configs: Container = doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
-                new_configs = copy.deepcopy(init_configs)
-
-                P.__options__(agent=agent.id, configs=new_configs)
-
-                if new_configs != curr_configs:  # type: ignore
-                    if st.button("Save", type="primary", key=P.id() + ".save"):
-                        if "plugins" not in doc:
-                            doc["plugins"] = tomlkit.table()
-                        doc["plugins"][P.id()] = new_configs  # type: ignore
-                        with open(agent.config_path, "w") as fp:
-                            tomlkit.dump(doc, fp)
-                            st.rerun()
+        if P.__options__.__code__ == Plugin.__options__.__code__:
+            continue
+        with st.expander("**" + (P.NAME or p) + "**"):
+            init_configs: Container = init_doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
+            curr_configs: Container = doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
+            new_configs = copy.deepcopy(init_configs)
+            P.__options__(agent=agent.id, configs=new_configs)
+            if new_configs != curr_configs:  # type: ignore
+                if st.button("Save", type="primary", key=P.id() + ".save"):
+                    if "plugins" not in doc:
+                        doc["plugins"] = tomlkit.table()
+                    doc["plugins"][P.id()] = new_configs  # type: ignore
+                    with open(agent.config_path, "w") as fp:
+                        tomlkit.dump(doc, fp)
+                        st.rerun()
 
     # st.write("Plugins")
 

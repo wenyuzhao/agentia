@@ -118,9 +118,9 @@ def __load_agent_from_config(
     colleagues: list[Agent] = []
     colleague_session_ids: dict[str, str] = {}
     if persist and session_id:
-        with shelve.open(
-            _get_global_cache_dir() / "sessions" / session_id / "history"
-        ) as db:
+        history = _get_global_cache_dir() / "sessions" / session_id / "history"
+        history.parent.mkdir(parents=True, exist_ok=True)
+        with shelve.open(history) as db:
             colleague_session_ids: dict[str, str] = db.get("colleagues", {})
     for child_id in config.agent.colleagues:
         child_path = __get_config_path(file.parent, child_id)

@@ -14,6 +14,7 @@ from agentia import (
     AssistantMessage,
     ToolCallEvent,
 )
+from agentia.plugins import PluginInitError
 import agentia.utils.app.utils as utils
 
 dotenv.load_dotenv()
@@ -64,7 +65,7 @@ with st.sidebar:
     st.write("##### Sessions:")
     # All sessions
     for session in sessions:
-        active = session == agent.session_id
+        active = session.id == agent.session_id
         if session.title is None:
             if sinfo := Agent.load_session_info(session.id):
                 title = sinfo.title or "New Conversation"
@@ -104,6 +105,22 @@ with st.sidebar:
     ):
         delete_all(agent.id, agent.name or "")
 
+# Initialize plugins
+
+
+async def init_agent():
+    try:
+        await agent.init()
+    except PluginInitError as e:
+        st.error(f"Failed to initialize plugin **{e.plugin}**: _{e.msg}_")
+
+        with st.expander("Traceback", expanded=False):
+            st.exception(e.original)
+
+        st.stop()
+
+
+asyncio.run(init_agent())
 
 # Render previous messages
 

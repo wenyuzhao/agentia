@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 
 from tomlkit.container import Container
 from ..decorators import *
@@ -28,8 +29,8 @@ class MSToDoPlugin(Plugin):
         import pymstodo
 
         self.agent.log.info("MSToDoPlugin initialized")
-        client_id = self.config.get("client_id")
-        client_secret = self.config.get("client_secret")
+        client_id = os.environ["AUTH_AZURE_AD_CLIENT_ID"]
+        client_secret = os.environ["AUTH_AZURE_AD_CLIENT_SECRET"]
 
         with self.agent.open_configs_file() as cache:
             token = None
@@ -38,6 +39,8 @@ class MSToDoPlugin(Plugin):
                 if self.__test_token(client_id, client_secret, cache[key]):
                     token = cache[key]
             if token is None:
+                if self.is_server():
+                    raise RuntimeError("Please setup the plugin on dashboard")
                 auth_url = pymstodo.ToDoConnection.get_auth_url(client_id)
                 redirect_resp = input(
                     f"Go here and authorize:\n{auth_url}\n\nPaste the full redirect URL below:\n"
@@ -201,7 +204,19 @@ class MSToDoPlugin(Plugin):
         """Append a comment to a task in Microsoft To Do."""
         time = datetime.now()
         time_str = time.strftime("%Y-%m-%d %H:%M:%S")
-        comment = f"[{time_str}] @{self.agent.id}: {comment}"
+        name = ""
+        if self.agent.name:
+            name = self.agent.name
+        elif not self.agent.id_is_random:
+            name = self.agent.id
+        if self.agent.icon:
+            name = f"{self.agent.icon} {name}".strip()
+        comment = f"[{name} - {time_str}]\n{comment}"
+        task = self.client.get_task(task_id=task_id, list_id=list_id)
+        prev_comment = (task.body_text or "").strip()
+        if prev_comment != "":
+            comment = f"{prev_comment}\n\n{comment}"
+
         task_data: Any = {
             "body": {"content": comment, "contentType": "text"},
         }

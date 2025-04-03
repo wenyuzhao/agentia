@@ -1,3 +1,4 @@
+import os
 import typer
 import agentia.utils
 import asyncio
@@ -32,6 +33,8 @@ def repl(agent: str):
 @app.command(help="Start the web app server")
 def serve():
     __check_group()
+
+    os.environ["AGENTIA_SERVER"] = "1"
 
     import streamlit.web.bootstrap
 

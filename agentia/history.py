@@ -85,8 +85,10 @@ class History:
         if not path.exists():
             return
         with shelve.open(path) as db:
-            self.__messages = db["messages"]
-            self.summary = db.get("summary", None)
+            if "messages" in db:
+                self.__messages = db["messages"]
+            if "messages" in db:
+                self.summary = db.get("summary", None)
 
     def get_formatted_history(self) -> str:
         """

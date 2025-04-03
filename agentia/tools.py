@@ -79,19 +79,19 @@ class ToolRegistry:
         self._agent.log.debug(f"Registered Tools: {names}")
 
     async def init(self, silent: bool):
-        for p in self.__plugins:
-            # if p.init.__code__ == Plugin.init.__code__:
-            #     continue  # No need to initialize
+        from .plugins import PluginInitError
+
+        for plugin in self.__plugins:
             if not silent:
-                rich.print(f"[bold blue]>[/bold blue] [blue]{p.id()}[/blue]")
+                rich.print(f"[bold blue]>[/bold blue] [blue]{plugin.id()}[/blue]")
             try:
-                await p.init()
+                await plugin.init()
             except Exception as e:
                 if not silent:
                     rich.print(
-                        f"[red bold]Failed to initialize plugin `{p.id()}`[/red bold][red]: {e}[/red]"
+                        f"[red bold]Failed to initialize plugin `{plugin.id()}`[/red bold][red]: {e}[/red]"
                     )
-                raise e
+                raise PluginInitError(plugin.id(), e) from e
 
     def _add_dispatch_tool(self, f: Callable[..., Any]):
         return self.__add_function(f)

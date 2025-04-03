@@ -185,6 +185,7 @@ class Agent:
                 raise ValueError("Agent name cannot be empty.")
         self.name = name
         self.id = slugify((id or shortuuid.uuid()[:16]).strip())
+        self.id_is_random = id is None
 
         timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         if persist:
@@ -750,6 +751,7 @@ class Agent:
             instructions="You need to summarise the following conversation as a short title. Just output the title, no other text, no quotes around it. The title should be short and precise, and it should be a single line. The title should not contain any other text.",
             model="openai/gpt-4o-mini",
         )
+        await agent.init(silent=True)
         conversation = self.history.get_formatted_history()
         result = await agent.chat_completion(conversation)
         self.history.update_summary(result)

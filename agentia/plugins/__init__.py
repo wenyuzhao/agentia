@@ -1,3 +1,4 @@
+import os
 import tomlkit.container
 from ..decorators import tool
 from ..message import Message
@@ -6,6 +7,14 @@ import tomlkit
 
 if TYPE_CHECKING:
     from ..agent import Agent
+
+
+class PluginInitError(RuntimeError):
+    def __init__(self, plugin: str, original: BaseException) -> None:
+        self.plugin = plugin
+        self.msg = str(original)
+        self.original = original
+        super().__init__(f"Plugin {plugin} failed to initialize: {self.msg}")
 
 
 class ToolResult(BaseException):
@@ -33,6 +42,11 @@ class Plugin:
 
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
+
+    @staticmethod
+    def is_server() -> bool:
+        v = os.environ.get("AGENTIA_SERVER", None)
+        return v not in [None, "", "0", "false", "FALSE", "False"]
 
     @classmethod
     def name(cls) -> str:
