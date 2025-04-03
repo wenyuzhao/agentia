@@ -25,27 +25,25 @@ print(response)
 
 ## Create an Agent from a Config File
 
-1. Create a config file at `./alice.yml`
+1. Create a config file at `./alice.toml`
 
-```yaml
-name: Alice
-icon: 👩
-instructions: You are a helpful assistant
-tools:
-  clock:
-  calculator:
-  # ... other tools
+```toml
+[agent]
+name = "Alice" # This is the only required field
+icon = "👩"
+instructions = "You are a helpful assistant"
+model = "openai/o3-mini"
+plugins = ["calc", "clock", "web"]
 ```
 
 2. In your python code:
 
 ```python
-agent = Agent.load_from_config("./alice.yml")
+agent = Agent.load_from_config("./alice.toml")
 ```
 
 3. Alternatively, start a REPL:
 
 ```bash
-pipx install agentia
-agentia repl alice
+uvx agentia repl alice
 ```
