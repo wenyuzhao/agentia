@@ -1,7 +1,12 @@
+import os
+from pathlib import Path
 import shelve
 from typing import Literal, Sequence, TypeVar, Callable
+from slugify import slugify
 import streamlit as st
 import uuid
+
+import tomlkit
 
 from agentia.agent import Agent, SessionInfo
 
@@ -216,3 +221,26 @@ def find_index(a: Sequence[T], f: Callable[[T], bool]) -> int | None:
         if f(item):
             return i
     return None
+
+
+def new_agent():
+    st.write("#### Create a new agent:")
+    name = st.text_input("name", label_visibility="collapsed").strip()
+    if st.button("Create", type="primary", disabled=name == ""):
+        id = slugify(name)
+        doc = tomlkit.document()
+        table = tomlkit.table()
+        table.add("name", name)
+        doc.add("agent", table)
+        configs_dir = Path.cwd() / "agents"
+        if "AGENTIA_NEW_AGENT_DIR" in os.environ:
+            configs_dir = Path(os.environ["AGENTIA_NEW_AGENT_DIR"])
+        configs_dir.mkdir(parents=True, exist_ok=True)
+        with open(configs_dir / f"{id}.toml", "w+") as fp:
+            tomlkit.dump(doc, fp)
+        st.query_params["agent"] = id
+        if "initial_agent" in st.session_state:
+            del st.session_state["initial_agent"]
+        if "initial_doc" in st.session_state:
+            del st.session_state["initial_doc"]
+        st.rerun()

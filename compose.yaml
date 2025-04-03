@@ -6,8 +6,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - 2334:8501
+      - ${STREAMLIT_SERVER_PORT:-8501}:${STREAMLIT_SERVER_PORT:-8501}
     volumes:
-      - ./data/agents:/app/agents:ro
+      - ./data/agents:/app/agents
       - ./data/.cache:/app/.cache
     env_file: .env

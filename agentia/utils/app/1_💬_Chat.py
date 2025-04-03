@@ -24,6 +24,10 @@ st.set_page_config(initial_sidebar_state="collapsed")
 ALL_AGENTS = Agent.get_all_agents()
 ALL_AGENT_IDS = [a.id for a in ALL_AGENTS]
 
+if len(ALL_AGENT_IDS) == 0:
+    utils.new_agent()
+    st.stop()
+
 agent, sessions = utils.get_initial_agent(ALL_AGENT_IDS)
 
 

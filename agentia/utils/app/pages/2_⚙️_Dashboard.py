@@ -17,32 +17,9 @@ st.set_page_config(initial_sidebar_state="collapsed")
 ALL_AGENTS = Agent.get_all_agents()
 
 
-def new_agent():
-    st.write("#### Create a new agent:")
-    name = st.text_input("name", label_visibility="collapsed").strip()
-    if st.button("Create", type="primary", disabled=name == ""):
-        id = slugify(name)
-        doc = tomlkit.document()
-        table = tomlkit.table()
-        table.add("name", name)
-        doc.add("agent", table)
-        configs_dir = Path.cwd() / "agents"
-        if "AGENTIA_NEW_AGENT_DIR" in os.environ:
-            configs_dir = Path(os.environ["AGENTIA_NEW_AGENT_DIR"])
-        configs_dir.mkdir(parents=True, exist_ok=True)
-        with open(configs_dir / f"{id}.toml", "w+") as fp:
-            tomlkit.dump(doc, fp)
-        st.query_params["agent"] = id
-        if "initial_agent" in st.session_state:
-            del st.session_state["initial_agent"]
-        if "initial_doc" in st.session_state:
-            del st.session_state["initial_doc"]
-        st.rerun()
-
-
 @st.dialog("New Agent")
 def new_agent_dialog():
-    new_agent()
+    utils.new_agent()
 
 
 if "agent" in st.query_params:
@@ -51,7 +28,7 @@ elif len(ALL_AGENTS) > 0:
     init_agent_id = ALL_AGENTS[0].id
 else:
     st.divider()
-    new_agent()
+    utils.new_agent()
     st.stop()
 
 # Load initial agent
