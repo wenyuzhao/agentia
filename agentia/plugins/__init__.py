@@ -38,7 +38,10 @@ class Plugin:
     def name(cls) -> str:
         if cls.NAME:
             return cls.NAME
-        return cls.__name__
+        name = cls.__name__
+        if name.endswith("Plugin"):
+            name = name[:-6]
+        return name
 
     @classmethod
     def id(cls) -> str:

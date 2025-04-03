@@ -202,6 +202,7 @@ class Agent:
         self.log = MSG_LOGGER.getChild(self.id)
         if debug:
             self.log.setLevel(logging.DEBUG)
+        self.debug = debug
         model = model or DEFAULT_MODEL
         self.description = description
         self.colleagues: dict[str, "Agent"] = {}
