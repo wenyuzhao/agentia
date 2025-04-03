@@ -24,9 +24,10 @@ class AgentConfig(BaseModel):
     knowledge_base: str | bool = False
     colleagues: list[str] = Field(default_factory=list)
     user: str | None = None
+    plugins: list[str] | None = None
 
 
-PluginsConfig = dict[str, bool | dict[str, Any]]
+PluginsConfig = dict[str, dict[str, Any]]
 
 
 def check_plugins(configs: PluginsConfig) -> PluginsConfig:
@@ -63,21 +64,21 @@ def __get_config_path(cwd: Path, id: str):
     raise FileNotFoundError(f"Agent config not found: {id}")
 
 
-def __create_tools(
-    config: Config, parent_plugins_config: PluginsConfig
-) -> tuple[list[Plugin], dict[str, Any]]:
+def __create_tools(config: Config) -> tuple[list[Plugin], dict[str, Any]]:
     tools: list[Plugin] = []
     tool_configs = {}
-    for name, c in config.plugins.items():
-        if c == False or c is None:
-            continue
+    enabled_plugins = (
+        config.agent.plugins
+        if config.agent.plugins is not None
+        else list(config.plugins.keys())
+    )
+    for name in enabled_plugins:
+        c = config.plugins.get(name, {})
         if name not in ALL_PLUGINS:
             raise ValueError(f"Unknown tool: {name}")
         PluginCls = ALL_PLUGINS[name]
         if not (c is None or isinstance(c, dict)):
             raise ValueError(f"Invalid config for tool {name}: must be a dict or null")
-        if c is None and name in parent_plugins_config:
-            c = parent_plugins_config[name]
         c = c if isinstance(c, dict) else {}
         tool_configs[name] = c
         tools.append(PluginCls(config=c))
@@ -88,7 +89,6 @@ def __load_agent_from_config(
     file: Path,
     pending: set[Path],
     agents: dict[Path, Agent],
-    parent_tool_configs: dict[str, Any],
     persist: bool,
     session_id: str | None,
 ):
@@ -107,7 +107,7 @@ def __load_agent_from_config(
     if file in agents:
         return agents[file]
     # Create tools
-    tools, tool_configs = __create_tools(config, parent_tool_configs)
+    tools, tool_configs = __create_tools(config)
     # Load colleagues
     colleagues: list[Agent] = []
     colleague_session_ids: dict[str, str] = {}
@@ -122,7 +122,6 @@ def __load_agent_from_config(
             child_path,
             pending,
             agents,
-            tool_configs,
             persist,
             colleague_session_ids.get(child_id) if persist else None,
         )
@@ -184,7 +183,7 @@ def load_agent_from_config(
             raise FileNotFoundError(f"Agent config not found: {name}")
     if config_path.stem.startswith(("_", ".", "-")):
         raise ValueError(f"Invalid agent file name: {config_path.stem}")
-    return __load_agent_from_config(config_path, set(), {}, {}, persist, session_id)
+    return __load_agent_from_config(config_path, set(), {}, persist, session_id)
 
 
 def find_all_agents() -> list[AgentInfo]:

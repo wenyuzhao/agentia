@@ -1,7 +1,9 @@
 from datetime import datetime
+
+from tomlkit.container import Container
 from ..decorators import *
 from . import Plugin
-from typing import Annotated, Literal, override, TYPE_CHECKING
+from typing import Annotated, Any, Literal, override, TYPE_CHECKING
 from dataclasses import asdict
 
 if TYPE_CHECKING:
@@ -31,7 +33,7 @@ class MSToDoPlugin(Plugin):
 
         with self.agent.open_configs_file() as cache:
             token = None
-            key = self.cache_key + ".token"
+            key = self.cache_key(".token")
             if key in cache:
                 if self.__test_token(client_id, client_secret, cache[key]):
                     token = cache[key]
@@ -48,6 +50,16 @@ class MSToDoPlugin(Plugin):
             client_id=client_id, client_secret=client_secret, token=token
         )
         self.default_list_id = self.client.get_lists()[0].list_id
+
+    @classmethod
+    @override
+    def __options__(cls, agent: str, configs: Container):
+        from agentia.utils.app.utils.oauth import OAuth2Client
+
+        oauth_client = OAuth2Client.azure_ad(agent, cls.id())
+        oauth_client.login_panel(
+            scope="user.read Tasks.Read Tasks.ReadWrite openid profile offline_access"
+        )
 
     def __process_time(self, time: str) -> datetime:
         # time is in the format of YYYY-MM-DD HH:MM:SS

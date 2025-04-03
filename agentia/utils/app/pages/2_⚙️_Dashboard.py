@@ -1,8 +1,11 @@
+import asyncio
 import streamlit as st
 import copy
 import tomlkit
+import tomlkit.container
 
 from agentia import Agent
+from agentia.plugins import ALL_PLUGINS, Plugin
 import agentia.utils.app.utils as utils
 from agentia.utils.config import ALL_RECOMMENDED_MODELS, Config
 
@@ -111,5 +114,57 @@ with settings_tab:
 
 
 with plugins_tab:
+    assert agent.original_config_path
+    if "initial_tomlkit_doc" not in st.session_state:
+        st.session_state["initial_tomlkit_doc"] = tomlkit.parse(
+            agent.original_config_path.read_text()
+        )
+    initial_doc: tomlkit.TOMLDocument = st.session_state["initial_tomlkit_doc"]
+    doc = tomlkit.parse(agent.original_config_path.read_text())
 
-    st.write("Plugins")
+    all_plugins = [k for k, v in ALL_PLUGINS.items()]
+    initial_enabled = []
+    if initial_config.agent.plugins is not None:
+        initial_enabled = sorted(initial_config.agent.plugins)
+    else:
+        initial_enabled = sorted(initial_config.plugins.keys())
+    curr_enabled = []
+    if agent.original_config.agent.plugins is not None:
+        curr_enabled = sorted(agent.original_config.agent.plugins)
+    else:
+        curr_enabled = sorted(agent.original_config.plugins.keys())
+
+    enabled = sorted(
+        st.multiselect("Enabled Plugins", all_plugins, default=initial_enabled)
+    )
+
+    if enabled != curr_enabled:
+        print(enabled, curr_enabled)
+        doc["agent"]["plugins"] = enabled  # type: ignore
+        with open(agent.original_config_path, "w") as fp:
+            tomlkit.dump(doc, fp)
+            print("Saved")
+            st.rerun()
+
+    # Configs
+
+    st.write("#### Plugin Configs")
+
+    for p in all_plugins:
+        P = ALL_PLUGINS[p]
+        if P.__options__ and P.__options__.__code__ != Plugin.__options__.__code__:
+            plugin = agent.get_plugin(P)
+            with st.expander(P.NAME or p):
+                initial_configs: tomlkit.container.Container = initial_doc["plugins"].get(P.id(), {})  # type: ignore
+                configs: tomlkit.container.Container = doc["plugins"].get(P.id(), {})  # type: ignore
+                initial_configs_cloned = copy.deepcopy(initial_configs)
+                P.__options__(agent=agent.id, configs=initial_configs_cloned)
+                if initial_configs_cloned != configs:  # type: ignore
+                    if st.button("Save", type="primary", key=P.id() + ".save"):
+                        doc["plugins"][P.id()] = initial_configs_cloned  # type: ignore
+                        with open(agent.d, "w") as fp:
+                            tomlkit.dump(doc, fp)
+                            print("Saved")
+                            st.rerun()
+
+    # st.write("Plugins")

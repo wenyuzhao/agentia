@@ -258,10 +258,15 @@ class Agent:
     def __exit__(self, exc_type, exc_value, traceback):
         self.__sweeper(self.session_id, self.persist)
 
+    @staticmethod
+    def get_config_path(agent: str) -> Path:
+        """Get the config path"""
+        return _get_global_cache_dir() / "agents" / agent / "config"
+
     def open_configs_file(self):
-        cache_file = self.agent_data_folder / "configs"
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        return shelve.open(cache_file)
+        config_file = self.agent_data_folder / "configs"
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        return shelve.open(config_file)
 
     @staticmethod
     def set_default_model(model: str):

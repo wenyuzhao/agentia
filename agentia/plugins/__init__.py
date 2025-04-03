@@ -1,6 +1,8 @@
+import tomlkit.container
 from ..decorators import tool
 from ..message import Message
 from typing import TYPE_CHECKING, Any, Callable, Type
+import tomlkit
 
 if TYPE_CHECKING:
     from ..agent import Agent
@@ -17,32 +19,70 @@ class ToolResult(BaseException):
         return self.__result
 
 
+def _streamlit_enabled():
+    try:
+        import streamlit
+
+        return True
+    except ImportError:
+        return False
+
+
 class Plugin:
-    NAME: str | None
+    STREAMLIT_ENABLED: bool = _streamlit_enabled()
+
+    NAME: str | None = None
     _BUILTIN_ID: str | None = None
 
-    @property
-    def id(self) -> str:
-        if self._BUILTIN_ID:
-            return self._BUILTIN_ID
-        return self.name.lower()
+    @classmethod
+    def name(cls) -> str:
+        if cls.NAME:
+            return cls.NAME
+        return cls.__name__
+
+    @classmethod
+    def id(cls) -> str:
+        if cls._BUILTIN_ID:
+            return cls._BUILTIN_ID
+        return cls.name().lower()
+
+    @classmethod
+    def cache_key(cls, k: str | None = None) -> str:
+        key = f"plugins.{cls.id()}".lower()
+        if k:
+            while k.startswith("."):
+                k = k[1:]
+            key += f".{k}"
+        return key
 
     def __init__(self, config: Any = None):
-        if hasattr(self, "NAME") and self.NAME:
-            self.name = self.NAME.strip()
-        else:
-            self.name = self.__class__.__name__
-            if self.name.endswith("Plugin"):
-                self.name = self.name[:-6]
-        self.cache_key = f"plugins.{self.name}".lower()
         self.config = config
         self.agent: "Agent"
 
     def _register(self, agent: "Agent"):
         self.agent = agent
-        self.log = self.agent.log.getChild(self.name)
+        self.log = self.agent.log.getChild(self.name())
 
     async def init(self):
+        """
+        Initialize the plugin before running the agent.
+        This may involve creating API clients, login, and verify auth tokens.
+
+        For OAuth:
+            Login steps here can only access to CLI inputs.
+            You may also want to override `__options__` so that user can login on the dashboard site.
+        """
+        pass
+
+    @classmethod
+    def __options__(cls, agent: str, configs: tomlkit.container.Container):
+        """
+        Web UI for logging on the user and configuring the plugin.
+        Any modifications to the `configs` parameter will be saved to the config file.
+
+        For OAuth:
+            Please call `self.agent.open_configs_file()` and save your oauth tokens there. Same for other secrets.
+        """
         pass
 
     @classmethod

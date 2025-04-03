@@ -209,7 +209,7 @@ class ToolRegistry:
 
     def __add_plugin(self, p: Plugin):
         # Add all functions from the plugin
-        plugin_name = p.name
+        plugin_name = p.name()
         for _n, method in inspect.getmembers(p, predicate=inspect.ismethod):
             if not getattr(method, IS_TOOL_TAG, False):
                 continue

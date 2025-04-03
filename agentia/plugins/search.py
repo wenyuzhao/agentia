@@ -1,6 +1,6 @@
 from ..decorators import *
 from . import Plugin
-from typing import TYPE_CHECKING, Annotated, Union
+from typing import TYPE_CHECKING, Annotated, Union, override
 from dataforseo_client import (
     configuration as dfs_config,
     api_client as dfs_api_provider,
@@ -27,16 +27,16 @@ from dataforseo_client.models.serp_google_news_live_advanced_request_info import
 )
 from dataforseo_client.models.work_hours import WorkHours
 from dataforseo_client.models.work_day_info import WorkDayInfo
+import os
+
+from tomlkit.container import Container
 
 
 class SearchPlugin(Plugin):
+    @override
     async def init(self):
-        username = self.config.get("username")
-        password = self.config.get("password")
-        if not username:
-            raise ValueError("DataForSEO Serp API username is required")
-        if not password:
-            raise ValueError("DataForSEO Serp API password is required")
+        username = os.environ["AUTH_DATAFORSEO_USERNAME"]
+        password = os.environ["AUTH_DATAFORSEO_PASSWORD"]
         self.__country = self.config.get("country", "Australia")
         if self.__country not in _ALL_COUNTRIES:
             raise ValueError(f"Invalid country: {self.__country}")
@@ -47,6 +47,23 @@ class SearchPlugin(Plugin):
         from dataforseo_client.api.serp_api import SerpApi
 
         self.__api = SerpApi(self.__client)
+
+    @classmethod
+    @override
+    def __options__(cls, agent: str, configs: Container):
+        import streamlit as st
+
+        v = configs.get("country", "Australia")
+        index = _ALL_COUNTRIES.index(v) if v in _ALL_COUNTRIES else None
+
+        configs["country"] = st.selectbox(
+            "Select the country for the search",
+            options=_ALL_COUNTRIES,
+            index=index,
+        )
+
+        if "Australia" in configs["country"].value:
+            del configs["country"]
 
     def __process_result(
         self,

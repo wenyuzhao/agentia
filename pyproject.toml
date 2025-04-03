@@ -20,6 +20,7 @@ dependencies = [
     "pydantic>=2.10.4",
     "shortuuid>=1.0.13",
     "rich>=14.0.0",
+    "tomlkit>=0.13.2",
 ]
 
 [project.urls]
@@ -36,7 +37,11 @@ dev = [
     "pytest-asyncio>=0.21.1,<0.22",
 ]
 plugins = ["pymstodo>=0.2.0", "dataforseo-client>=1.0.45", "markdownify>=1.1.0"]
-all = [{ include-group = "plugins" }, "streamlit>=1.44.0", "tomlkit>=0.13.2"]
+all = [
+    { include-group = "plugins" },
+    "streamlit>=1.44.0",
+    "streamlit-oauth>=0.1.11",
+]
 
 [tool.hatch.build.targets.sdist]
 include = ["agentia"]
