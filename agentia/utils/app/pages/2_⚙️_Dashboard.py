@@ -162,7 +162,7 @@ with plugins_tab:
                 if initial_configs_cloned != configs:  # type: ignore
                     if st.button("Save", type="primary", key=P.id() + ".save"):
                         doc["plugins"][P.id()] = initial_configs_cloned  # type: ignore
-                        with open(agent.d, "w") as fp:
+                        with open(agent.original_config_path, "w") as fp:
                             tomlkit.dump(doc, fp)
                             print("Saved")
                             st.rerun()
