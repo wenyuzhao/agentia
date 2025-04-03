@@ -12,4 +12,4 @@ RUN uv sync --all-groups --frozen
 ADD ./setup.sh /app/setup
 ENV PATH="/app:$PATH"
 
-CMD ["uv", "run", "agentia", "serve"]
+CMD uv run agentia serve

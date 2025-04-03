@@ -1,0 +1,6 @@
+.*
+/agents*
+__pycache__
+/Dockerfile
+/compose.yaml
+/data

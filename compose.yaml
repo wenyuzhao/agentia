@@ -1,15 +1,13 @@
 services:
   agentia:
+    container_name: agentia
     build:
       context: .
       dockerfile: Dockerfile
-    stdin_open: true
-    tty: true
-    container_name: agentia
     restart: unless-stopped
     ports:
       - 2334:8501
     volumes:
-      - ./agents:/app/agents:ro
+      - ./data/agents:/app/agents:ro
       - ./data/.cache:/app/.cache
     env_file: .env
