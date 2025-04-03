@@ -155,7 +155,10 @@ def render_plugins_tab():
     st.write("###### Enabled Plugins")
     new_enabled = sorted(
         st.multiselect(
-            "", all_plugins, default=init_enabled, label_visibility="collapsed"
+            "Enabled Plugins",
+            all_plugins,
+            default=init_enabled,
+            label_visibility="collapsed",
         )
     )
 
