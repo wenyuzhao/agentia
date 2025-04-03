@@ -62,7 +62,7 @@ class SearchPlugin(Plugin):
             index=index,
         )
 
-        if "Australia" in configs["country"].value:
+        if "Australia" == configs["country"]:
             del configs["country"]
 
     def __process_result(

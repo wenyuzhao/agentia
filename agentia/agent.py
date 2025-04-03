@@ -206,8 +206,8 @@ class Agent:
         self.description = description
         self.colleagues: dict[str, "Agent"] = {}
         self.context: Any = None
-        self.original_config: Optional["Config"] = None
-        self.original_config_path: Optional[Path] = None
+        self.config: Optional["Config"] = None
+        self.config_path: Optional[Path] = None
         self.agent_data_folder = _get_global_cache_dir() / "agents" / f"{self.id}"
         self.session_data_folder = (
             _get_global_cache_dir() / "sessions" / f"{self.session_id}"
@@ -264,7 +264,7 @@ class Agent:
         return _get_global_cache_dir() / "agents" / agent / "config"
 
     def open_configs_file(self):
-        config_file = self.agent_data_folder / "configs"
+        config_file = self.agent_data_folder / "config"
         config_file.parent.mkdir(parents=True, exist_ok=True)
         return shelve.open(config_file)
 
@@ -296,9 +296,7 @@ class Agent:
 
     async def __init_plugins(self, silent: bool):
         agent_path = (
-            self.original_config_path.relative_to(Path.cwd())
-            if self.original_config_path
-            else ""
+            self.config_path.relative_to(Path.cwd()) if self.config_path else ""
         )
         header = f"[bold blue]Configuring plugins:[/bold blue] [blue]{self.id}[/blue] [dim italic]{agent_path}[/dim italic]"
 

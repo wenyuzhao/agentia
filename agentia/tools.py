@@ -83,13 +83,13 @@ class ToolRegistry:
             # if p.init.__code__ == Plugin.init.__code__:
             #     continue  # No need to initialize
             if not silent:
-                rich.print(f"[bold blue]>[/bold blue] [blue]{p.id}[/blue]")
+                rich.print(f"[bold blue]>[/bold blue] [blue]{p.id()}[/blue]")
             try:
                 await p.init()
             except Exception as e:
                 if not silent:
                     rich.print(
-                        f"[red bold]Failed to initialize plugin `{p.id}`[/red bold][red]: {e}[/red]"
+                        f"[red bold]Failed to initialize plugin `{p.id()}`[/red bold][red]: {e}[/red]"
                     )
                 raise e
 

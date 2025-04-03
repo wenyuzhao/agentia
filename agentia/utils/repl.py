@@ -58,8 +58,8 @@ async def __dump(agent: Agent, completion: ChatCompletion[MessageStream | Event]
 
 async def __run_async(agent: Agent):
     await agent.init()
-    assert agent.original_config_path
-    config_path = agent.original_config_path.relative_to(Path.cwd())
+    assert agent.config_path
+    config_path = agent.config_path.relative_to(Path.cwd())
     header = f"[bold blue]RUNNING:[/bold blue] [blue]{agent.id}[/blue] [dim italic]{config_path}[/dim italic]"
     rich.print(rich.panel.Panel.fit(header))
     while True:

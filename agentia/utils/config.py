@@ -27,10 +27,10 @@ class AgentConfig(BaseModel):
     plugins: list[str] | None = None
 
 
-PluginsConfig = dict[str, dict[str, Any]]
+PluginConfigs = dict[str, dict[str, Any]]
 
 
-def check_plugins(configs: PluginsConfig) -> PluginsConfig:
+def check_plugins(configs: PluginConfigs) -> PluginConfigs:
     for name, config in configs.items():
         if config is False or config is None:
             continue
@@ -43,9 +43,15 @@ def check_plugins(configs: PluginsConfig) -> PluginsConfig:
 
 class Config(BaseModel):
     agent: AgentConfig
-    plugins: Annotated[PluginsConfig, AfterValidator(check_plugins)] = Field(
+    plugins: Annotated[PluginConfigs, AfterValidator(check_plugins)] = Field(
         default_factory=dict
     )
+
+    def get_enabled_plugins(self) -> list[str]:
+        if self.agent.plugins is not None:
+            return sorted(self.agent.plugins)
+        else:
+            return sorted(self.plugins.keys())
 
 
 def __get_config_path(cwd: Path, id: str):
@@ -146,8 +152,8 @@ def __load_agent_from_config(
         persist=persist,
         session_id=session_id,
     )
-    agent.original_config = config
-    agent.original_config_path = file.resolve()
+    agent.config = config
+    agent.config_path = file.resolve()
     # Load history
     if persist and session_id:
         agent.load()
@@ -162,13 +168,13 @@ def load_agent_from_config(
     """Load a bot from a configuration file"""
     if isinstance(name, Path):
         if not name.exists():
-            raise FileNotFoundError(f"Agent config not found: {name}")
+            raise FileNotFoundError(f"Agent config file not found: {name}")
         config_path = name.resolve()
     elif name.endswith(".toml"):
         # name is also a path
         config_path = Path(name)
         if not config_path.exists() or not config_path.is_file():
-            raise FileNotFoundError(f"Agent config not found: {name}")
+            raise FileNotFoundError(f"Agent config file not found: {name}")
         config_path = config_path.resolve()
     elif (s := Path(name).suffix) and s != ".toml":
         raise ValueError(f"Invalid agent path: {name}")
