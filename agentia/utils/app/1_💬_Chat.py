@@ -1,8 +1,7 @@
 import base64
-import os, dotenv
+import dotenv
 import asyncio
 import streamlit as st
-import shelve
 
 from agentia.agent import CommunicationEvent
 from agentia.message import ContentPartImage, ContentPartText
@@ -15,7 +14,7 @@ from agentia import (
     AssistantMessage,
     ToolCallEvent,
 )
-from agentia.utils.app.utils import session_record
+import agentia.utils.app.utils as utils
 
 dotenv.load_dotenv()
 
@@ -24,55 +23,7 @@ st.set_page_config(initial_sidebar_state="collapsed")
 ALL_AGENTS = Agent.get_all_agents()
 ALL_AGENT_IDS = [a.id for a in ALL_AGENTS]
 
-app_config = Agent.global_cache_dir() / "streamlit-app" / "config"
-app_config.parent.mkdir(parents=True, exist_ok=True)
-with shelve.open(app_config) as db:
-    initial_agent: str | None = db.get("last_agent", None)
-    if initial_agent and initial_agent not in ALL_AGENT_IDS:
-        initial_agent = None
-    initial_session: str | None = db.get("last_session", None)
-    if not initial_agent:
-        initial_session = None
-    elif initial_session and not initial_session.startswith(initial_agent + "-"):
-        initial_session = None
-    if (
-        initial_session
-        and not (Agent.global_cache_dir() / "sessions" / initial_session).is_dir()
-    ):
-        initial_session = None
-
-
-# Load session or create new one
-if "agent" in st.session_state:
-    agent: Agent = st.session_state.agent
-    sessions = Agent.get_all_sessions(agent.id)
-elif initial_session:
-    agent_id = initial_agent or ALL_AGENT_IDS[0]
-    agent = st.session_state.agent = Agent.load_from_config(
-        agent_id, True, session_id=initial_session
-    )
-    sessions = Agent.get_all_sessions(agent.id)
-
-else:
-    agent_id = initial_agent or ALL_AGENT_IDS[0]
-    sessions = Agent.get_all_sessions(agent_id)
-    session = sessions[0] if len(sessions) > 0 else None
-    agent = st.session_state.agent = Agent.load_from_config(
-        agent_id, True, session_id=session.id if session else None
-    )
-
-session_ids = [s.id for s in sessions]
-
-if agent.session_id not in session_ids:
-    sessions.append(agent.get_session_info())
-    sessions.sort(reverse=True, key=lambda s: s.id)
-
-session_ids = [s.id for s in sessions]
-
-# Save last agent and session
-with shelve.open(app_config) as db:
-    db["last_agent"] = agent.id
-    db["last_session"] = agent.session_id
+agent, sessions = utils.get_initial_agent(ALL_AGENT_IDS)
 
 
 @st.dialog("Delete All Sessions")
@@ -102,7 +53,6 @@ with st.sidebar:
         index=initial_agent_index,
     )
     if selected_agent and selected_agent.id != agent.id:
-        print(selected_agent)
         # Find first session
         sessions = Agent.get_all_sessions(selected_agent.id)
         session = sessions[0] if len(sessions) > 0 else None
@@ -123,7 +73,7 @@ with st.sidebar:
         else:
             title = session.title
 
-        match session_record(session.id, title, active):
+        match utils.session_record(session.id, title, active):
             case "select" if not active:
                 st.session_state.agent = Agent.load_from_config(
                     agent.id, True, session_id=session.id

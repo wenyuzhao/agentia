@@ -18,11 +18,9 @@ AGENTS_SEARCH_PATHS = [
 class AgentConfig(BaseModel):
     name: str
     icon: str | None = None
-    instructions: str | None = None
     description: str | None = None
-    language: str | None = None
+    instructions: str | None = None
     model: str | None = None
-    icon: str | None = None
     knowledge_base: str | bool = False
     colleagues: list[str] = Field(default_factory=list)
     user: str | None = None
@@ -216,3 +214,13 @@ def find_all_agents() -> list[AgentInfo]:
     agents_list = list(agents.values())
     agents_list.sort(key=lambda x: x.config.agent.name)
     return agents_list
+
+
+ALL_RECOMMENDED_MODELS = [
+    "deepseek/deepseek-chat-v3-0324",
+    "openai/gpt-4o-mini",
+    "openai/gpt-4o",
+    "openai/o1",
+    "openai/o3-mini",
+    "openai/o3-mini-high",
+]

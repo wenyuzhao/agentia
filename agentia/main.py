@@ -37,7 +37,7 @@ def serve():
 
     dotenv.load_dotenv()
 
-    entry = Path(__file__).parent / "utils" / "app" / "app.py"
+    entry = Path(__file__).parent / "utils" / "app" / "1_💬_Chat.py"
 
     streamlit.web.bootstrap.run(str(entry), False, [], {})
 
