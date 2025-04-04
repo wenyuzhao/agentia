@@ -297,6 +297,7 @@ class ToolRegistry:
                     while True:
                         yielded = await anext(result_or_coroutine)
                         if isinstance(yielded, UserConsentEvent | CommunicationEvent):
+                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                             yield yielded
                         if isinstance(yielded, ToolResult):
                             result = yielded.result
@@ -310,6 +311,7 @@ class ToolRegistry:
                     while True:
                         yielded = next(result_or_coroutine)
                         if isinstance(yielded, UserConsentEvent | CommunicationEvent):
+                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                             yield yielded
                         if isinstance(yielded, ToolResult):
                             result = yielded.result

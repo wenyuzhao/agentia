@@ -257,6 +257,8 @@ class Agent:
         if log_level is None:
             if "LOG_LEVEL" in os.environ:
                 log_level = os.environ["LOG_LEVEL"]
+            elif Agent.is_server():
+                log_level = logging.INFO
             else:
                 log_level = logging.WARNING
         self.log.setLevel(log_level)
@@ -320,10 +322,10 @@ class Agent:
         return v not in [None, "", "0", "false", "FALSE", "False"]
 
     async def init(self):
-        self.log.info("Agent Initializing ...")
         if self.__is_initialized:
             return
         self.__is_initialized = True
+        self.log.info("Agent Initializing ...")
         await self.__init_plugins()
         self.log.info("Agent Initialized")
         for c in self.colleagues.values():

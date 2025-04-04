@@ -226,7 +226,6 @@ if prompt := st.chat_input(
             else:
                 if isinstance(response, ToolCallEvent | CommunicationEvent):
                     display_message(response, expanded=True)
-                print(response)
         messages_container.empty()
         st.rerun()
 
