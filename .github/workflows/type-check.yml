@@ -13,6 +13,6 @@ jobs:
       - name: Install Packages
         run: |
           uv venv
-          uv run pip install pyright
+          uv sync --all-groups --frozen
       - name: Run Pyright
         run: uv run pyright
