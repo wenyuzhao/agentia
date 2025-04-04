@@ -31,16 +31,27 @@ def repl(agent: str):
 
 
 @app.command(help="Start the web app server")
-def serve():
+def serve(port: int = 8501, dev: bool = False):
     __check_group()
-
-    os.environ["AGENTIA_SERVER"] = "1"
-
-    import streamlit.web.bootstrap
 
     dotenv.load_dotenv()
 
+    os.environ["AGENTIA_SERVER"] = "1"
+    # Streamlit options
+    if "SERVER_PORT" in os.environ:
+        port = int(os.environ["SERVER_PORT"])
+
+    import streamlit.web.bootstrap
+
     entry = Path(__file__).parent / "_app" / "1_💬_Chat.py"
+
+    streamlit.web.bootstrap.load_config_options(
+        flag_options={
+            "server.port": port,
+            "server.fileWatcherType": "auto" if dev else "none",
+            "runner.magicEnabled": False,
+        }
+    )
 
     streamlit.web.bootstrap.run(str(entry), False, [], {})
 

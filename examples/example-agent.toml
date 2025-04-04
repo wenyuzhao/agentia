@@ -1,0 +1,23 @@
+[agent]
+# (REQUIRED) The name of the agent
+name = "Alice"
+# (OPTIONAL) The avatar of the agent
+icon = "🤵🏻‍♀️"
+# (OPTIONAL) A short description of the agent. This is also visible to the agent.
+description = "A helpful assistant"
+# (OPTIONAL) Detailed instructions for the agent.
+instructions = """
+You are a helpful assistant.
+Please always respond with a jok
+"""
+# (OPTIONAL) OpenRouter model name
+model = "openai/o3-mini"
+# (OPTIONAL) A short description of yourself to the agent.
+user = "William, 你的老板"
+# (OPTIONAL) The list of plugins to load.
+plugins = ["calc", "clock", "search", "web", "mstodo"]
+
+
+# Plugin options
+[plugins]
+search = { country = "Australia" }

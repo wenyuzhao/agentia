@@ -1,12 +1,10 @@
 services:
   agentia:
     container_name: agentia
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: wenyuzhao/agentia:latest
     restart: unless-stopped
     ports:
-      - ${STREAMLIT_SERVER_PORT:-8501}:${STREAMLIT_SERVER_PORT:-8501}
+      - ${SERVER_PORT:-8501}:${SERVER_PORT:-8501}
     volumes:
       - ./data/agents:/app/agents
       - ./data/.cache:/app/.cache
