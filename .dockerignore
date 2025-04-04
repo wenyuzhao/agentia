@@ -2,5 +2,5 @@
 /agents*
 __pycache__
 /Dockerfile
-/compose.yaml
+/compose*.yaml
 /data

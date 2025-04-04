@@ -1,9 +1,6 @@
 services:
   agentia:
     container_name: agentia
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: wenyuzhao/agentia
     restart: unless-stopped
     ports:
@@ -23,18 +20,3 @@ services:
       # search
       - AUTH_DATAFORSEO_USERNAME=${AUTH_DATAFORSEO_USERNAME}
       - AUTH_DATAFORSEO_PASSWORD=${AUTH_DATAFORSEO_PASSWORD}
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-          ignore: &ignore
-            - .*
-            - _*
-            - "**/__pycache__"
-            - agents
-        - action: rebuild
-          path: pyproject.toml
-        - action: restart
-          path: .
-          ignore: *ignore
