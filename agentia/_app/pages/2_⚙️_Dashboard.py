@@ -7,7 +7,7 @@ from tomlkit.container import Container
 
 from agentia import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
-import agentia.utils.app.utils as utils
+import agentia._app.utils as utils
 from agentia.utils.config import ALL_RECOMMENDED_MODELS, Config
 from slugify import slugify
 
@@ -196,15 +196,15 @@ def render_plugins_tab():
         if P.__options__.__code__ == Plugin.__options__.__code__:
             continue
         with st.expander("**" + (P.NAME or p) + "**"):
-            init_configs: Container = init_doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
-            curr_configs: Container = doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
-            new_configs = copy.deepcopy(init_configs)
-            P.__options__(agent=agent.id, configs=new_configs)
-            if new_configs != curr_configs:  # type: ignore
+            init_config: Container = init_doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
+            curr_config: Container = doc.get("plugins", tomlkit.table()).get(P.id(), {})  # type: ignore
+            new_config = copy.deepcopy(init_config)
+            P.__options__(agent=agent.id, config=new_config)
+            if new_config != curr_config:  # type: ignore
                 if st.button("Save", type="primary", key=P.id() + ".save"):
                     if "plugins" not in doc:
                         doc["plugins"] = tomlkit.table()
-                    doc["plugins"][P.id()] = new_configs  # type: ignore
+                    doc["plugins"][P.id()] = new_config  # type: ignore
                     with open(agent.config_path, "w") as fp:
                         tomlkit.dump(doc, fp)
                         st.rerun()

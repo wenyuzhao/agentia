@@ -50,20 +50,20 @@ class SearchPlugin(Plugin):
 
     @classmethod
     @override
-    def __options__(cls, agent: str, configs: Container):
+    def __options__(cls, agent: str, config: Container):
         import streamlit as st
 
-        v = configs.get("country", "Australia")
+        v = config.get("country", "Australia")
         index = _ALL_COUNTRIES.index(v) if v in _ALL_COUNTRIES else None
 
-        configs["country"] = st.selectbox(
+        config["country"] = st.selectbox(
             "Select the country for the search",
             options=_ALL_COUNTRIES,
             index=index,
         )
 
-        if "Australia" == configs["country"]:
-            del configs["country"]
+        if "Australia" == config["country"]:
+            del config["country"]
 
     def __process_result(
         self,

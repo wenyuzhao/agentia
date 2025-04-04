@@ -15,7 +15,7 @@ from agentia import (
     ToolCallEvent,
 )
 from agentia.plugins import PluginInitError
-import agentia.utils.app.utils as utils
+import agentia._app.utils as utils
 
 dotenv.load_dotenv()
 

@@ -56,8 +56,8 @@ class MSToDoPlugin(Plugin):
 
     @classmethod
     @override
-    def __options__(cls, agent: str, configs: Container):
-        from agentia.utils.app.utils.oauth import OAuth2Client
+    def __options__(cls, agent: str, config: Container):
+        from agentia._app.utils.oauth import OAuth2Client
 
         oauth_client = OAuth2Client.azure_ad(agent, cls.id())
         oauth_client.login_panel(

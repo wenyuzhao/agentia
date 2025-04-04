@@ -92,7 +92,7 @@ class Plugin:
         pass
 
     @classmethod
-    def __options__(cls, agent: str, configs: tomlkit.container.Container):
+    def __options__(cls, agent: str, config: tomlkit.container.Container):
         """
         Web UI for logging on the user and configuring the plugin.
         Any modifications to the `configs` parameter will be saved to the config file.
