@@ -7,22 +7,21 @@ services:
     image: wenyuzhao/agentia
     restart: unless-stopped
     ports:
-      - ${SERVER_PORT:-8501}:${SERVER_PORT:-8501}
+      - ${SERVER_PORT:-8501}:8501
     volumes:
       - ./data/agents:/app/agents
       - ./data/.cache:/app/.cache
     environment:
       # Required environment variables
-      - SERVER_PORT=${SERVER_PORT:-8501}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?}
       # Environment variables for plugins
       # mstodo
-      - AUTH_AZURE_AD_CLIENT_ID=${AUTH_AZURE_AD_CLIENT_ID}
-      - AUTH_AZURE_AD_CLIENT_SECRET=${AUTH_AZURE_AD_CLIENT_SECRET}
+      AUTH_AZURE_AD_CLIENT_ID: ${AUTH_AZURE_AD_CLIENT_ID:?}
+      AUTH_AZURE_AD_CLIENT_SECRET: ${AUTH_AZURE_AD_CLIENT_SECRET:?}
       # search
-      - AUTH_DATAFORSEO_USERNAME=${AUTH_DATAFORSEO_USERNAME}
-      - AUTH_DATAFORSEO_PASSWORD=${AUTH_DATAFORSEO_PASSWORD}
+      AUTH_DATAFORSEO_USERNAME: ${AUTH_DATAFORSEO_USERNAME:?}
+      AUTH_DATAFORSEO_PASSWORD: ${AUTH_DATAFORSEO_PASSWORD:?}
     develop:
       watch:
         - action: sync
