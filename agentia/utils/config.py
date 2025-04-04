@@ -2,6 +2,7 @@ from typing import Annotated, Any
 import tomllib
 from pathlib import Path
 import shelve
+import tomlkit
 
 from agentia.agent import Agent, AgentInfo, _get_global_cache_dir
 from agentia.plugins import ALL_PLUGINS, Plugin
@@ -219,6 +220,20 @@ def find_all_agents() -> list[AgentInfo]:
     agents_list = list(agents.values())
     agents_list.sort(key=lambda x: x.config.agent.name)
     return agents_list
+
+
+def save(path: Path, doc: tomlkit.TOMLDocument):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w+") as f:
+        tomlkit.dump(doc, f)
+
+
+def load(path: Path) -> tomlkit.TOMLDocument:
+    if not path.exists():
+        raise FileNotFoundError(f"Agent config file not found: {path}")
+    with path.open("r") as f:
+        doc = tomlkit.load(f)
+    return doc
 
 
 ALL_RECOMMENDED_MODELS = [

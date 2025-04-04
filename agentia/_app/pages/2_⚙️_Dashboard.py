@@ -8,7 +8,7 @@ from tomlkit.container import Container
 from agentia import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
 import agentia._app.utils as utils
-from agentia.utils.config import ALL_RECOMMENDED_MODELS, Config
+import agentia.utils.config as cfg
 from slugify import slugify
 
 st.set_page_config(initial_sidebar_state="collapsed")
@@ -41,7 +41,7 @@ init_agent_index = utils.find_index(ALL_AGENTS, lambda x: x.id == init_agent.id)
 # Load initial config doc
 if "initial_doc" not in st.session_state:
     assert init_agent.config_path
-    st.session_state["initial_doc"] = tomlkit.loads(init_agent.config_path.read_text())
+    st.session_state["initial_doc"] = cfg.load(init_agent.config_path)
 init_doc: tomlkit.TOMLDocument = st.session_state["initial_doc"]
 
 
@@ -108,7 +108,7 @@ def render_settings_tab():
     if new_config.agent.user and new_config.agent.user.strip() == "":
         new_config.agent.user = ""
     model_index = 0
-    all_models = ["(default)", *ALL_RECOMMENDED_MODELS]
+    all_models = ["(default)", *cfg.ALL_RECOMMENDED_MODELS]
     try:
         if init_config.agent.model:
             model_index = all_models.index(init_config.agent.model)
@@ -122,7 +122,7 @@ def render_settings_tab():
     if st.button("Save", type="primary"):
         # Save new config
         assert agent.config_path
-        doc = tomlkit.parse(agent.config_path.read_text())
+        doc = cfg.load(agent.config_path)
         new_dict = new_config.model_dump()
         old_dict = config.model_dump()
 
@@ -147,9 +147,8 @@ def render_settings_tab():
             update_string_field("model")
             update_string_field("user")
 
-            with open(agent.config_path, "w") as fp:
-                tomlkit.dump(doc, fp)
-                st.rerun()
+            cfg.save(agent.config_path, doc)
+            st.rerun()
         except ValueError as e:
             st.error("ERROR: " + str(e))
 
@@ -162,7 +161,7 @@ def render_plugins_tab():
     assert agent.config and agent.config_path
     assert init_agent.config and init_agent.config_path
 
-    doc = tomlkit.parse(agent.config_path.read_text())
+    doc = cfg.load(agent.config_path)
 
     all_plugins = [k for k, v in ALL_PLUGINS.items()]
     # Initial enabled plugins
@@ -182,9 +181,8 @@ def render_plugins_tab():
 
     if new_enabled != curr_enabled:
         doc["agent"]["plugins"] = new_enabled  # type: ignore
-        with open(agent.config_path, "w") as fp:
-            tomlkit.dump(doc, fp)
-            st.rerun()
+        cfg.save(agent.config_path, doc)
+        st.rerun()
 
     # Configs
 
@@ -202,14 +200,9 @@ def render_plugins_tab():
             P.__options__(agent=agent.id, config=new_config)
             if new_config != curr_config:  # type: ignore
                 if st.button("Save", type="primary", key=P.id() + ".save"):
-                    if "plugins" not in doc:
-                        doc["plugins"] = tomlkit.table()
-                    doc["plugins"][P.id()] = new_config  # type: ignore
-                    with open(agent.config_path, "w") as fp:
-                        tomlkit.dump(doc, fp)
-                        st.rerun()
-
-    # st.write("Plugins")
+                    doc.setdefault("plugins", tomlkit.table())[P.id()] = new_config  # type: ignore
+                    cfg.save(agent.config_path, doc)
+                    st.rerun()
 
 
 with plugins_tab:

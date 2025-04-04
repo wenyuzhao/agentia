@@ -28,7 +28,7 @@ if len(ALL_AGENT_IDS) == 0:
     utils.new_agent()
     st.stop()
 
-agent, sessions = utils.get_initial_agent(ALL_AGENT_IDS)
+agent, sessions = utils.chat.get_initial_agent(ALL_AGENT_IDS)
 
 
 @st.dialog("Delete All Sessions")
@@ -44,9 +44,7 @@ def delete_all(id: str, name: str):
 
 with st.sidebar:
     # Agent selection
-    initial_agent_index = (
-        ALL_AGENT_IDS.index(agent.id) if agent.id in ALL_AGENT_IDS else 0
-    )
+    initial_agent_index = utils.find_index(ALL_AGENT_IDS, lambda x: x == agent.id) or 0
     selected_agent = st.selectbox(
         "**Agent:**",
         options=ALL_AGENTS,
@@ -78,7 +76,7 @@ with st.sidebar:
         else:
             title = session.title
 
-        match utils.session_record(session.id, title, active):
+        match utils.chat.session_record(session.id, title, active):
             case "select" if not active:
                 st.session_state.agent = Agent.load_from_config(
                     agent.id, True, session_id=session.id
