@@ -1,3 +1,4 @@
+import logging
 import os
 import typer
 import agentia.utils
@@ -27,16 +28,20 @@ def __check_group():
 @app.command(help="Start the command line REPL")
 def repl(agent: str):
     dotenv.load_dotenv()
+    os.environ["AGENTIA_CLI"] = "1"
     agentia.utils.repl.run(agent)
 
 
 @app.command(help="Start the web app server")
-def serve(port: int = 8501, dev: bool = False):
+def serve(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
     __check_group()
 
     dotenv.load_dotenv()
 
     os.environ["AGENTIA_SERVER"] = "1"
+    if "LOG_LEVEL" not in os.environ:
+        os.environ["LOG_LEVEL"] = log_level
+
     # Streamlit options
     if "SERVER_PORT" in os.environ:
         port = int(os.environ["SERVER_PORT"])
@@ -59,6 +64,7 @@ def serve(port: int = 8501, dev: bool = False):
 @app.command(help="Setup plugins for all agents")
 def setup():
     dotenv.load_dotenv()
+    os.environ["AGENTIA_CLI"] = "1"
     ALL_AGENTS = Agent.get_all_agents()
     for agent_info in ALL_AGENTS:
         agent = Agent.load_from_config(agent_info.id)

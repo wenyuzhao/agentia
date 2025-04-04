@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 
 LOGGER = logging.getLogger("agentia")
-MSG_LOGGER = LOGGER.getChild("message")
 
 from .decorators import tool
 from .message import (

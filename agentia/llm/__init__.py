@@ -9,7 +9,6 @@ from ..agent import ChatCompletion, Event
 from ..history import History
 
 from dataclasses import dataclass
-from .. import MSG_LOGGER
 
 
 @dataclass

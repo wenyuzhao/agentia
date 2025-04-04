@@ -76,7 +76,7 @@ class ToolRegistry:
             else:
                 raise ValueError(f"Invalid tool type: {type(t)}")
         names = ", ".join([f"{k}" for k in self.__functions.keys()])
-        self._agent.log.debug(f"Registered Tools: {names}")
+        self._agent.log.info(f"Registered Tools: {names or 'N/A'}")
 
     async def init(self, silent: bool):
         from .plugins import PluginInitError
@@ -84,9 +84,11 @@ class ToolRegistry:
         for plugin in self.__plugins:
             if not silent:
                 rich.print(f"[bold blue]>[/bold blue] [blue]{plugin.id()}[/blue]")
+            self._agent.log.info(f" - init plugin: {plugin.id()}")
             try:
                 await plugin.init()
             except Exception as e:
+                self._agent.log.error(e)
                 if not silent:
                     rich.print(
                         f"[red bold]Failed to initialize plugin `{plugin.id()}`[/red bold][red]: {e}[/red]"
@@ -321,8 +323,6 @@ class ToolRegistry:
             else:
                 result = result_or_coroutine
         except BaseException as e:
-            if self._agent.debug:
-                print(e)
             self._agent.log.error(repr(e))
             raise ToolResult({"error": f"Failed to run tool `{name}`: {e}"}) from e
         result_s = json.dumps(result)

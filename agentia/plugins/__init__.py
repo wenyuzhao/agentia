@@ -45,8 +45,9 @@ class Plugin:
 
     @staticmethod
     def is_server() -> bool:
-        v = os.environ.get("AGENTIA_SERVER", None)
-        return v not in [None, "", "0", "false", "FALSE", "False"]
+        from ..agent import Agent
+
+        return Agent.is_server()
 
     @classmethod
     def name(cls) -> str:
@@ -78,7 +79,7 @@ class Plugin:
 
     def _register(self, agent: "Agent"):
         self.agent = agent
-        self.log = self.agent.log.getChild(self.name())
+        self.log = self.agent.log.getChild(self.id())
 
     async def init(self):
         """

@@ -1,6 +1,8 @@
 from datetime import datetime
 import logging
+import logging.config
 import shutil
+import tomllib
 from typing import (
     Annotated,
     AsyncGenerator,
@@ -22,7 +24,7 @@ import uuid
 import os
 import shortuuid
 
-from agentia import MSG_LOGGER
+from agentia import LOGGER
 
 if TYPE_CHECKING:
     from agentia.utils.config import Config
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
     from .llm import ModelOptions
 
 _global_cache_dir = None
+_global_logger_configured = False
 
 
 def _get_global_cache_dir() -> Path:
@@ -170,7 +173,7 @@ class Agent:
         options: Optional["ModelOptions"] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
-        debug: bool = False,
+        log_level: str | int | None = logging.WARNING,
         # Session recovery
         persist: bool = False,
         session_id: str | None = None,
@@ -200,10 +203,12 @@ class Agent:
             )
         self.persist = persist
         self.icon = icon
-        self.log = MSG_LOGGER.getChild(self.id)
-        if debug:
-            self.log.setLevel(logging.DEBUG)
-        self.debug = debug
+        self.log = LOGGER.getChild(self.id)
+        self.__config_logger(log_level)
+        icon_and_name = ((icon or "") + " " + (name or "")).strip()
+        self.log.info(
+            f"Creating Agent: {self.id} {f'({icon_and_name})' if icon_and_name else ''}"
+        )
         model = model or DEFAULT_MODEL
         self.description = description
         self.colleagues: dict[str, "Agent"] = {}
@@ -248,6 +253,22 @@ class Agent:
 
         weakref.finalize(self, Agent.__sweeper, self.session_id, self.persist)
 
+    def __config_logger(self, log_level: str | int | None):
+        if log_level is None:
+            if "LOG_LEVEL" in os.environ:
+                log_level = os.environ["LOG_LEVEL"]
+            else:
+                log_level = logging.WARNING
+        self.log.setLevel(log_level)
+
+        global _global_logger_configured
+        if _global_logger_configured:
+            return
+        _global_logger_configured = True
+        if Agent.is_server() and (Path.cwd() / "logging.toml").exists():
+            config = tomllib.loads((Path.cwd() / "logging.toml").read_text())
+            logging.config.dictConfig(config)
+
     @staticmethod
     def __sweeper(session_id: str, persist: bool):
         session_dir = _get_global_cache_dir() / "sessions" / session_id
@@ -288,24 +309,36 @@ class Agent:
 
         init_logging(level)
 
-    async def init(self, silent: bool = False):
+    @staticmethod
+    def is_server() -> bool:
+        v = os.environ.get("AGENTIA_SERVER", None)
+        return v not in [None, "", "0", "false", "FALSE", "False"]
+
+    @staticmethod
+    def is_cli() -> bool:
+        v = os.environ.get("AGENTIA_CLI", None)
+        return v not in [None, "", "0", "false", "FALSE", "False"]
+
+    async def init(self):
+        self.log.info("Agent Initializing ...")
         if self.__is_initialized:
             return
         self.__is_initialized = True
-        await self.__init_plugins(silent)
+        await self.__init_plugins()
+        self.log.info("Agent Initialized")
         for c in self.colleagues.values():
             await c.init()
 
-    async def __init_plugins(self, silent: bool):
+    async def __init_plugins(self):
         agent_path = (
             self.config_path.relative_to(Path.cwd()) if self.config_path else ""
         )
         header = f"[bold blue]Configuring plugins:[/bold blue] [blue]{self.id}[/blue] [dim italic]{agent_path}[/dim italic]"
 
-        if not silent:
+        if Agent.is_cli():
             rich.print(rich.panel.Panel.fit(header))
-        await self.__backend.tools.init(silent)
-        if not silent:
+        await self.__backend.tools.init(silent=not Agent.is_cli())
+        if Agent.is_cli():
             rich.print()
 
     def __init_backend(
@@ -750,8 +783,9 @@ class Agent:
         agent = Agent(
             instructions="You need to summarise the following conversation as a short title. Just output the title, no other text, no quotes around it. The title should be short and precise, and it should be a single line. The title should not contain any other text.",
             model="openai/gpt-4o-mini",
+            log_level=logging.WARNING,
         )
-        await agent.init(silent=True)
+        await agent.init()
         conversation = self.history.get_formatted_history()
         result = await agent.chat_completion(conversation)
         self.history.update_summary(result)

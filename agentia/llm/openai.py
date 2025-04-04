@@ -4,8 +4,6 @@ from typing import AsyncIterator, Literal, Any, Sequence, overload, override
 
 from agentia.history import History
 
-from .. import MSG_LOGGER
-
 from . import LLMBackend, ModelOptions
 from ..tools import ToolRegistry
 

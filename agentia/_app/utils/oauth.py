@@ -63,7 +63,6 @@ class OAuth2Client:
                 icon = "https://microsoft.com/favicon.ico"
             case _:
                 raise ValueError(f"Invalid kind: {self.kind}")
-        print(dict(**st.context.headers))
         origin = st.context.headers["origin"]
         result = self.__client.authorize_button(
             name=name,

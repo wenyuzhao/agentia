@@ -1,7 +1,7 @@
 services:
   agentia:
     container_name: agentia
-    image: wenyuzhao/agentia:latest
+    image: wenyuzhao/agentia
     restart: unless-stopped
     ports:
       - ${SERVER_PORT:-8501}:${SERVER_PORT:-8501}
