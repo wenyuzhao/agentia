@@ -19,7 +19,7 @@ class MemoryPlugin(Plugin):
             time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(self.__momery_cache, "a") as f:
                 f.write(f"[{time}] {content}\n")
-            self.log.info(f"REMEMBER: {content}")
+            self.log.debug(f"REMEMBER: {content}")
         return "Remembered"
 
     @tool

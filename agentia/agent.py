@@ -173,7 +173,7 @@ class Agent:
         options: Optional["ModelOptions"] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
-        log_level: str | int | None = logging.WARNING,
+        log_level: str | int | None = None,
         # Session recovery
         persist: bool = False,
         session_id: str | None = None,
@@ -422,7 +422,7 @@ class Agent:
                 "The message to send, or the job details. You must send the message as yourself, not someone else.",
             ],
         ):
-            self.log.info(f"COMMUNICATE {leader.id} -> {id}: {repr(message)}")
+            self.log.debug(f"COMMUNICATE {leader.id} -> {id}: {repr(message)}")
 
             target = self.colleagues[id]
             cid = uuid.uuid4().hex
@@ -442,7 +442,7 @@ class Agent:
                 if isinstance(
                     m, Union[UserMessage, SystemMessage, AssistantMessage, ToolMessage]
                 ):
-                    self.log.info(f"RESPONSE {leader.id} <- {id}: {repr(m.content)}")
+                    self.log.debug(f"RESPONSE {leader.id} <- {id}: {repr(m.content)}")
                     # results.append(m.to_json())
                     last_message = m.content
             yield CommunicationEvent(
@@ -524,9 +524,9 @@ class Agent:
         ):
             """Similarity-based search for related file segments in the knowledge base"""
             if filename is None:
-                agent.log.info(f"FILE-SEARCH {query}")
+                agent.log.debug(f"FILE-SEARCH {query}")
             else:
-                agent.log.info(f"FILE-SEARCH {query} ({filename})")
+                agent.log.debug(f"FILE-SEARCH {query} ({filename})")
             assert agent.knowledge_base is not None
             response = await agent.knowledge_base.query(query, filename)
             return response

@@ -130,6 +130,7 @@ class SearchPlugin(Plugin):
                 ]
             )
             dfs_results = self.__process_result(dfs_results)
+            return dfs_results
 
     @tool
     async def news_search(

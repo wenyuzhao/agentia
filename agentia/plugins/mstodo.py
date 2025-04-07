@@ -28,7 +28,7 @@ class MSToDoPlugin(Plugin):
     async def init(self):
         import pymstodo
 
-        self.agent.log.info("MSToDoPlugin initialized")
+        self.agent.log.debug("MSToDoPlugin initialized")
         client_id = os.environ["AUTH_AZURE_AD_CLIENT_ID"]
         client_secret = os.environ["AUTH_AZURE_AD_CLIENT_SECRET"]
 

@@ -188,7 +188,7 @@ class LLMBackend:
         | AsyncGenerator[AssistantMessage | Event, None]
     ):
         for m in messages:
-            self.log.info(f"{m}")
+            self.log.debug(m)
             self.history.add(m)
         # First completion request
         message: AssistantMessage
@@ -202,12 +202,13 @@ class LLMBackend:
             if message.content is not None:
                 yield message
         self.history.add(message)
-        self.log.info(f"{message}")
+        self.log.debug(message)
         # Run tools and submit results until convergence
         while len(message.tool_calls) > 0:
             # Run tools
             count = 0
             async for event in self.tools.call_tools(message.tool_calls):
+                self.log.debug(event)
                 if isinstance(event, Message):
                     self.history.add(event)
                     count += 1
@@ -229,4 +230,4 @@ class LLMBackend:
                 if message.content is not None:
                     yield message
             self.history.add(message)
-            self.log.info(f"{message}")
+            self.log.debug(message)
