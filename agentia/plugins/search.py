@@ -168,7 +168,7 @@ class SearchPlugin(Plugin):
             )
             return self.__process_result(response)
 
-    if os.environ["TAVILY_API_KEY"]:
+    if "TAVILY_API_KEY" in os.environ:
 
         @tool
         async def finance_search(
