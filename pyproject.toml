@@ -30,12 +30,14 @@ Repository = "https://github.com/wenyuzhao/agentia"
 agentia = "agentia.main:main"
 
 [dependency-groups]
+# Development tools
 dev = [
     "pyright>=1.1.361,<2",
     "ipykernel>=6.23.2,<7",
     "pytest>=7.3.2,<8",
     "pytest-asyncio>=0.21.1,<0.22",
 ]
+# Include all plugins
 plugins = [
     "pymstodo>=0.2.0",
     "dataforseo-client>=1.0.45",
@@ -44,6 +46,7 @@ plugins = [
     "google-api-python-client>=2.166.0",
     "google-auth-oauthlib>=1.2.1",
 ]
+# Include all plugins, the web app, and the API server
 all = [
     { include-group = "plugins" },
     "streamlit>=1.44.0",
