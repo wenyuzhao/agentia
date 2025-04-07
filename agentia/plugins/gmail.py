@@ -1,5 +1,3 @@
-# type: ignore
-
 from typing import Any
 
 from ..decorators import *
@@ -11,20 +9,17 @@ import json
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-from google_auth_oauthlib.flow import Flow  # type: ignore
-from googleapiclient.discovery import build  # type: ignore
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 import base64
 from bs4 import BeautifulSoup
 from tomlkit.container import Container
 
-# from gmail_wrapper import GmailClient
-
 
 SCOPES = [
-    "email",
+    "https://www.googleapis.com/auth/userinfo.email",
     "openid",
-    "profile",
-    # "offline_access",
+    "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.send",
@@ -32,42 +27,50 @@ SCOPES = [
 
 
 class GmailPlugin(Plugin):
+    @override
     async def init(self):
         creds = await self.__get_creds()
         self.service: Any = build("gmail", "v1", credentials=creds)
 
     @override
     async def __get_creds(self):
-        client_id = os.environ["AUTH_GOOGLE_CLIENT_ID"]
-        client_secret = os.environ["AUTH_GOOGLE_CLIENT_SECRET"]
 
         with self.agent.open_configs_file() as cache:
             key = self.cache_key(".token")
-            print(f"Cache file: {cache.get(key)} {type(key)} {key}")
 
             if key in cache:
                 token = cache[key]
-                print(f"Token found in cache: {type(token)}")
                 try:
+                    client_id = os.environ["AUTH_GOOGLE_CLIENT_ID"]
+                    client_secret = os.environ["AUTH_GOOGLE_CLIENT_SECRET"]
                     token["client_id"] = client_id
                     token["client_secret"] = client_secret
                     creds = Credentials.from_authorized_user_info(token, SCOPES)
                     if creds.expired and creds.refresh_token:
                         creds.refresh(Request())
-                        cache[key] = json.loads(creds.to_json())
+                        token = json.loads(creds.to_json())
+                        token["id_token"] = creds.id_token
+                        cache[key] = token
                     return creds
                 except Exception as e:
                     self.agent.log.error(f"Error loading token: {e}")
                     ...
             if self.is_server():
                 raise RuntimeError("Please setup the plugin on dashboard")
+            client_id = os.environ.get("AUTH_GOOGLE_NATIVE_CLIENT_ID")
+            client_secret = os.environ.get("AUTH_GOOGLE_NATIVE_CLIENT_SECRET")
+            if client_id is None or client_secret is None:
+                raise RuntimeError(
+                    "To configure the gmail plugin in a terminal, please set AUTH_GOOGLE_NATIVE_CLIENT_ID and AUTH_GOOGLE_NATIVE_CLIENT_SECRET"
+                )
             flow = Flow.from_client_config(
                 {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "installed": {
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                    }
                 },
                 scopes=SCOPES,
                 redirect_uri="urn:ietf:wg:oauth:2.0:oob",
@@ -77,8 +80,10 @@ class GmailPlugin(Plugin):
             code = input("Paste the authorization code: ")
             flow.fetch_token(code=code)
             session = flow.authorized_session()
-            cache[key] = json.loads(session.credentials.to_json())  # type: ignore
-            creds = session.credentials  # type: ignore
+            token = json.loads(session.credentials.to_json())
+            token["id_token"] = flow.oauth2session.token["id_token"]
+            cache[key] = token
+            creds = session.credentials
             return creds
 
     @classmethod
@@ -140,7 +145,9 @@ class GmailPlugin(Plugin):
             result["body_parts"] = body_list
         return result
 
-    async def __fetch_email_list(self, labelIds: list[str], q: str = None) -> list:
+    async def __fetch_email_list(
+        self, labelIds: list[str], q: str | None = None
+    ) -> Any:
         results = (
             self.service.users()
             .messages()
@@ -172,7 +179,7 @@ class GmailPlugin(Plugin):
     async def get_email_detail(
         self,
         id: Annotated[str, "The email ID"],
-    ) -> list:
+    ) -> Any:
         """Get the details of an email by its ID, including the email body/content."""
         return self.__get_email_by_id(id, body=True)
 
@@ -180,7 +187,7 @@ class GmailPlugin(Plugin):
     async def archive_email(
         self,
         id: Annotated[str, "The email ID"],
-    ) -> list:
+    ) -> Any:
         """Archive an email by its ID."""
         data = self.service.users().messages().get(userId="me", id=id).execute()
         labels = data["labelIds"]
