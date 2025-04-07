@@ -22,6 +22,7 @@ services:
       # search
       AUTH_DATAFORSEO_USERNAME: ${AUTH_DATAFORSEO_USERNAME:?}
       AUTH_DATAFORSEO_PASSWORD: ${AUTH_DATAFORSEO_PASSWORD:?}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:?}
     develop:
       watch:
         - action: sync
