@@ -9,6 +9,7 @@ import requests
 class OpenRouterBackend(OpenAIBackend):
     def __init__(
         self,
+        *,
         model: str,
         tools: ToolRegistry,
         options: ModelOptions,
@@ -19,13 +20,24 @@ class OpenRouterBackend(OpenAIBackend):
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY environment variable is not set")
         base_url = "https://openrouter.ai/api/v1"
-        super().__init__(model, tools, options, history, api_key, base_url)
+        super().__init__(
+            name="openrouter",
+            model=model,
+            tools=tools,
+            options=options,
+            history=history,
+            api_key=api_key,
+            base_url=base_url,
+        )
         if providers := os.environ.get("OPENROUTER_PROVIDERS"):
             self.extra_body["provider"] = {
                 "order": [x.strip() for x in providers.strip().split(",")]
             }
         self.has_reasoning = self.__model_has_reasoning(model)
         self.extra_body["transforms"] = ["middle-out"]
+
+    def get_default_model(self) -> str:
+        return "openrouter:openai/gpt-4o-mini"
 
     def __model_has_reasoning(self, model: str):
         global _REASONING_MODELS

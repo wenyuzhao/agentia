@@ -30,6 +30,7 @@ from dataforseo_client.models.work_day_info import WorkDayInfo
 import os
 
 from tomlkit.container import Container
+from tavily import TavilyClient
 
 
 class SearchPlugin(Plugin):
@@ -47,6 +48,11 @@ class SearchPlugin(Plugin):
         from dataforseo_client.api.serp_api import SerpApi
 
         self.__api = SerpApi(self.__client)
+
+        self.__tavily: TavilyClient | None = None
+
+        if api_key := os.environ.get("TAVILY_API_KEY"):
+            self.__tavily = TavilyClient(api_key=api_key)
 
     @classmethod
     @override
@@ -81,39 +87,125 @@ class SearchPlugin(Plugin):
             return {"error": "Failed to get search result"}
         return [r.to_dict() for r in res.tasks[0].result or []]
 
-    @tool
-    def google_search(self, keywords: Annotated[str, "The keywords to search"]):
-        """Perform Google Search using the given keywords. Returning the top 10 search result in json format. When necessary, you need to combine this tool with the getWebPageContent tools (if available), to browse the web in depth by jumping through links."""
-        response = self.__api.google_organic_live_regular(
-            [
-                SerpGoogleOrganicLiveRegularRequestInfo(
-                    language_code="en",
-                    location_name=self.__country,
-                    keyword=keywords,
-                    depth=10,
-                )
-            ]
+    async def __get_keywords(self, query: str) -> str:
+        agent = self.agent.anonymized(
+            instructions="Extract keywords from the given query. Just return the keywords without any additional text.",
         )
-        return self.__process_result(response)
+        keywords = await agent.chat_completion(query)
+        return keywords
 
     @tool
-    def google_news_search(self, keywords: Annotated[str, "The keywords to search"]):
-        """Perform Google News Search using the given keywords, to search news related to the given topics. Returning the top 5 search result in json format."""
-        response = self.__api.google_news_live_advanced(
-            [
-                SerpGoogleNewsLiveAdvancedRequestInfo(
-                    language_code="en",
-                    location_name=self.__country,
-                    keyword=keywords,
-                    depth=10,
-                )
-            ]
-        )
-        return self.__process_result(response)
+    async def web_search(
+        self,
+        query: Annotated[
+            str, "The search query. Please be as specific and verbose as possible."
+        ],
+    ):
+        """
+        Perform web search on the given query.
+        Returning the top related search results in json format.
+        When necessary, you need to combine this tool with the get_webpage_content tools (if available), to browse the web in depth by jumping through links.
+        """
+
+        if self.__tavily:
+            tavily_results = self.__tavily.search(
+                query=query,
+                search_depth="advanced",
+                # max_results=10,
+                include_answer=True,
+                include_images=True,
+                include_image_descriptions=True,
+            )
+            return tavily_results
+        else:
+            keywords = await self.__get_keywords(query)
+            dfs_results = self.__api.google_organic_live_regular(
+                [
+                    SerpGoogleOrganicLiveRegularRequestInfo(
+                        language_code="en",
+                        location_name=self.__country,
+                        keyword=keywords,
+                        depth=10,
+                    )
+                ]
+            )
+            dfs_results = self.__process_result(dfs_results)
 
     @tool
-    def google_map_search(self, keywords: Annotated[str, "The keywords to search"]):
-        """Perform Google Map Search using the given keywords. Returning the top 10 search result in json format. This is helpful to get the address, website, opening hours, and contact information of a place or store."""
+    async def news_search(
+        self,
+        query: Annotated[
+            str, "The search query. Please be as specific and verbose as possible."
+        ],
+    ):
+        """
+        Perform news search on the given query.
+        Returning the top related results in json format.
+        """
+
+        if self.__tavily:
+            tavily_results = self.__tavily.search(
+                query=query,
+                search_depth="advanced",
+                topic="news",
+                # max_results=10,
+                include_answer=True,
+                include_images=True,
+                include_image_descriptions=True,
+            )
+            return tavily_results
+        else:
+            keywords = await self.__get_keywords(query)
+            response = self.__api.google_news_live_advanced(
+                [
+                    SerpGoogleNewsLiveAdvancedRequestInfo(
+                        language_code="en",
+                        location_name=self.__country,
+                        keyword=keywords,
+                        depth=10,
+                    )
+                ]
+            )
+            return self.__process_result(response)
+
+    if os.environ["TAVILY_API_KEY"]:
+
+        @tool
+        async def finance_search(
+            self,
+            query: Annotated[
+                str, "The search query. Please be as specific and verbose as possible."
+            ],
+        ):
+            """
+            Search for finance-related news and information on the given query.
+            Returning the top related results in json format.
+            """
+            assert self.__tavily is not None
+            tavily_results = self.__tavily.search(
+                query=query,
+                search_depth="advanced",
+                topic="finance",
+                # max_results=10,
+                include_answer=True,
+                include_images=True,
+                include_image_descriptions=True,
+            )
+            return tavily_results
+
+    @tool
+    async def google_map_search(
+        self,
+        query: Annotated[
+            str, "The search query. Please be as specific and verbose as possible."
+        ],
+    ):
+        """
+        Perform Google Map Search on the given query.
+        Returning the top 10 search result in json format.
+        This is helpful to get the address, website, opening hours, and contact information of a place or store.
+        """
+        keywords = await self.__get_keywords(query)
         response = self.__api.google_maps_live_advanced(
             [
                 SerpGoogleMapsLiveAdvancedRequestInfo(

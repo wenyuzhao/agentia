@@ -33,6 +33,7 @@ all = [
     { name = "pymstodo" },
     { name = "streamlit" },
     { name = "streamlit-oauth" },
+    { name = "tavily-python" },
 ]
 dev = [
     { name = "ipykernel" },
@@ -44,6 +45,7 @@ plugins = [
     { name = "dataforseo-client" },
     { name = "markdownify" },
     { name = "pymstodo" },
+    { name = "tavily-python" },
 ]
 
 [package.metadata]
@@ -70,6 +72,7 @@ all = [
     { name = "pymstodo", specifier = ">=0.2.0" },
     { name = "streamlit", specifier = ">=1.44.0" },
     { name = "streamlit-oauth", specifier = ">=0.1.11" },
+    { name = "tavily-python", specifier = ">=0.5.4" },
 ]
 dev = [
     { name = "ipykernel", specifier = ">=6.23.2,<7" },
@@ -81,6 +84,7 @@ plugins = [
     { name = "dataforseo-client", specifier = ">=1.0.45" },
     { name = "markdownify", specifier = ">=1.1.0" },
     { name = "pymstodo", specifier = ">=0.2.0" },
+    { name = "tavily-python", specifier = ">=0.5.4" },
 ]
 
 [[package]]
@@ -2909,6 +2913,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/11/8a/5a7fd6284fa8caac23a26c9ddf9c30485a48169344b4bd3b0f02fef1890f/sympy-1.13.3.tar.gz", hash = "sha256:b27fd2c6530e0ab39e275fc9b683895367e51d5da91baa8d3d64db2565fec4d9", size = 7533196 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/99/ff/c87e0622b1dadea79d2fb0b25ade9ed98954c9033722eb707053d310d4f3/sympy-1.13.3-py3-none-any.whl", hash = "sha256:54612cf55a62755ee71824ce692986f23c88ffa77207b30c1368eda4a7060f73", size = 6189483 },
+]
+
+[[package]]
+name = "tavily-python"
+version = "0.5.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "requests" },
+    { name = "tiktoken" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2c/72/f36a49c2fd344b45e6f1ddab59a7f809bff4f46dcc78af7ac9758461a5bf/tavily_python-0.5.4.tar.gz", hash = "sha256:fdad5303f9f6603a06fddcc7e21b128bebc1adf7694e553a664caf87eb2d2d9d", size = 109050 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/dd/63d1d2fddcaaee040745ea58d13b54c0b1483260ddae52eb59abf691f757/tavily_python-0.5.4-py3-none-any.whl", hash = "sha256:47f8c0b41283d44849fe9531596cd26d3de42a59618ef66f9e1244d8fedba404", size = 44419 },
 ]
 
 [[package]]

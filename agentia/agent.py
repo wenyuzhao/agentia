@@ -70,7 +70,7 @@ class ToolCallEvent:
     name: str
     display_name: str
     description: str
-    parameters: dict[str, Any]
+    arguments: dict[str, Any]
     result: Any | None = None
 
 
@@ -778,14 +778,22 @@ class Agent:
         """Get the global cache directory"""
         return _get_global_cache_dir()
 
-    async def summarise(self) -> str:
-        """
-        Summarise the history as a short title
-        """
+    def anonymized(
+        self, instructions: str | None = None, tools: Optional["Tools"] = None
+    ) -> "Agent":
+        """Create an agent with no name, no description, and by default no tools"""
         agent = Agent(
-            instructions="You need to summarise the following conversation as a short title. Just output the title, no other text, no quotes around it. The title should be short and precise, and it should be a single line. The title should not contain any other text.",
-            model="openai/gpt-4o-mini",
+            instructions=instructions,
+            model=self.__backend.get_default_model(),
+            tools=tools,
             log_level=logging.WARNING,
+        )
+        return agent
+
+    async def summarise(self) -> str:
+        """Summarise the history as a short title"""
+        agent = self.anonymized(
+            instructions="You need to summarise the following conversation as a short title. Just output the title, no other text, no quotes around it. The title should be short and precise, and it should be a single line. The title should not contain any other text."
         )
         await agent.init()
         conversation = self.history.get_formatted_history()

@@ -46,11 +46,14 @@ class LLMBackend:
 
     def __init__(
         self,
+        *,
+        name: str,
         model: str,
         tools: ToolRegistry,
         options: ModelOptions,
         history: History,
     ):
+        self.name = name
         self.options = options or ModelOptions()
         self.model = model
         self.tools = tools
@@ -59,6 +62,9 @@ class LLMBackend:
 
     @abc.abstractmethod
     def get_api_key(self) -> str: ...
+
+    @abc.abstractmethod
+    def get_default_model(self) -> str: ...
 
     @overload
     def chat_completion(

@@ -97,15 +97,8 @@ class History:
         from .message import (
             UserMessage,
             AssistantMessage,
-            ToolMessage,
             ContentPartText,
             ContentPartImage,
-        )
-        from .agent import (
-            Event,
-            ToolCallEvent,
-            CommunicationEvent,
-            UserConsentEvent,
         )
 
         S = ""

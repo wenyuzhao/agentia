@@ -74,7 +74,7 @@ class Plugin:
         return key
 
     def __init__(self, config: Any = None):
-        self.config = config
+        self.config = config or {}
         self.agent: "Agent"
 
     def _register(self, agent: "Agent"):
@@ -137,7 +137,32 @@ def __import_plugins() -> dict[str, Type[Plugin]]:
         return {}
 
 
-ALL_PLUGINS = __import_plugins()
+ALL_PLUGINS: dict[str, type[Plugin]] = {}
+try:
+    from .calc import CalculatorPlugin
+    from .clock import ClockPlugin
+    from .code import CodePlugin
+    from .memory import MemoryPlugin
+    from .mstodo import MSToDoPlugin
+    from .search import SearchPlugin
+    from .dalle import DallEPlugin
+    from .vision import VisionPlugin
+    from .web import WebPlugin
+
+    ALL_PLUGINS = {
+        "calc": CalculatorPlugin,
+        "clock": ClockPlugin,
+        "code": CodePlugin,
+        "memory": MemoryPlugin,
+        "mstodo": MSToDoPlugin,
+        "search": SearchPlugin,
+        "dalle": DallEPlugin,
+        "vision": VisionPlugin,
+        "web": WebPlugin,
+    }
+except ImportError as e:
+    ...
+
 
 for name, cls in ALL_PLUGINS.items():
     cls._BUILTIN_ID = name

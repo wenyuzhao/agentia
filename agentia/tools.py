@@ -344,7 +344,7 @@ class ToolRegistry:
                 name=info.name,
                 display_name=info.display_name,
                 description=info.description,
-                parameters=info.parameters,
+                arguments=t.function.arguments,  # type: ignore
             )
             yield event
             raw_result = {}
@@ -359,7 +359,7 @@ class ToolRegistry:
                 name=info.name,
                 display_name=info.display_name,
                 description=info.description,
-                parameters=info.parameters,
+                arguments=t.function.arguments,  # type: ignore
                 result=raw_result,
             )
             yield event

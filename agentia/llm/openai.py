@@ -1,3 +1,4 @@
+import abc
 import json
 import os
 from typing import AsyncIterator, Literal, Any, Sequence, overload, override
@@ -45,6 +46,8 @@ from openai.types.chat import ChatCompletionChunk
 class OpenAIBackend(LLMBackend):
     def __init__(
         self,
+        *,
+        name: str = "openai",
         model: str,
         tools: ToolRegistry,
         options: ModelOptions,
@@ -52,7 +55,9 @@ class OpenAIBackend(LLMBackend):
         api_key: str | None = None,
         base_url: str | None = None,
     ) -> None:
-        super().__init__(model, tools, options, history)
+        super().__init__(
+            name=name, model=model, tools=tools, options=options, history=history
+        )
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
@@ -65,6 +70,10 @@ class OpenAIBackend(LLMBackend):
 
     def get_api_key(self) -> str:
         return self.client.api_key
+
+    @abc.abstractmethod
+    def get_default_model(self) -> str:
+        return "openai:gpt-4o-mini"
 
     @overload
     async def _chat_completion_request(

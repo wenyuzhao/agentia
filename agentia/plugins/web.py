@@ -1,13 +1,22 @@
 from io import BytesIO
+import os
 from ..decorators import *
 from . import Plugin
-from typing import Annotated
+from typing import Annotated, override
 import requests
 from markdownify import markdownify
 import uuid
+from tavily import TavilyClient
 
 
 class WebPlugin(Plugin):
+
+    @override
+    async def init(self):
+        self.__tavily: TavilyClient | None = None
+
+        if api_key := os.environ.get("TAVILY_API_KEY"):
+            self.__tavily = TavilyClient(api_key=api_key)
 
     def __embed_file(self, content: bytes, file_ext: str):
         assert self.agent.knowledge_base is not None
@@ -27,7 +36,18 @@ class WebPlugin(Plugin):
         self,
         url: Annotated[str, "The URL of the web page to get the content of"],
     ):
-        """Access a web page by a URL, and fetch the content of this web page (in markdown format). You can always use this tool to directly access web content or access external sites. Use it at any time when you think you may need to access the internet."""
+        """
+        Access a web page by a URL, and fetch the content of this web page (in markdown format).
+        You can always use this tool to directly access web content or access external sites.
+        Use it at any time when you think you may need to access the internet.
+        """
+        if self.__tavily:
+            result = self.__tavily.extract(
+                urls=url,
+                # extract_depth="advanced",
+                include_images=True,
+            )
+            return result
         res = requests.get(url)
         content_type = res.headers.get("content-type")
         if content_type == "application/pdf":
