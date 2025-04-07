@@ -41,6 +41,8 @@ plugins = [
     "dataforseo-client>=1.0.45",
     "markdownify>=1.1.0",
     "tavily-python>=0.5.4",
+    "google-api-python-client>=2.166.0",
+    "google-auth-oauthlib>=1.2.1",
 ]
 all = [
     { include-group = "plugins" },

@@ -107,37 +107,8 @@ class Plugin:
     def validate_config(cls, config: dict[str, Any]): ...
 
 
-def __import_plugins() -> dict[str, Type[Plugin]]:
-    try:
-        from . import (
-            calc,
-            clock,
-            code,
-            memory,
-            mstodo,
-            search,
-            dalle,
-            vision,
-            web,
-        )
-
-        return {
-            "calc": calc.CalculatorPlugin,
-            "clock": clock.ClockPlugin,
-            "code": code.CodePlugin,
-            "memory": memory.MemoryPlugin,
-            "mstodo": mstodo.MSToDoPlugin,
-            "search": search.SearchPlugin,
-            "dalle": dalle.DallEPlugin,
-            "vision": vision.VisionPlugin,
-            "web": web.WebPlugin,
-        }
-    except ImportError as e:
-        # raise e
-        return {}
-
-
 ALL_PLUGINS: dict[str, type[Plugin]] = {}
+
 try:
     from .calc import CalculatorPlugin
     from .clock import ClockPlugin
@@ -148,6 +119,7 @@ try:
     from .dalle import DallEPlugin
     from .vision import VisionPlugin
     from .web import WebPlugin
+    from .gmail import GmailPlugin
 
     ALL_PLUGINS = {
         "calc": CalculatorPlugin,
@@ -159,9 +131,10 @@ try:
         "dalle": DallEPlugin,
         "vision": VisionPlugin,
         "web": WebPlugin,
+        "gmail": GmailPlugin,
     }
 except ImportError as e:
-    ...
+    raise e from e
 
 
 for name, cls in ALL_PLUGINS.items():

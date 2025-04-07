@@ -148,6 +148,5 @@ class OAuth2Client:
             authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
             token_endpoint="https://oauth2.googleapis.com/token",
             refresh_token_endpoint="https://oauth2.googleapis.com/token",
-            revoke_token_endpoint="https://oauth2.googleapis.com/revoke",
         )
         return OAuth2Client(agent=agent, plugin=plugin, kind="google", client=client)
