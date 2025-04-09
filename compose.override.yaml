@@ -2,7 +2,7 @@ services:
   agentia:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./docker/Dockerfile
     develop:
       watch:
         - action: sync

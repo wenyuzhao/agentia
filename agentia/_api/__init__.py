@@ -3,16 +3,16 @@ from fastapi import FastAPI, HTTPException, WebSocket
 
 from agentia.agent import Agent, Event
 
-app = FastAPI()
+app = FastAPI(root_path="/api")
 
 
-@app.get("/agents")
+@app.get("/v1/agents")
 async def get_agents():
     agents = Agent.get_all_agents()
     return {"agents": [agent.to_dict() for agent in agents]}
 
 
-@app.get("/agents/{agent_id}")
+@app.get("/v1/agents/{agent_id}")
 async def get_agent(agent_id: str):
     agents = Agent.get_all_agents()
     for agent in agents:
@@ -21,28 +21,28 @@ async def get_agent(agent_id: str):
     raise HTTPException(status_code=404, detail="Agent not found")
 
 
-@app.put("/agents/{agent_id}")
+@app.put("/v1/agents/{agent_id}")
 async def create_agent(agent_id: str):
     raise HTTPException(status_code=500, detail="Not implemented")
 
 
-@app.patch("/agents/{agent_id}")
+@app.patch("/v1/agents/{agent_id}")
 async def update_agent(agent_id: str):
     raise HTTPException(status_code=500, detail="Not implemented")
 
 
-@app.delete("/agents/{agent_id}")
+@app.delete("/v1/agents/{agent_id}")
 async def delete_agent(agent_id: str):
     raise HTTPException(status_code=500, detail="Not implemented")
 
 
-@app.get("/agents/{agent_id}/sessions")
+@app.get("/v1/agents/{agent_id}/sessions")
 async def get_sessions(agent_id: str):
     sessions = Agent.get_all_sessions(agent_id)
     return {"sessions": [session.to_dict() for session in sessions]}
 
 
-@app.get("/agents/{agent_id}/sessions/{session_id}")
+@app.get("/v1/agents/{agent_id}/sessions/{session_id}")
 async def get_session(agent_id: str, session_id: str):
     agent_info = None
     for agent in Agent.get_all_agents():
@@ -66,7 +66,7 @@ async def get_session(agent_id: str, session_id: str):
     return {"session": session.to_dict(), "history": history}
 
 
-@app.put("/agents/{agent_id}/sessions")
+@app.put("/v1/agents/{agent_id}/sessions")
 async def create_session(agent_id: str):
     try:
         agent = Agent.load_from_config(agent_id, persist=True)
@@ -94,7 +94,7 @@ async def run_chat_completion(websocket: WebSocket, agent: Agent, prompt: str):
     await websocket.send_json({"type": "response.end"})
 
 
-@app.websocket("/agents/{agent_id}/sessions/{session_id}/chat")
+@app.websocket("/v1/agents/{agent_id}/sessions/{session_id}/chat")
 async def chat(websocket: WebSocket, agent_id: str, session_id: str):
     await websocket.accept()
     agent = Agent.load_from_config(agent_id, persist=True, session_id=session_id)

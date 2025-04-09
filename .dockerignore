@@ -1,6 +1,6 @@
 .*
 /agents*
 __pycache__
-/Dockerfile
+Dockerfile
 /compose*.yaml
 /data

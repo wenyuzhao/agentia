@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:bookworm
 
 ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update && apt-get install -y nginx
+
 # Copy the project into the image
 ADD . /app
 
@@ -9,7 +11,9 @@ ADD . /app
 WORKDIR /app
 RUN uv sync --all-groups --frozen
 
-ADD ./setup.sh /app/setup
+ADD ./docker/setup.sh /app/setup
 ENV PATH="/app:$PATH"
 
-CMD uv run agentia serve
+COPY ./docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+CMD ./docker/start.sh

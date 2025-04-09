@@ -32,7 +32,7 @@ def setup():
         asyncio.run(agent._Agent__init_plugins())  # type: ignore
 
 
-def __check_and_setup_server(log_level: str):
+def __check_and_setup_server(log_level: str, port: int):
     try:
         import streamlit
     except ImportError:
@@ -48,6 +48,7 @@ def __check_and_setup_server(log_level: str):
     # Streamlit options
     if "SERVER_PORT" in os.environ:
         port = int(os.environ["SERVER_PORT"])
+    return port
 
 
 serve = typer.Typer(
@@ -62,7 +63,7 @@ app.add_typer(serve, name="serve")
 
 @serve.command(name="app", help="Start the web app server")
 def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
-    __check_and_setup_server(log_level)
+    port = __check_and_setup_server(log_level, port)
 
     import streamlit.web.bootstrap
 
@@ -80,13 +81,13 @@ def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
 
 
 @serve.command(name="api", help="Start the API server")
-def serve_api(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
-    __check_and_setup_server(log_level)
+def serve_api(port: int = 8000, dev: bool = False, log_level: str = "DEBUG"):
+    port = __check_and_setup_server(log_level, port)
 
     import uvicorn
     from agentia._api import app
 
-    uvicorn.run(app, host="localhost", port=8502)
+    uvicorn.run(app, host="localhost", port=port)
 
 
 @app.callback()
