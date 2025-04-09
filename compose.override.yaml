@@ -1,0 +1,20 @@
+services:
+  agentia:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore: &ignore
+            - .*
+            - _*
+            - "**/__pycache__"
+            - agents
+        - action: rebuild
+          path: pyproject.toml
+        - action: restart
+          path: .
+          ignore: *ignore

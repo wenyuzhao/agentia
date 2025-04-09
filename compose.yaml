@@ -26,18 +26,3 @@ services:
       # gmail
       AUTH_GMAIL_CLIENT_ID: ${AUTH_GMAIL_CLIENT_ID:?}
       AUTH_GMAIL_CLIENT_SECRET: ${AUTH_GMAIL_CLIENT_SECRET:?}
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-          ignore: &ignore
-            - .*
-            - _*
-            - "**/__pycache__"
-            - agents
-        - action: rebuild
-          path: pyproject.toml
-        - action: restart
-          path: .
-          ignore: *ignore
