@@ -11,9 +11,10 @@ ADD . /app
 WORKDIR /app
 RUN uv sync --all-groups --frozen
 
-ADD ./docker/setup.sh /app/setup
-ENV PATH="/app:$PATH"
+# Install `setup` command
+ENV PATH="/app/docker:$PATH"
 
-COPY ./docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Configure nginx
+COPY ./docker/nginx.conf /etc/nginx/sites-enabled/default
 
-CMD ./docker/start.sh
+CMD start
