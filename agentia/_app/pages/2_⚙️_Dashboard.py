@@ -5,11 +5,14 @@ import copy
 import tomlkit
 from tomlkit.container import Container
 
+import agentia
 from agentia import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
 import agentia._app.utils as utils
 import agentia.utils.config as cfg
 from slugify import slugify
+
+agentia.utils._setup_logging()
 
 st.set_page_config(initial_sidebar_state="collapsed")
 

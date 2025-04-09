@@ -1,4 +1,6 @@
+import logging.config
 import os
+import tomllib
 import typer
 import agentia.utils
 import asyncio
@@ -64,6 +66,7 @@ app.add_typer(serve, name="serve")
 @serve.command(name="app", help="Start the web app server")
 def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
     port = __check_and_setup_server(log_level, port)
+    agentia.utils._setup_logging()
 
     import streamlit.web.bootstrap
 
@@ -83,6 +86,7 @@ def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
 @serve.command(name="api", help="Start the API server")
 def serve_api(port: int = 8000, dev: bool = False, log_level: str = "DEBUG"):
     port = __check_and_setup_server(log_level, port)
+    agentia.utils._setup_logging()
 
     import uvicorn
     from agentia._api import app

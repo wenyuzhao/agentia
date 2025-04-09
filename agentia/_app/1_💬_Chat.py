@@ -16,8 +16,10 @@ from agentia import (
 )
 from agentia.plugins import PluginInitError
 import agentia._app.utils as utils
+import agentia
 
 dotenv.load_dotenv()
+agentia.utils._setup_logging()
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
