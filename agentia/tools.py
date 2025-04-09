@@ -75,8 +75,8 @@ class ToolRegistry:
                 self.__add_plugin(t)
             else:
                 raise ValueError(f"Invalid tool type: {type(t)}")
-        names = ", ".join([f"{k}" for k in self.__functions.keys()])
-        self._agent.log.info(f"Registered Tools: {names or 'N/A'}")
+        # names = ", ".join([f"{k}" for k in self.__functions.keys()])
+        # self._agent.log.info(f"Registered Tools: {names or 'N/A'}")
 
     async def init(self, silent: bool):
         from .plugins import PluginInitError

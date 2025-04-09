@@ -98,6 +98,7 @@ def __load_agent_from_config(
     agents: dict[Path, Agent],
     persist: bool,
     session_id: str | None,
+    log_level: str | int | None = None,
 ):
     """Load a bot from a configuration file"""
     # Load the configuration file
@@ -152,6 +153,7 @@ def __load_agent_from_config(
         user=config.agent.user,
         persist=persist,
         session_id=session_id,
+        log_level=log_level,
     )
     agent.config = config
     agent.config_path = file.resolve()
@@ -164,7 +166,10 @@ def __load_agent_from_config(
 
 
 def load_agent_from_config(
-    name: str | Path, persist: bool, session_id: str | None
+    name: str | Path,
+    persist: bool,
+    session_id: str | None,
+    log_level: str | int | None = None,
 ) -> Agent:
     """Load a bot from a configuration file"""
     if isinstance(name, Path):
@@ -190,7 +195,9 @@ def load_agent_from_config(
             raise FileNotFoundError(f"Agent config not found: {name}")
     if config_path.stem.startswith(("_", ".", "-")):
         raise ValueError(f"Invalid agent file name: {config_path.stem}")
-    return __load_agent_from_config(config_path, set(), {}, persist, session_id)
+    return __load_agent_from_config(
+        config_path, set(), {}, persist, session_id, log_level
+    )
 
 
 def find_all_agents() -> list[AgentInfo]:

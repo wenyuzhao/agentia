@@ -70,7 +70,7 @@ def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
 
     import streamlit.web.bootstrap
 
-    entry = Path(__file__).parent / "_app" / "1_💬_Chat.py"
+    entry = Path(__file__).parent / "_app" / "app.py"
 
     streamlit.web.bootstrap.load_config_options(
         flag_options={

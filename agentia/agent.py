@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from .llm import ModelOptions
 
 _global_cache_dir = None
-_global_logger_configured = False
 
 
 def _get_global_cache_dir() -> Path:
@@ -273,14 +272,6 @@ class Agent:
             else:
                 log_level = logging.WARNING
         self.log.setLevel(log_level)
-
-        global _global_logger_configured
-        if _global_logger_configured:
-            return
-        _global_logger_configured = True
-        if Agent.is_server() and (Path.cwd() / "logging.toml").exists():
-            config = tomllib.loads((Path.cwd() / "logging.toml").read_text())
-            logging.config.dictConfig(config)
 
     @staticmethod
     def __sweeper(session_id: str, persist: bool):
@@ -692,11 +683,14 @@ class Agent:
 
     @staticmethod
     def load_from_config(
-        config: str | Path, persist: bool = False, session_id: str | None = None
+        config: str | Path,
+        persist: bool = False,
+        session_id: str | None = None,
+        log_level: str | int | None = None,
     ):
         from .utils.config import load_agent_from_config
 
-        return load_agent_from_config(config, persist, session_id)
+        return load_agent_from_config(config, persist, session_id, log_level)
 
     def load(self, colleagues=True):
         if not self.persist:
