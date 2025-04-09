@@ -1,3 +1,4 @@
+import dataclasses
 from datetime import datetime
 import logging
 import logging.config
@@ -55,12 +56,22 @@ class AgentInfo:
     config_path: Path
     config: "Config"
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "config_path": str(self.config_path),
+            "config": self.config.model_dump(),
+        }
+
 
 @dataclass
 class SessionInfo:
     id: str
     agent: str
     title: str | None = None
+
+    def to_dict(self):
+        dataclasses.asdict(self)
 
 
 @dataclass

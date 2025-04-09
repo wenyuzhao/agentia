@@ -1,4 +1,3 @@
-import logging
 import os
 import typer
 import agentia.utils
@@ -16,15 +15,6 @@ app = typer.Typer(
 )
 
 
-def __check_group():
-    try:
-        import streamlit
-    except ImportError:
-        raise RuntimeError(
-            "Agentia REPL is not supported. You may need to reinstall agentia with all dependencies: `pipx install agentia[all]`"
-        )
-
-
 @app.command(help="Start the command line REPL")
 def repl(agent: str):
     dotenv.load_dotenv()
@@ -32,10 +22,23 @@ def repl(agent: str):
     agentia.utils.repl.run(agent)
 
 
-@app.command(help="Start the web app server")
-def serve(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
-    __check_group()
+@app.command(help="Setup plugins for all agents")
+def setup():
+    dotenv.load_dotenv()
+    os.environ["AGENTIA_CLI"] = "1"
+    ALL_AGENTS = Agent.get_all_agents()
+    for agent_info in ALL_AGENTS:
+        agent = Agent.load_from_config(agent_info.id)
+        asyncio.run(agent._Agent__init_plugins())  # type: ignore
 
+
+def __check_and_setup_server(log_level: str):
+    try:
+        import streamlit
+    except ImportError:
+        raise RuntimeError(
+            "Agentia REPL is not supported. You may need to reinstall agentia with all dependencies: `pipx install agentia[all]`"
+        )
     dotenv.load_dotenv()
 
     os.environ["AGENTIA_SERVER"] = "1"
@@ -45,6 +48,21 @@ def serve(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
     # Streamlit options
     if "SERVER_PORT" in os.environ:
         port = int(os.environ["SERVER_PORT"])
+
+
+serve = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    context_settings=dict(help_option_names=["-h", "--help"]),
+    pretty_exceptions_short=True,
+    pretty_exceptions_show_locals=False,
+)
+app.add_typer(serve, name="serve")
+
+
+@serve.command(name="app", help="Start the web app server")
+def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
+    __check_and_setup_server(log_level)
 
     import streamlit.web.bootstrap
 
@@ -61,14 +79,14 @@ def serve(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
     streamlit.web.bootstrap.run(str(entry), False, [], {})
 
 
-@app.command(help="Setup plugins for all agents")
-def setup():
-    dotenv.load_dotenv()
-    os.environ["AGENTIA_CLI"] = "1"
-    ALL_AGENTS = Agent.get_all_agents()
-    for agent_info in ALL_AGENTS:
-        agent = Agent.load_from_config(agent_info.id)
-        asyncio.run(agent._Agent__init_plugins())  # type: ignore
+@serve.command(name="api", help="Start the API server")
+def serve_api(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
+    __check_and_setup_server(log_level)
+
+    import uvicorn
+    from agentia._api import app
+
+    uvicorn.run(app, host="localhost", port=8502)
 
 
 @app.callback()
