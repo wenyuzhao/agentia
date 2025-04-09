@@ -70,7 +70,7 @@ class SessionInfo:
     title: str | None = None
 
     def to_dict(self):
-        dataclasses.asdict(self)
+        return dataclasses.asdict(self)
 
 
 @dataclass
