@@ -62,7 +62,9 @@ async def get_session(agent_id: str, session_id: str):
         if isinstance(e, Event):
             history.append(dataclasses.asdict(e))
         else:
-            history.append(e.to_json())
+            x = dict(**e.to_json())
+            x["type"] = "message"
+            history.append(x)
     return {"session": session.to_dict(), "history": history}
 
 
