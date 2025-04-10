@@ -3,17 +3,13 @@ import tomllib
 from pathlib import Path
 import shelve
 import tomlkit
+import os
 
 from agentia.agent import Agent, AgentInfo, _get_global_cache_dir
 from agentia.plugins import ALL_PLUGINS, Plugin
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
-AGENTS_SEARCH_PATHS = [
-    Path.cwd(),
-    Path.cwd() / "agents",
-    Path.cwd() / ".agents",
-    Path.home() / ".config" / "agentia" / "agents",
-]
+DEFAULT_AGENT_CONFIG_PATH = Path.cwd() / "agents"
 
 
 class AgentConfig(BaseModel):
@@ -165,12 +161,23 @@ def __load_agent_from_config(
     return agent
 
 
+def __get_config_dir() -> Path:
+    if path := os.environ.get("AGENTIA_CONFIG_DIR"):
+        config_dir = Path(path)
+    else:
+        config_dir = DEFAULT_AGENT_CONFIG_PATH
+    config_dir = config_dir.absolute()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
 def load_agent_from_config(
     name: str | Path,
     persist: bool,
     session_id: str | None,
     log_level: str | int | None = None,
 ) -> Agent:
+    config_dir = __get_config_dir()
     """Load a bot from a configuration file"""
     if isinstance(name, Path):
         if not name.exists():
@@ -186,12 +193,9 @@ def load_agent_from_config(
         raise ValueError(f"Invalid agent path: {name}")
     else:
         # If the name is a string, we need to find the configuration file from a list of search paths
-        config_path = None
-        for dir in AGENTS_SEARCH_PATHS:
-            if (file := dir / f"{name}.toml").exists():
-                config_path = file
-                break
-        if config_path is None:
+        if (file := config_dir / f"{name}.toml").exists():
+            config_path = file
+        else:
             raise FileNotFoundError(f"Agent config not found: {name}")
     if config_path.stem.startswith(("_", ".", "-")):
         raise ValueError(f"Invalid agent file name: {config_path.stem}")
@@ -203,27 +207,25 @@ def load_agent_from_config(
 def find_all_agents() -> list[AgentInfo]:
     """Find all agents in the search paths"""
     agents: dict[str, AgentInfo] = {}
-    for path in AGENTS_SEARCH_PATHS:
-        if not path.exists():
+    config_dir = __get_config_dir()
+    for file in config_dir.glob("*.toml"):
+        if file.stem in agents:
             continue
-        for file in path.glob("*.toml"):
-            if file.stem in agents:
-                continue
-            if file.stem.startswith(("_", ".", "-")):
-                continue
-            doc = tomllib.loads(file.read_text())
-            if not isinstance(doc, dict) or "agent" not in doc:
-                continue
-            try:
-                config = Config(**doc)
-            except ValidationError as e:
-                raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
-            agent_info = AgentInfo(
-                id=file.stem,
-                config=config,
-                config_path=file.resolve().relative_to(Path.cwd()),
-            )
-            agents[file.stem] = agent_info
+        if file.stem.startswith(("_", ".", "-")):
+            continue
+        doc = tomllib.loads(file.read_text())
+        if not isinstance(doc, dict) or "agent" not in doc:
+            continue
+        try:
+            config = Config(**doc)
+        except ValidationError as e:
+            raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
+        agent_info = AgentInfo(
+            id=file.stem,
+            config=config,
+            config_path=file.resolve().relative_to(Path.cwd()),
+        )
+        agents[file.stem] = agent_info
     agents_list = list(agents.values())
     agents_list.sort(key=lambda x: x.config.agent.name)
     return agents_list

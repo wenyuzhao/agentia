@@ -1,12 +1,13 @@
-import logging.config
 import os
-import tomllib
+from typing import Annotated
 import typer
 import agentia.utils
 import asyncio
 from pathlib import Path
 from agentia import Agent
 import dotenv
+
+from agentia.utils.config import DEFAULT_AGENT_CONFIG_PATH
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -34,7 +35,7 @@ def setup():
         asyncio.run(agent._Agent__init_plugins())  # type: ignore
 
 
-def __check_and_setup_server(log_level: str, port: int):
+def __check_and_setup_server(log_level: str, port: int, config_dir: Path | None):
     try:
         import streamlit
     except ImportError:
@@ -46,6 +47,8 @@ def __check_and_setup_server(log_level: str, port: int):
     os.environ["AGENTIA_SERVER"] = "1"
     if "LOG_LEVEL" not in os.environ:
         os.environ["LOG_LEVEL"] = log_level
+    if config_dir is not None:
+        os.environ["AGENTIA_CONFIG_DIR"] = str(config_dir)
 
     # Streamlit options
     if "SERVER_PORT" in os.environ:
@@ -64,8 +67,18 @@ app.add_typer(serve, name="serve")
 
 
 @serve.command(name="app", help="Start the web app server")
-def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
-    port = __check_and_setup_server(log_level, port)
+def serve_app(
+    port: int = 8501,
+    dev: bool = False,
+    config_dir: Annotated[
+        Path | None,
+        typer.Option(
+            help=f"Path to the agent configuration directory. DEFAULT: {DEFAULT_AGENT_CONFIG_PATH}",
+        ),
+    ] = None,
+    log_level: str = "DEBUG",
+):
+    port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
 
     import streamlit.web.bootstrap
@@ -84,8 +97,18 @@ def serve_app(port: int = 8501, dev: bool = False, log_level: str = "DEBUG"):
 
 
 @serve.command(name="api", help="Start the API server")
-def serve_api(port: int = 8000, dev: bool = False, log_level: str = "DEBUG"):
-    port = __check_and_setup_server(log_level, port)
+def serve_api(
+    port: int = 8000,
+    dev: bool = False,
+    config_dir: Annotated[
+        Path | None,
+        typer.Option(
+            help=f"Path to the agent configuration directory. DEFAULT: {DEFAULT_AGENT_CONFIG_PATH}",
+        ),
+    ] = None,
+    log_level: str = "DEBUG",
+):
+    port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
 
     import uvicorn
