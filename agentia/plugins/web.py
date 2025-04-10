@@ -31,6 +31,18 @@ class WebPlugin(Plugin):
             "hint": f"This is a .{file_ext} file and it is embeded in the knowledge base. Use _file_search to query the content.",
         }
 
+    def __get(self, url: str):
+        res = requests.get(url)
+        res.raise_for_status()
+        content_type = res.headers.get("content-type")
+        # if content_type == "application/pdf":
+        #     # Add this file to the knowledge base
+        #     if self.agent.knowledge_base is not None:
+        #         return self.__embed_file(res.content, "pdf")
+        #     return {"content": "This is a PDF file. You don't know how to view it."}
+        md = markdownify(res.text)
+        return {"content": md}
+
     @tool
     def get_webpage_content(
         self,
@@ -47,13 +59,11 @@ class WebPlugin(Plugin):
                 # extract_depth="advanced",
                 include_images=True,
             )
+            failed_results = result.get("failed_results", [])
+            if len(failed_results) > 0:
+                try:
+                    return self.__get(url)
+                except Exception as e:
+                    pass
             return result
-        res = requests.get(url)
-        content_type = res.headers.get("content-type")
-        if content_type == "application/pdf":
-            # Add this file to the knowledge base
-            if self.agent.knowledge_base is not None:
-                return self.__embed_file(res.content, "pdf")
-            return {"content": "This is a PDF file. You don't know how to view it."}
-        md = markdownify(res.text)
-        return {"content": md}
+        return self.__get(url)

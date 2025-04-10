@@ -91,7 +91,7 @@ async def run_chat_completion(websocket: WebSocket, agent: Agent, prompt: str):
         else:
             await websocket.send_json({"type": "message.start"})
             async for s in e:
-                await websocket.send_json({"type": "message.delta", "data": s})
+                await websocket.send_json({"type": "message.delta", "delta": s})
             await websocket.send_json({"type": "message.end"})
     await websocket.send_json({"type": "response.end"})
 
@@ -103,7 +103,7 @@ async def chat(websocket: WebSocket, agent_id: str, session_id: str):
     while True:
         req = await websocket.receive_json()
         if "type" not in req:
-            await websocket.send_json({"error": "Invalid request"})
+            await websocket.send_json({"type": "error", "error": "Invalid request"})
             continue
         try:
             match req["type"]:
@@ -113,7 +113,9 @@ async def chat(websocket: WebSocket, agent_id: str, session_id: str):
                     prompt = req["prompt"]
                     await run_chat_completion(websocket, agent, prompt)
                 case _:
-                    await websocket.send_json({"error": "Invalid request"})
+                    await websocket.send_json(
+                        {"type": "error", "error": "Invalid request"}
+                    )
         except BaseException as e:
             agent.log.error(e)
             await websocket.send_json({"error": str(e)})
