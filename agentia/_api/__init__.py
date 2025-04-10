@@ -1,7 +1,8 @@
 import dataclasses
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from agentia.agent import Agent, Event
+from agentia import LOGGER
 
 app = FastAPI(root_path="/api")
 
@@ -96,26 +97,37 @@ async def run_chat_completion(websocket: WebSocket, agent: Agent, prompt: str):
     await websocket.send_json({"type": "response.end"})
 
 
+SERVER_LOGGER = LOGGER.getChild("server")
+
+
 @app.websocket("/v1/agents/{agent_id}/sessions/{session_id}/chat")
 async def chat(websocket: WebSocket, agent_id: str, session_id: str):
     await websocket.accept()
     agent = Agent.load_from_config(agent_id, persist=True, session_id=session_id)
-    while True:
-        req = await websocket.receive_json()
-        if "type" not in req:
-            await websocket.send_json({"type": "error", "error": "Invalid request"})
-            continue
-        try:
-            match req["type"]:
-                case "ping":
-                    await websocket.send_json({"type": "pong"})
-                case "prompt":
-                    prompt = req["prompt"]
-                    await run_chat_completion(websocket, agent, prompt)
-                case _:
-                    await websocket.send_json(
-                        {"type": "error", "error": "Invalid request"}
-                    )
-        except BaseException as e:
-            agent.log.error(e)
-            await websocket.send_json({"error": str(e)})
+    SERVER_LOGGER.info(f"WebSocket connected: agent={agent_id} session={session_id}")
+
+    try:
+        while True:
+            req = await websocket.receive_json()
+            if "type" not in req:
+                await websocket.send_json({"type": "error", "error": "Invalid request"})
+                continue
+            try:
+                match req["type"]:
+                    case "ping":
+                        await websocket.send_json({"type": "pong"})
+                    case "prompt":
+                        prompt = req["prompt"]
+                        await run_chat_completion(websocket, agent, prompt)
+                    case _:
+                        await websocket.send_json(
+                            {"type": "error", "error": "Invalid request"}
+                        )
+            except BaseException as e:
+                agent.log.error(e)
+                await websocket.send_json({"error": str(e)})
+    except WebSocketDisconnect as e:
+        SERVER_LOGGER.info(
+            f"WebSocket disconnected: agent={agent_id} session={session_id}"
+        )
+        raise e
