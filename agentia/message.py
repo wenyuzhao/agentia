@@ -200,7 +200,7 @@ class SystemMessage(BaseMessage):
 
     @override
     def to_json(self) -> Mapping[str, Any]:
-        data: Mapping[str, Any] = {"role": "systen", "content": self.content}
+        data: Mapping[str, Any] = {"role": "system", "content": self.content}
         return data
 
 

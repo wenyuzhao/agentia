@@ -82,7 +82,7 @@ class ToolCallEvent:
     description: str
     arguments: dict[str, Any]
     result: Any | None = None
-    type: Literal["event.tool_call"] = "event.tool_call"
+    role: Literal["event.tool_call"] = "event.tool_call"
 
 
 @dataclass
@@ -92,7 +92,7 @@ class CommunicationEvent:
     child: str
     message: str
     response: str | None = None
-    type: Literal["event.communication"] = "event.communication"
+    role: Literal["event.communication"] = "event.communication"
 
 
 @dataclass
@@ -100,7 +100,7 @@ class UserConsentEvent:
     id: str
     message: str
     response: bool | None = None
-    type: Literal["event.user_consent"] = "event.user_consent"
+    role: Literal["event.user_consent"] = "event.user_consent"
 
 
 Event: TypeAlias = ToolCallEvent | CommunicationEvent | UserConsentEvent
