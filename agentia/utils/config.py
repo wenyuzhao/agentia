@@ -4,12 +4,14 @@ from pathlib import Path
 import shelve
 import tomlkit
 import os
+import importlib.util
 
 from agentia.agent import Agent, AgentInfo, _get_global_cache_dir
 from agentia.plugins import ALL_PLUGINS, Plugin
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 DEFAULT_AGENT_CONFIG_PATH = Path.cwd() / "agents"
+DEFAULT_AGENT_USER_PLUGIN_PATH = Path.cwd() / "plugins"
 
 
 class AgentConfig(BaseModel):
@@ -169,6 +171,43 @@ def __get_config_dir() -> Path:
     config_dir = config_dir.absolute()
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
+
+
+__user_plugins_loaded = False
+
+
+def prepare_user_plugins():
+    from agentia import LOGGER
+
+    global __user_plugins_loaded
+    if __user_plugins_loaded:
+        return
+    __user_plugins_loaded = True
+    if path := os.environ.get("AGENTIA_USER_PLUGIN_DIR"):
+        plugins_dir = Path(path)
+    else:
+        plugins_dir = DEFAULT_AGENT_USER_PLUGIN_PATH
+    if not plugins_dir.is_dir():
+        return
+    LOGGER.info(f"Loading user plugins from {plugins_dir}")
+    # Install requirements.txt
+    if (plugins_dir / "requirements.txt").is_file():
+        ret = os.system(f"uv pip install -r {plugins_dir / "requirements.txt"}")
+        if ret != 0:
+            raise RuntimeError(
+                f"Failed to install requirements.txt from {plugins_dir}: {ret}"
+            )
+    # Load plugins
+    for file in plugins_dir.glob("*.py"):
+        if not file.is_file() or file.stem.startswith(("_", ".", "-")):
+            continue
+        name = file.stem
+        LOGGER.info(f" - {name} ({file})")
+        spec = importlib.util.spec_from_file_location(name, file)
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
 
 
 def load_agent_from_config(

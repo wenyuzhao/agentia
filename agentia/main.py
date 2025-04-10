@@ -7,7 +7,7 @@ from pathlib import Path
 from agentia import Agent
 import dotenv
 
-from agentia.utils.config import DEFAULT_AGENT_CONFIG_PATH
+from agentia.utils.config import DEFAULT_AGENT_CONFIG_PATH, prepare_user_plugins
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -19,9 +19,28 @@ app = typer.Typer(
 
 
 @app.command(help="Start the command line REPL")
-def repl(agent: str):
+def repl(
+    agent: str,
+    config_dir: Annotated[
+        Path | None,
+        typer.Option(
+            help=f"Path to the agent configuration directory. DEFAULT: {DEFAULT_AGENT_CONFIG_PATH}",
+        ),
+    ] = None,
+    user_plugin_dir: Annotated[
+        Path | None,
+        typer.Option(
+            help=f"Path to the user-defined plugins directory. DEFAULT: {DEFAULT_AGENT_CONFIG_PATH}",
+        ),
+    ] = None,
+):
     dotenv.load_dotenv()
     os.environ["AGENTIA_CLI"] = "1"
+    if config_dir is not None:
+        os.environ["AGENTIA_CONFIG_DIR"] = str(config_dir)
+    if user_plugin_dir is not None:
+        os.environ["AGENTIA_USER_PLUGIN_DIR"] = str(user_plugin_dir)
+    prepare_user_plugins()
     agentia.utils.repl.run(agent)
 
 
@@ -80,6 +99,7 @@ def serve_app(
 ):
     port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
+    prepare_user_plugins()
 
     import streamlit.web.bootstrap
 
@@ -110,6 +130,7 @@ def serve_api(
 ):
     port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
+    prepare_user_plugins()
 
     import uvicorn
     from agentia._api import app
