@@ -1,8 +1,11 @@
 import dataclasses
+from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from agentia.agent import Agent, Event
 from agentia import LOGGER
+import agentia.utils.config
 
 app = FastAPI(root_path="/api")
 
@@ -22,7 +25,7 @@ async def get_agent(agent_id: str):
     raise HTTPException(status_code=404, detail="Agent not found")
 
 
-@app.put("/v1/agents/{agent_id}")
+@app.post("/v1/agents/{agent_id}")
 async def create_agent(agent_id: str):
     raise HTTPException(status_code=500, detail="Not implemented")
 
@@ -37,9 +40,20 @@ async def delete_agent(agent_id: str):
     raise HTTPException(status_code=500, detail="Not implemented")
 
 
+class GetSessions(BaseModel):
+    tags: list[str] | None = None
+
+
 @app.get("/v1/agents/{agent_id}/sessions")
-async def get_sessions(agent_id: str):
+async def get_sessions(agent_id: str, body: GetSessions | None = None):
     sessions = Agent.get_all_sessions(agent_id)
+    if body and body.tags is not None:
+        # Get sessions that matches all query tags
+        sessions = [
+            session
+            for session in sessions
+            if all(tag in session.tags for tag in body.tags)
+        ]
     return {"sessions": [session.to_dict() for session in sessions]}
 
 
@@ -69,14 +83,20 @@ async def get_session(agent_id: str, session_id: str):
     return {"session": session.to_dict(), "history": history}
 
 
-@app.put("/v1/agents/{agent_id}/sessions")
-async def create_session(agent_id: str):
+class CreateSession(BaseModel):
+    tags: list[str] | None = None
+
+
+@app.post("/v1/agents/{agent_id}/sessions")
+async def create_session(agent_id: str, body: CreateSession | None = None):
     try:
         agent = Agent.load_from_config(agent_id, persist=True)
     except Exception as e:
         print(e)
         raise HTTPException(status_code=404, detail="Agent not found")
     await agent.save()
+    if body and body.tags is not None:
+        agentia.utils.config.set_session_tags(agent.session_id, body.tags)
     session_id = agent.session_id
     session = Agent.load_session_info(session_id)
     if session is None:
@@ -84,7 +104,14 @@ async def create_session(agent_id: str):
     return {"session": session.to_dict()}
 
 
+@app.delete("/v1/agents/{agent_id}/sessions/{session_id}")
+async def delete_session(agent_id: str, session_id: str):
+    Agent.delete_session(session_id)
+    return {"success": True}
+
+
 async def run_chat_completion(websocket: WebSocket, agent: Agent, prompt: str):
+    old_summary = agent.history.summary
     await websocket.send_json({"type": "response.start"})
     async for e in agent.chat_completion(prompt, stream=True, events=True):
         if isinstance(e, Event):
@@ -94,7 +121,10 @@ async def run_chat_completion(websocket: WebSocket, agent: Agent, prompt: str):
             async for s in e:
                 await websocket.send_json({"type": "message.delta", "delta": s})
             await websocket.send_json({"type": "message.end"})
-    await websocket.send_json({"type": "response.end"})
+    response_end: dict[str, Any] = {"type": "response.end"}
+    if old_summary != agent.history.summary:
+        response_end["summary"] = agent.history.summary
+    await websocket.send_json(response_end)
 
 
 SERVER_LOGGER = LOGGER.getChild("server")

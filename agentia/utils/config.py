@@ -284,6 +284,34 @@ def load(path: Path) -> tomlkit.TOMLDocument:
     return doc
 
 
+def set_session_tags(
+    session_id: str,
+    tags: list[str],
+):
+    """Set the tags for a session"""
+    for t in tags:
+        if " " in t or "," in t:
+            raise ValueError(f"Invalid tag: {t}")
+    session_dir = _get_global_cache_dir() / "sessions" / session_id
+    if not session_dir.exists():
+        raise FileNotFoundError(f"Session not found: {session_id}")
+    with open(session_dir / "tags", "w+") as f:
+        f.write(",".join(tags))
+
+
+def get_session_tags(session_id: str) -> list[str]:
+    """Get the tags for a session"""
+    session_dir = _get_global_cache_dir() / "sessions" / session_id
+    if not session_dir.exists():
+        raise FileNotFoundError(f"Session not found: {session_id}")
+    tags_file = session_dir / "tags"
+    if not tags_file.exists():
+        return []
+    with open(tags_file, "r") as f:
+        tags = f.read().strip().split(",")
+    return [t.strip() for t in tags if t.strip()]
+
+
 ALL_RECOMMENDED_MODELS = [
     "deepseek/deepseek-chat-v3-0324",
     "openai/gpt-4o-mini",

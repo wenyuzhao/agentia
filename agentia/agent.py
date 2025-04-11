@@ -67,6 +67,7 @@ class SessionInfo:
     id: str
     agent: str
     title: str | None = None
+    tags: list[str] = dataclasses.field(default_factory=list)
 
     def to_dict(self):
         return dataclasses.asdict(self)
@@ -791,6 +792,8 @@ class Agent:
     @staticmethod
     def load_session_info(session: str) -> SessionInfo | None:
         """Get the session info"""
+        from agentia.utils.config import get_session_tags
+
         session_dir = _get_global_cache_dir() / "sessions" / session
         if not session_dir.exists():
             return None
@@ -800,7 +803,8 @@ class Agent:
         with shelve.open(config_file) as db:
             sess_title = db.get("title", None)
             sess_agent = db["agent"]
-        return SessionInfo(id=session, agent=sess_agent, title=sess_title)
+        tags = get_session_tags(session)
+        return SessionInfo(id=session, agent=sess_agent, title=sess_title, tags=tags)
 
     @staticmethod
     def get_all_agents() -> list[AgentInfo]:
