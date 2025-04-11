@@ -783,6 +783,48 @@ class Agent:
             return
         shutil.rmtree(session_dir)
 
+    @staticmethod
+    def delete_agent(id: str):
+        """Delete the agent"""
+        from agentia.utils.config import get_config_dir
+
+        # delete all sessions
+        sessions = Agent.get_all_sessions(id)
+        for session in sessions:
+            Agent.delete_session(session.id)
+        # delete the agent
+        agent_dir = _get_global_cache_dir() / "agents" / id
+        if not agent_dir.exists():
+            print(f"Agent {id} not found")
+            return
+        shutil.rmtree(agent_dir)
+        agent_config_file = get_config_dir() / f"{id}.toml"
+        if agent_config_file.exists():
+            os.remove(agent_config_file)
+
+    @staticmethod
+    def cleanup_cache():
+        """Delete all stale sessions and agents"""
+        all_agents = Agent.get_all_agents()
+        agent_ids = set([a.id for a in all_agents])
+        # delete all stale agents
+        agents_dir = _get_global_cache_dir() / "agents"
+        if agents_dir.exists():
+            for entry in agents_dir.iterdir():
+                if entry.is_dir():
+                    agent_id = entry.stem
+                    if agent_id not in agent_ids:
+                        shutil.rmtree(entry)
+        # delete all stale sessions
+        sessions_dir = _get_global_cache_dir() / "sessions"
+        if sessions_dir.exists():
+            for entry in sessions_dir.iterdir():
+                if entry.is_dir():
+                    session_id = entry.stem
+                    session = Agent.load_session_info(session_id)
+                    if session and session.agent not in agent_ids:
+                        shutil.rmtree(entry)
+
     def get_session_info(self) -> SessionInfo:
         """Get the session info"""
         return SessionInfo(

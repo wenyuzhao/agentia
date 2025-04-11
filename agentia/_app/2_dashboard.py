@@ -78,8 +78,12 @@ assert agent.config and agent.config_path
 
 st.write("")
 
-settings_tab, plugins_tab = st.tabs(
-    ["🤖&nbsp;&nbsp;&nbsp;**Agent Settings**", "🧩&nbsp;&nbsp;&nbsp;**Plugins**"]
+settings_tab, plugins_tab, delete_tab = st.tabs(
+    [
+        "🤖&nbsp;&nbsp;&nbsp;**Agent Settings**",
+        "🧩&nbsp;&nbsp;&nbsp;**Plugins**",
+        "🗑️&nbsp;&nbsp;&nbsp;**Delete**",
+    ]
 )
 
 
@@ -208,3 +212,23 @@ def render_plugins_tab():
 
 with plugins_tab:
     render_plugins_tab()
+
+
+@st.dialog("Delete Agent")
+def delete_agent(agent: str):
+    st.write("Are you sure you want to delete this agent?")
+    if st.button("DELETE", type="primary"):
+        Agent.delete_agent(agent)
+        del st.session_state["initial_agent"]
+        del st.session_state["initial_doc"]
+        if a := st.session_state.get("agent"):
+            if a.id == agent:  # type: ignore
+                del st.session_state["agent"]
+        del st.query_params["agent"]
+        st.rerun()
+
+
+with delete_tab:
+    if st.button("Delete This Agent", type="primary"):
+        # Delete agent
+        delete_agent(selected_agent.id)

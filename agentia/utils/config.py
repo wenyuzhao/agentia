@@ -163,7 +163,7 @@ def __load_agent_from_config(
     return agent
 
 
-def __get_config_dir() -> Path:
+def get_config_dir() -> Path:
     if path := os.environ.get("AGENTIA_CONFIG_DIR"):
         config_dir = Path(path)
     else:
@@ -216,7 +216,7 @@ def load_agent_from_config(
     session_id: str | None,
     log_level: str | int | None = None,
 ) -> Agent:
-    config_dir = __get_config_dir()
+    config_dir = get_config_dir()
     """Load a bot from a configuration file"""
     if isinstance(name, Path):
         if not name.exists():
@@ -246,7 +246,7 @@ def load_agent_from_config(
 def find_all_agents() -> list[AgentInfo]:
     """Find all agents in the search paths"""
     agents: dict[str, AgentInfo] = {}
-    config_dir = __get_config_dir()
+    config_dir = get_config_dir()
     for file in config_dir.glob("*.toml"):
         if file.stem in agents:
             continue

@@ -100,6 +100,7 @@ def serve_app(
     port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
     prepare_user_plugins()
+    Agent.cleanup_cache()
 
     import streamlit.web.bootstrap
 
@@ -131,6 +132,7 @@ def serve_api(
     port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
     prepare_user_plugins()
+    Agent.cleanup_cache()
 
     import uvicorn
     from agentia._api import app
