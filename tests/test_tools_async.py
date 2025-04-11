@@ -1,4 +1,6 @@
-from agentia import Agent, Message, tool
+from agentia import Agent
+from agentia.message import UserMessage
+from agentia.plugins import tool
 from typing import Literal, Annotated
 import pytest
 import asyncio

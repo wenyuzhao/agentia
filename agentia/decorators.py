@@ -62,3 +62,6 @@ def tool(
         return __tool_impl(name)
 
     return __tool_impl
+
+
+__all__ = ["tool"]

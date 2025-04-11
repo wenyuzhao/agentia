@@ -7,13 +7,14 @@ from agentia import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
 import agentia._app.utils as utils
 import agentia.utils.config as cfg
+import agentia.utils.session as sess
 import logging
 
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
 
-ALL_AGENTS = Agent.get_all_agents()
+ALL_AGENTS = cfg.get_all_agents()
 
 
 @st.dialog("New Agent")
@@ -218,7 +219,7 @@ with plugins_tab:
 def delete_agent(agent: str):
     st.write("Are you sure you want to delete this agent?")
     if st.button("DELETE", type="primary"):
-        Agent.delete_agent(agent)
+        sess.delete_agent(agent)
         del st.session_state["initial_agent"]
         del st.session_state["initial_doc"]
         if a := st.session_state.get("agent"):

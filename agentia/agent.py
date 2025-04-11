@@ -1,21 +1,15 @@
-import dataclasses
 from datetime import datetime
 import logging
-import shutil
 from typing import (
     Annotated,
-    AsyncGenerator,
     Literal,
     Optional,
     Type,
-    TypeVar,
     Any,
-    Generic,
     overload,
     TYPE_CHECKING,
 )
 import shelve
-from filelock import BaseFileLock, FileLock
 import rich
 import rich.panel
 from slugify import slugify
@@ -29,6 +23,7 @@ from agentia import LOGGER
 if TYPE_CHECKING:
     from agentia.utils.config import Config
     from agentia.knowledge_base import KnowledgeBase
+    from agentia.chat_completion import ChatCompletion, MessageStream
 
 from .message import *
 from .history import History
@@ -40,71 +35,6 @@ if TYPE_CHECKING:
     from .plugins import Plugin
     from .llm import ModelOptions
 
-_global_cache_dir = None
-
-
-def _get_global_cache_dir() -> Path:
-    global _global_cache_dir
-    return _global_cache_dir or (Path.cwd() / ".cache")
-
-
-@dataclass
-class AgentInfo:
-    id: str
-    config_path: Path
-    config: "Config"
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "config_path": str(self.config_path),
-            "config": self.config.model_dump(),
-        }
-
-
-@dataclass
-class SessionInfo:
-    id: str
-    agent: str
-    title: str | None = None
-    tags: list[str] = dataclasses.field(default_factory=list)
-
-    def to_dict(self):
-        return dataclasses.asdict(self)
-
-
-@dataclass
-class ToolCallEvent:
-    id: str
-    agent: str
-    name: str
-    display_name: str
-    description: str
-    arguments: dict[str, Any]
-    result: Any | None = None
-    role: Literal["event.tool_call"] = "event.tool_call"
-
-
-@dataclass
-class CommunicationEvent:
-    id: str
-    parent: str
-    child: str
-    message: str
-    response: str | None = None
-    role: Literal["event.communication"] = "event.communication"
-
-
-@dataclass
-class UserConsentEvent:
-    id: str
-    message: str
-    response: bool | None = None
-    role: Literal["event.user_consent"] = "event.user_consent"
-
-
-Event: TypeAlias = ToolCallEvent | CommunicationEvent | UserConsentEvent
-
 
 DEFAULT_MODEL_OPENROUTER = "openai/gpt-4o-mini"
 DEFAULT_MODEL_OPENAI = "gpt-4o-mini"
@@ -112,86 +42,6 @@ if "OPENAI_BASE_URL" in os.environ:
     DEFAULT_MODEL = DEFAULT_MODEL_OPENAI
 else:
     DEFAULT_MODEL = DEFAULT_MODEL_OPENROUTER
-
-
-M = TypeVar(
-    "M",
-    AssistantMessage,
-    MessageStream,
-    AssistantMessage | Event,
-    MessageStream | Event,
-)
-
-
-@dataclass
-class ChatCompletion(Generic[M]):
-    def __init__(
-        self,
-        agent: "Agent",
-        agen: AsyncGenerator[M, None],
-    ) -> None:
-        super().__init__()
-        self.__agen = agen
-        self.__agent = agent
-        self.__lock: Optional[BaseFileLock] = None
-        self.__lock_session()  # type: ignore
-
-        weakref.finalize(self, ChatCompletion.__finalize, self.__lock)
-
-    @staticmethod
-    def __finalize(lock: Optional[BaseFileLock]):
-        if lock is not None and lock.is_locked:
-            lock.release()
-
-    async def __save_history(self):
-        if not self.__agent.persist:
-            return
-        await self.__agent.save()
-
-    def __lock_session(self):
-        if self.__agent.persist:
-            self.__agent.session_data_folder.mkdir(parents=True, exist_ok=True)
-            self.__lock = FileLock(self.__agent.session_data_folder / "lock")
-            self.__lock.acquire()
-
-    def __unlock_session(self):
-        if self.__agent.persist and self.__lock is not None:
-            self.__lock.release()
-            self.__lock = None
-
-    async def __end_of_stream(self, error: bool):
-        if not error:
-            await self.__save_history()
-        self.__unlock_session()  # type: ignore
-
-    async def __anext__(self) -> M:
-        await self.__agent.init()
-        try:
-            return await self.__agen.__anext__()
-        except StopAsyncIteration as e:
-            await self.__end_of_stream(False)
-            raise e
-        except BaseException as e:
-            await self.__end_of_stream(True)
-            raise e
-
-    def __aiter__(self):
-        return self
-
-    async def __await_impl(self) -> str:
-        last_message = ""
-        async for msg in self:
-            if isinstance(msg, Message):
-                assert isinstance(msg.content, str)
-                last_message = msg.content
-            if isinstance(msg, MessageStream):
-                last_message = ""
-                async for delta in msg:
-                    last_message += delta
-        return last_message
-
-    def __await__(self):
-        return self.__await_impl().__await__()
 
 
 class Agent:
@@ -220,6 +70,7 @@ class Agent:
         session_id: str | None = None,
     ):
         from .tools import ToolRegistry
+        from .utils.session import get_global_cache_dir
 
         # Init simple fields
         self.__is_initialized = False
@@ -256,9 +107,9 @@ class Agent:
         self.context: Any = None
         self.config: Optional["Config"] = None
         self.config_path: Optional[Path] = None
-        self.agent_data_folder = _get_global_cache_dir() / "agents" / f"{self.id}"
+        self.agent_data_folder = get_global_cache_dir() / "agents" / f"{self.id}"
         self.session_data_folder = (
-            _get_global_cache_dir() / "sessions" / f"{self.session_id}"
+            get_global_cache_dir() / "sessions" / f"{self.session_id}"
         )
         self.__tools = ToolRegistry(self, tools)
         # Generate instructions
@@ -294,6 +145,18 @@ class Agent:
 
         weakref.finalize(self, Agent.__sweeper, self.session_id, self.persist)
 
+    @property
+    def history(self) -> History:
+        return self.__history
+
+    @property
+    def model(self) -> str:
+        return self.__backend.model
+
+    @property
+    def tools(self) -> "ToolRegistry":
+        return self.__backend.tools
+
     def __config_logger(self, log_level: str | int | None):
         if log_level is None:
             if "LOG_LEVEL" in os.environ:
@@ -306,20 +169,16 @@ class Agent:
 
     @staticmethod
     def __sweeper(session_id: str, persist: bool):
-        session_dir = _get_global_cache_dir() / "sessions" / session_id
-        if session_dir.exists() and not persist:
-            shutil.rmtree(session_dir)
+        from .utils.session import delete_session
+
+        if not persist:
+            delete_session(session_id)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.__sweeper(self.session_id, self.persist)
-
-    @staticmethod
-    def get_config_path(agent: str) -> Path:
-        """Get the config path"""
-        return _get_global_cache_dir() / "agents" / agent / "config"
 
     def open_configs_file(self):
         config_file = self.agent_data_folder / "config"
@@ -336,13 +195,6 @@ class Agent:
         global _global_cache_dir
         _global_cache_dir = path
         path.mkdir(parents=True, exist_ok=True)
-
-    @staticmethod
-    def init_logging(level: int = logging.INFO):
-        """Initialize logging with a set of pre-defined rules."""
-        from . import init_logging
-
-        init_logging(level)
 
     @staticmethod
     def is_server() -> bool:
@@ -600,7 +452,7 @@ class Agent:
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
-    ) -> ChatCompletion[AssistantMessage]: ...
+    ) -> "ChatCompletion[AssistantMessage]": ...
 
     @overload
     def chat_completion(
@@ -609,7 +461,7 @@ class Agent:
         *,
         stream: Literal[True],
         events: Literal[False] = False,
-    ) -> ChatCompletion[MessageStream]: ...
+    ) -> "ChatCompletion[MessageStream]": ...
 
     @overload
     def chat_completion(
@@ -618,7 +470,7 @@ class Agent:
         *,
         stream: Literal[False] = False,
         events: Literal[True],
-    ) -> ChatCompletion[AssistantMessage | Event]: ...
+    ) -> "ChatCompletion[AssistantMessage | Event]": ...
 
     @overload
     def chat_completion(
@@ -627,7 +479,7 @@ class Agent:
         *,
         stream: Literal[True],
         events: Literal[True],
-    ) -> ChatCompletion[MessageStream | Event]: ...
+    ) -> "ChatCompletion[MessageStream | Event]": ...
 
     def chat_completion(
         self,
@@ -635,12 +487,12 @@ class Agent:
         *,
         stream: bool = False,
         events: bool = False,
-    ) -> (
-        ChatCompletion[MessageStream]
-        | ChatCompletion[AssistantMessage]
-        | ChatCompletion[MessageStream | Event]
-        | ChatCompletion[AssistantMessage | Event]
-    ):
+    ) -> Union[
+        "ChatCompletion[MessageStream]",
+        "ChatCompletion[AssistantMessage]",
+        "ChatCompletion[MessageStream | Event]",
+        "ChatCompletion[AssistantMessage | Event]",
+    ]:
         if isinstance(messages, str):
             messages = [UserMessage(messages)]
         self.__load_files(messages)
@@ -693,18 +545,6 @@ class Agent:
             raise ValueError("Knowledge base is disabled.")
         self.knowledge_base.add_temporary_documents(files)
 
-    @property
-    def history(self) -> History:
-        return self.__history
-
-    @property
-    def model(self) -> str:
-        return self.__backend.model
-
-    @property
-    def tools(self) -> "ToolRegistry":
-        return self.__backend.tools
-
     def all_agents(self) -> set["Agent"]:
         agents = set()
         agents.add(self)
@@ -722,22 +562,6 @@ class Agent:
         from .utils.config import load_agent_from_config
 
         return load_agent_from_config(config, persist, session_id, log_level)
-
-    def load(self, colleagues=True):
-        if not self.persist:
-            return
-        history_file = self.session_data_folder / "history"
-        if not history_file.exists():
-            return
-        self.history._load(history_file)
-        if colleagues:
-            with shelve.open(history_file) as db:
-                for k, v in db.get("colleagues", {}).items():
-                    colleague = self.colleagues.get(k)
-                    if colleague is None:
-                        continue
-                    colleague.session_id = v
-                    colleague.load(colleagues=False)
 
     async def save(self):
         if not self.persist:
@@ -758,106 +582,6 @@ class Agent:
         with shelve.open(config_file) as db:
             db["title"] = self.history.summary
             db["agent"] = self.id
-
-    @staticmethod
-    def get_all_sessions(agent: str) -> list[SessionInfo]:
-        sessions_dir = _get_global_cache_dir() / "sessions"
-        if not sessions_dir.exists():
-            return []
-        sessions: list[SessionInfo] = []
-        for entry in sessions_dir.iterdir():
-            if entry.is_dir():
-                session_id = entry.stem
-                if session := Agent.load_session_info(session_id):
-                    if not agent or session.agent == agent:
-                        sessions.append(session)
-        # Sort in descending order
-        sessions.sort(reverse=True, key=lambda x: x.id)
-        return sessions
-
-    @staticmethod
-    def delete_session(id: str):
-        """Delete a session"""
-        session_dir = _get_global_cache_dir() / "sessions" / id
-        if not session_dir.exists():
-            return
-        shutil.rmtree(session_dir)
-
-    @staticmethod
-    def delete_agent(id: str):
-        """Delete the agent"""
-        from agentia.utils.config import get_config_dir
-
-        # delete all sessions
-        sessions = Agent.get_all_sessions(id)
-        for session in sessions:
-            Agent.delete_session(session.id)
-        # delete the agent
-        agent_dir = _get_global_cache_dir() / "agents" / id
-        if not agent_dir.exists():
-            print(f"Agent {id} not found")
-            return
-        shutil.rmtree(agent_dir)
-        agent_config_file = get_config_dir() / f"{id}.toml"
-        if agent_config_file.exists():
-            os.remove(agent_config_file)
-
-    @staticmethod
-    def cleanup_cache():
-        """Delete all stale sessions and agents"""
-        all_agents = Agent.get_all_agents()
-        agent_ids = set([a.id for a in all_agents])
-        # delete all stale agents
-        agents_dir = _get_global_cache_dir() / "agents"
-        if agents_dir.exists():
-            for entry in agents_dir.iterdir():
-                if entry.is_dir():
-                    agent_id = entry.stem
-                    if agent_id not in agent_ids:
-                        shutil.rmtree(entry)
-        # delete all stale sessions
-        sessions_dir = _get_global_cache_dir() / "sessions"
-        if sessions_dir.exists():
-            for entry in sessions_dir.iterdir():
-                if entry.is_dir():
-                    session_id = entry.stem
-                    session = Agent.load_session_info(session_id)
-                    if session and session.agent not in agent_ids:
-                        shutil.rmtree(entry)
-
-    def get_session_info(self) -> SessionInfo:
-        """Get the session info"""
-        return SessionInfo(
-            id=self.session_id, agent=self.id, title=self.history.summary
-        )
-
-    @staticmethod
-    def load_session_info(session: str) -> SessionInfo | None:
-        """Get the session info"""
-        from agentia.utils.config import get_session_tags
-
-        session_dir = _get_global_cache_dir() / "sessions" / session
-        if not session_dir.exists():
-            return None
-        config_file = session_dir / "config"
-        if not config_file.exists():
-            return None
-        with shelve.open(config_file) as db:
-            sess_title = db.get("title", None)
-            sess_agent = db["agent"]
-        tags = get_session_tags(session)
-        return SessionInfo(id=session, agent=sess_agent, title=sess_title, tags=tags)
-
-    @staticmethod
-    def get_all_agents() -> list[AgentInfo]:
-        from agentia.utils.config import find_all_agents
-
-        return find_all_agents()
-
-    @staticmethod
-    def global_cache_dir():
-        """Get the global cache directory"""
-        return _get_global_cache_dir()
 
     def anonymized(
         self, instructions: str | None = None, tools: Optional["Tools"] = None
@@ -881,3 +605,6 @@ class Agent:
         result = await agent.chat_completion(conversation)
         self.history.update_summary(result)
         return result
+
+
+__all__ = ["Agent"]

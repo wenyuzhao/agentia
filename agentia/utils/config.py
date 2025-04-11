@@ -6,7 +6,8 @@ import tomlkit
 import os
 import importlib.util
 
-from agentia.agent import Agent, AgentInfo, _get_global_cache_dir
+from agentia.agent import Agent
+from agentia.utils.session import get_global_cache_dir
 from agentia.plugins import ALL_PLUGINS, Plugin
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
@@ -53,20 +54,10 @@ class Config(BaseModel):
             return sorted(self.plugins.keys())
 
 
-def __get_config_path(cwd: Path, id: str):
-    id = id.strip()
-    possible_paths = []
-    if id.endswith(".toml"):
-        possible_paths.append(id)
-    else:
-        possible_paths.append(f"{id}.toml")
-    for s in possible_paths:
-        p = Path(s)
-        if not p.is_absolute():
-            p = cwd / p
-        if p.exists():
-            return p.resolve()
-    raise FileNotFoundError(f"Agent config not found: {id}")
+class AgentInfo(BaseModel):
+    id: str
+    config_path: Path
+    config: "Config"
 
 
 def __create_tools(config: Config) -> tuple[list[Plugin], dict[str, Any]]:
@@ -99,6 +90,8 @@ def __load_agent_from_config(
     log_level: str | int | None = None,
 ):
     """Load a bot from a configuration file"""
+    import agentia.utils.session as sess
+
     # Load the configuration file
     assert file.exists()
     file = file.resolve()
@@ -118,12 +111,14 @@ def __load_agent_from_config(
     colleagues: list[Agent] = []
     colleague_session_ids: dict[str, str] = {}
     if persist and session_id:
-        history = _get_global_cache_dir() / "sessions" / session_id / "history"
+        history = get_global_cache_dir() / "sessions" / session_id / "history"
         history.parent.mkdir(parents=True, exist_ok=True)
         with shelve.open(history) as db:
             colleague_session_ids: dict[str, str] = db.get("colleagues", {})
     for child_id in config.agent.colleagues:
-        child_path = __get_config_path(file.parent, child_id)
+        child_path = get_config_dir() / f"{child_id}.toml"
+        if not child_path.is_file():
+            raise FileNotFoundError(f"Colleague config not found: {child_path}")
         colleague = __load_agent_from_config(
             child_path,
             pending,
@@ -157,7 +152,7 @@ def __load_agent_from_config(
     agent.config_path = file.resolve()
     # Load history
     if persist and session_id:
-        agent.load()
+        sess.load_history(agent)
     pending.remove(file)
     agents[file] = agent
     return agent
@@ -210,6 +205,11 @@ def prepare_user_plugins():
         spec.loader.exec_module(module)
 
 
+def get_agent_config_file(name: str) -> Path:
+    """Get the agent configuration file"""
+    return get_config_dir() / f"{name}.toml"
+
+
 def load_agent_from_config(
     name: str | Path,
     persist: bool,
@@ -243,7 +243,7 @@ def load_agent_from_config(
     )
 
 
-def find_all_agents() -> list[AgentInfo]:
+def get_all_agents() -> list[AgentInfo]:
     """Find all agents in the search paths"""
     agents: dict[str, AgentInfo] = {}
     config_dir = get_config_dir()
@@ -282,34 +282,6 @@ def load(path: Path) -> tomlkit.TOMLDocument:
     with path.open("r") as f:
         doc = tomlkit.load(f)
     return doc
-
-
-def set_session_tags(
-    session_id: str,
-    tags: list[str],
-):
-    """Set the tags for a session"""
-    for t in tags:
-        if " " in t or "," in t:
-            raise ValueError(f"Invalid tag: {t}")
-    session_dir = _get_global_cache_dir() / "sessions" / session_id
-    if not session_dir.exists():
-        raise FileNotFoundError(f"Session not found: {session_id}")
-    with open(session_dir / "tags", "w+") as f:
-        f.write(",".join(tags))
-
-
-def get_session_tags(session_id: str) -> list[str]:
-    """Get the tags for a session"""
-    session_dir = _get_global_cache_dir() / "sessions" / session_id
-    if not session_dir.exists():
-        raise FileNotFoundError(f"Session not found: {session_id}")
-    tags_file = session_dir / "tags"
-    if not tags_file.exists():
-        return []
-    with open(tags_file, "r") as f:
-        tags = f.read().strip().split(",")
-    return [t.strip() for t in tags if t.strip()]
 
 
 ALL_RECOMMENDED_MODELS = [

@@ -4,8 +4,8 @@ from logging import Logger
 from typing import Any, AsyncGenerator, Literal, Sequence, overload
 
 from ..tools import ToolRegistry
-from ..message import AssistantMessage, Message, MessageStream
-from ..agent import ChatCompletion, Event
+from ..message import AssistantMessage, Message, Event
+from ..chat_completion import ChatCompletion, MessageStream
 from ..history import History
 
 from dataclasses import dataclass

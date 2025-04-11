@@ -3,7 +3,10 @@ from typing import Literal
 import streamlit as st
 import uuid
 
-from agentia.agent import Agent, SessionInfo
+from agentia.agent import Agent
+import agentia.utils.session as sess
+from agentia.utils.session import SessionInfo
+import agentia.utils.config as config
 
 
 def __session_title(sid: str, title: str, active: bool = False) -> bool:
@@ -79,7 +82,7 @@ def session_record(
 
 
 def get_initial_agent(all_agent_ids: list[str]) -> tuple[Agent, list[SessionInfo]]:
-    app_config = Agent.global_cache_dir() / "streamlit-app" / "config"
+    app_config = sess.get_global_cache_dir() / "streamlit-app" / "config"
     app_config.parent.mkdir(parents=True, exist_ok=True)
     with shelve.open(app_config) as db:
         initial_agent: str | None = db.get("last_agent", None)
@@ -92,24 +95,26 @@ def get_initial_agent(all_agent_ids: list[str]) -> tuple[Agent, list[SessionInfo
             initial_session = None
         if (
             initial_session
-            and not (Agent.global_cache_dir() / "sessions" / initial_session).is_dir()
+            and not (
+                sess.get_global_cache_dir() / "sessions" / initial_session
+            ).is_dir()
         ):
             initial_session = None
 
     # Load session or create new one
     if "agent" in st.session_state:
         agent: Agent = st.session_state.agent
-        sessions = Agent.get_all_sessions(agent.id)
+        sessions = sess.get_all_sessions(agent.id)
     elif initial_session:
         agent_id = initial_agent or all_agent_ids[0]
         agent = st.session_state.agent = Agent.load_from_config(
             agent_id, True, session_id=initial_session
         )
-        sessions = Agent.get_all_sessions(agent.id)
+        sessions = sess.get_all_sessions(agent.id)
 
     else:
         agent_id = initial_agent or all_agent_ids[0]
-        sessions = Agent.get_all_sessions(agent_id)
+        sessions = sess.get_all_sessions(agent_id)
         session = sessions[0] if len(sessions) > 0 else None
         agent = st.session_state.agent = Agent.load_from_config(
             agent_id, True, session_id=session.id if session else None
@@ -118,7 +123,7 @@ def get_initial_agent(all_agent_ids: list[str]) -> tuple[Agent, list[SessionInfo
     session_ids = [s.id for s in sessions]
 
     if agent.session_id not in session_ids:
-        sessions.append(agent.get_session_info())
+        sessions.append(SessionInfo.from_agent(agent))
         sessions.sort(reverse=True, key=lambda s: s.id)
 
     # Save last agent and session

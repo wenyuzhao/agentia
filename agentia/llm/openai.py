@@ -3,6 +3,7 @@ import json
 import os
 from typing import AsyncIterator, Literal, Any, Sequence, overload, override
 
+from agentia.chat_completion import MessageStream, ReasoningMessageStream
 from agentia.history import History
 
 from . import LLMBackend, ModelOptions
@@ -11,8 +12,6 @@ from ..tools import ToolRegistry
 from ..message import (
     AssistantMessage,
     Message,
-    MessageStream,
-    ReasoningMessageStream,
     ToolCall,
     FunctionCall,
 )

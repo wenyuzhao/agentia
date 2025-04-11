@@ -1,13 +1,8 @@
 import asyncio
 from pathlib import Path
-from agentia.agent import (
-    Agent,
-    ChatCompletion,
-    Event,
-    ToolCallEvent,
-    CommunicationEvent,
-    MessageStream,
-)
+from agentia.agent import Agent
+from agentia.chat_completion import ChatCompletion, MessageStream
+from agentia.message import Event, ToolCallEvent, CommunicationEvent
 from agentia.message import Message, UserMessage
 from agentia.utils.config import load_agent_from_config
 import rich, rich.panel

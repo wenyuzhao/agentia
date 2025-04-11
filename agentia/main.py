@@ -7,7 +7,9 @@ from pathlib import Path
 from agentia import Agent
 import dotenv
 
-from agentia.utils.config import DEFAULT_AGENT_CONFIG_PATH, prepare_user_plugins
+import agentia.utils.config as config
+import agentia.utils.session as session
+from agentia.utils.config import DEFAULT_AGENT_CONFIG_PATH
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -40,7 +42,7 @@ def repl(
         os.environ["AGENTIA_CONFIG_DIR"] = str(config_dir)
     if user_plugin_dir is not None:
         os.environ["AGENTIA_USER_PLUGIN_DIR"] = str(user_plugin_dir)
-    prepare_user_plugins()
+    config.prepare_user_plugins()
     agentia.utils.repl.run(agent)
 
 
@@ -48,7 +50,7 @@ def repl(
 def setup():
     dotenv.load_dotenv()
     os.environ["AGENTIA_CLI"] = "1"
-    ALL_AGENTS = Agent.get_all_agents()
+    ALL_AGENTS = config.get_all_agents()
     for agent_info in ALL_AGENTS:
         agent = Agent.load_from_config(agent_info.id)
         asyncio.run(agent._Agent__init_plugins())  # type: ignore
@@ -99,8 +101,8 @@ def serve_app(
 ):
     port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
-    prepare_user_plugins()
-    Agent.cleanup_cache()
+    config.prepare_user_plugins()
+    session.cleanup_cache()
 
     import streamlit.web.bootstrap
 
@@ -131,8 +133,8 @@ def serve_api(
 ):
     port = __check_and_setup_server(log_level, port, config_dir)
     agentia.utils._setup_logging()
-    prepare_user_plugins()
-    Agent.cleanup_cache()
+    config.prepare_user_plugins()
+    session.cleanup_cache()
 
     import uvicorn
     from agentia._api import app

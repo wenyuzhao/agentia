@@ -1,9 +1,7 @@
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import (
-    AsyncIterator,
     Literal,
-    Optional,
     Required,
     TypeAlias,
     TypedDict,
@@ -259,22 +257,34 @@ class ToolMessage:
 Message: TypeAlias = UserMessage | SystemMessage | AssistantMessage | ToolMessage
 
 
-class MessageStream:
-    type: Literal["message.stream"] = "message.stream"
-    reasoning: Optional["ReasoningMessageStream"] = None
+@dataclass
+class ToolCallEvent:
+    id: str
+    agent: str
+    name: str
+    display_name: str
+    description: str
+    arguments: dict[str, Any]
+    result: Any | None = None
+    role: Literal["event.tool_call"] = "event.tool_call"
 
-    def __aiter__(self) -> AsyncIterator[str]:
-        raise NotImplementedError()
 
-    async def wait_for_completion(self) -> AssistantMessage:
-        raise NotImplementedError()
+@dataclass
+class CommunicationEvent:
+    id: str
+    parent: str
+    child: str
+    message: str
+    response: str | None = None
+    role: Literal["event.communication"] = "event.communication"
 
 
-class ReasoningMessageStream:
-    type: Literal["message.stream.reasoning"] = "message.stream.reasoning"
+@dataclass
+class UserConsentEvent:
+    id: str
+    message: str
+    response: bool | None = None
+    role: Literal["event.user_consent"] = "event.user_consent"
 
-    def __aiter__(self) -> AsyncIterator[str]:
-        raise NotImplementedError()
 
-    async def wait_for_completion(self) -> str:
-        raise NotImplementedError()
+Event: TypeAlias = ToolCallEvent | CommunicationEvent | UserConsentEvent

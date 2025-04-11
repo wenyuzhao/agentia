@@ -1,4 +1,6 @@
-from agentia import Agent, UserMessage, tool, Plugin
+from agentia import Agent
+from agentia.message import UserMessage
+from agentia.plugins import tool, Plugin
 from typing import Literal, Annotated
 import pytest
 import dotenv

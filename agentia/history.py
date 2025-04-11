@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Union
 import shelve
 import tiktoken
 
-from .message import BaseMessage, Message, SystemMessage
+from .message import Message, SystemMessage
 
 ENCODING = tiktoken.encoding_for_model("gpt-4o-mini")
 
@@ -122,3 +122,6 @@ class History:
                             S += f"    - [{t.id}] {t.function.name}\n"
 
         return S
+
+
+__all__ = ["History"]

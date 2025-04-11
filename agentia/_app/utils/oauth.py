@@ -7,6 +7,8 @@ import json
 import os
 
 from agentia.agent import Agent
+import agentia.utils.config as cfg
+import agentia.utils.session as sess
 
 
 class OAuth2Client:
@@ -97,18 +99,19 @@ class OAuth2Client:
                 self.__save(new_token)
                 st.rerun()
 
-    def __load(self) -> Any | None:
-        config_file = Agent.get_config_path(self.__agent)
+    def __open_config(self):
+        config_file = sess.get_global_cache_dir() / "agents" / self.__agent / "config"
         config_file.parent.mkdir(parents=True, exist_ok=True)
-        with shelve.open(config_file) as config:
+        return shelve.open(config_file)
+
+    def __load(self) -> Any | None:
+        with self.__open_config() as config:
             key = f"plugins.{self.__plugin}.token"
             token = config.get(key)
             return token
 
     def __save(self, token: Any):
-        config_file = Agent.get_config_path(self.__agent)
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-        with shelve.open(config_file) as config:
+        with self.__open_config() as config:
             key = f"plugins.{self.__plugin}.token"
             if token is None:
                 del config[key]

@@ -1,6 +1,6 @@
 from ..decorators import *
 from . import Plugin
-from typing import TYPE_CHECKING, Annotated, Union, override
+from typing import TYPE_CHECKING, Annotated, Any, Union, override
 from dataforseo_client import (
     configuration as dfs_config,
     api_client as dfs_api_provider,
@@ -31,6 +31,7 @@ import os
 
 from tomlkit.container import Container
 from tavily import TavilyClient
+from dataforseo_client.api.serp_api import SerpApi
 
 
 class SearchPlugin(Plugin):
@@ -45,12 +46,8 @@ class SearchPlugin(Plugin):
         self.__client = dfs_api_provider.ApiClient(
             dfs_config.Configuration(username=username, password=password)
         )
-        from dataforseo_client.api.serp_api import SerpApi
-
         self.__api = SerpApi(self.__client)
-
         self.__tavily: TavilyClient | None = None
-
         if api_key := os.environ.get("TAVILY_API_KEY"):
             self.__tavily = TavilyClient(api_key=api_key)
 

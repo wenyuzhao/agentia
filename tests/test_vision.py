@@ -1,4 +1,5 @@
-from agentia import Agent, UserMessage
+from agentia import Agent
+from agentia.message import UserMessage
 from agentia.message import ContentPartImage, ContentPartText
 import pytest
 import dotenv

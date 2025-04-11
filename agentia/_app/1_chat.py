@@ -3,22 +3,25 @@ import asyncio
 import streamlit as st
 
 from agentia.agent import CommunicationEvent
-from agentia.message import ContentPartImage, ContentPartText
-from agentia import (
-    Agent,
-    Message,
-    MessageStream,
-    Event,
-    UserMessage,
+from agentia.chat_completion import MessageStream
+from agentia.message import (
     AssistantMessage,
+    ContentPartImage,
+    ContentPartText,
+    Event,
+    Message,
     ToolCallEvent,
+    UserMessage,
 )
+from agentia import Agent
 from agentia.plugins import PluginInitError
 import agentia._app.utils as utils
+import agentia.utils.config as cfg
+import agentia.utils.session as sess
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
-ALL_AGENTS = Agent.get_all_agents()
+ALL_AGENTS = cfg.get_all_agents()
 ALL_AGENT_IDS = [a.id for a in ALL_AGENTS]
 
 if len(ALL_AGENT_IDS) == 0:
@@ -33,9 +36,9 @@ def delete_all(id: str, name: str):
     st.write(f"Delete all sessions for :blue[{name}]?")
     if st.button("DELETE", type="primary"):
         # Delete all sessions
-        sessions = Agent.get_all_sessions(id)
+        sessions = sess.get_all_sessions(id)
         for session in sessions:
-            Agent.delete_session(session.id)
+            sess.delete_session(session.id)
         st.rerun()
 
 
@@ -54,7 +57,7 @@ with st.sidebar:
     )
     if selected_agent and selected_agent.id != agent.id:
         # Find first session
-        sessions = Agent.get_all_sessions(selected_agent.id)
+        sessions = sess.get_all_sessions(selected_agent.id)
         session = sessions[0] if len(sessions) > 0 else None
         st.session_state.agent = Agent.load_from_config(
             selected_agent.id, True, session_id=session.id if session else None
@@ -66,7 +69,7 @@ with st.sidebar:
     for session in sessions:
         active = session.id == agent.session_id
         if session.title is None:
-            if sinfo := Agent.load_session_info(session.id):
+            if sinfo := sess.load_session_info(session.id):
                 title = sinfo.title or "New Conversation"
             else:
                 title = "New Conversation"
@@ -80,9 +83,9 @@ with st.sidebar:
                 )
                 st.rerun()
             case "delete":
-                Agent.delete_session(session.id)
+                sess.delete_session(session.id)
                 # Switch to the first session
-                sessions = Agent.get_all_sessions(agent.id)
+                sessions = sess.get_all_sessions(agent.id)
                 session = sessions[0] if len(sessions) > 0 else None
                 st.session_state.agent = Agent.load_from_config(
                     agent.id, True, session_id=session.id if session else None

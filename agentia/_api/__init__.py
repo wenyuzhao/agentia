@@ -5,23 +5,24 @@ from pydantic import BaseModel
 
 from agentia.agent import Agent, Event
 from agentia import LOGGER
-import agentia.utils.config
+import agentia.utils.config as cfg
+import agentia.utils.session as sess
 
 app = FastAPI(root_path="/api")
 
 
 @app.get("/v1/agents")
 async def get_agents():
-    agents = Agent.get_all_agents()
-    return {"agents": [agent.to_dict() for agent in agents]}
+    agents = cfg.get_all_agents()
+    return {"agents": [agent.model_dump() for agent in agents]}
 
 
 @app.get("/v1/agents/{agent_id}")
 async def get_agent(agent_id: str):
-    agents = Agent.get_all_agents()
+    agents = cfg.get_all_agents()
     for agent in agents:
         if agent.id == agent_id:
-            return {"agent": agent.to_dict()}
+            return {"agent": agent.model_dump()}
     raise HTTPException(status_code=404, detail="Agent not found")
 
 
@@ -46,7 +47,7 @@ class GetSessions(BaseModel):
 
 @app.get("/v1/agents/{agent_id}/sessions")
 async def get_sessions(agent_id: str, body: GetSessions | None = None):
-    sessions = Agent.get_all_sessions(agent_id)
+    sessions = sess.get_all_sessions(agent_id)
     if body and body.tags is not None:
         # Get sessions that matches all query tags
         sessions = [
@@ -54,19 +55,19 @@ async def get_sessions(agent_id: str, body: GetSessions | None = None):
             for session in sessions
             if all(tag in session.tags for tag in body.tags)
         ]
-    return {"sessions": [session.to_dict() for session in sessions]}
+    return {"sessions": [session.model_dump() for session in sessions]}
 
 
 @app.get("/v1/agents/{agent_id}/sessions/{session_id}")
 async def get_session(agent_id: str, session_id: str):
     agent_info = None
-    for agent in Agent.get_all_agents():
+    for agent in cfg.get_all_agents():
         if agent.id == agent_id:
-            agent_info = agent.to_dict()
+            agent_info = agent.model_dump()
             break
     if agent_info is None:
         raise HTTPException(status_code=404, detail="Agent not found")
-    session = Agent.load_session_info(session_id)
+    session = sess.load_session_info(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     if session.agent != agent_id:
@@ -80,7 +81,7 @@ async def get_session(agent_id: str, session_id: str):
             x = dict(**e.to_json())
             x["type"] = "message"
             history.append(x)
-    return {"session": session.to_dict(), "history": history}
+    return {"session": session.model_dump(), "history": history}
 
 
 class CreateSession(BaseModel):
@@ -96,17 +97,17 @@ async def create_session(agent_id: str, body: CreateSession | None = None):
         raise HTTPException(status_code=404, detail="Agent not found")
     await agent.save()
     if body and body.tags is not None:
-        agentia.utils.config.set_session_tags(agent.session_id, body.tags)
+        sess.set_session_tags(agent.session_id, body.tags)
     session_id = agent.session_id
-    session = Agent.load_session_info(session_id)
+    session = sess.load_session_info(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    return {"session": session.to_dict()}
+    return {"session": session.model_dump()}
 
 
 @app.delete("/v1/agents/{agent_id}/sessions/{session_id}")
 async def delete_session(agent_id: str, session_id: str):
-    Agent.delete_session(session_id)
+    sess.delete_session(session_id)
     return {"success": True}
 
 
