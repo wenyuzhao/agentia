@@ -20,9 +20,9 @@ from typing import (
 
 import rich
 
-from agentia.agent import CommunicationEvent, Event, ToolCallEvent, UserConsentEvent
+from agentia.agent import CommunicationEvent, ToolCallEvent, UserConsentEvent
 
-from .message import JSON, FunctionCall, Message, Role, ToolCall, ToolMessage
+from .message import JSON, FunctionCall, ToolCall, ToolMessage
 
 from .plugins import Plugin, ToolResult
 from pydantic import BaseModel

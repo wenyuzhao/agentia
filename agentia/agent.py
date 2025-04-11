@@ -1,11 +1,15 @@
 from datetime import datetime
+from io import BytesIO, StringIO
 import logging
+from pathlib import Path
 from typing import (
     Annotated,
     Literal,
     Optional,
+    Sequence,
     Type,
     Any,
+    Union,
     overload,
     TYPE_CHECKING,
 )
@@ -36,12 +40,15 @@ if TYPE_CHECKING:
     from .llm import ModelOptions
 
 
-DEFAULT_MODEL_OPENROUTER = "openai/gpt-4o-mini"
-DEFAULT_MODEL_OPENAI = "gpt-4o-mini"
-if "OPENAI_BASE_URL" in os.environ:
-    DEFAULT_MODEL = DEFAULT_MODEL_OPENAI
-else:
-    DEFAULT_MODEL = DEFAULT_MODEL_OPENROUTER
+def get_default_model() -> str:
+    if path := os.environ.get("AGENTIA_DEFAULT_MODEL"):
+        return path
+    DEFAULT_MODEL_OPENROUTER = "openai/gpt-4o-mini"
+    DEFAULT_MODEL_OPENAI = "gpt-4o-mini"
+    if "OPENAI_BASE_URL" in os.environ:
+        return "openai/gpt-4o-mini"
+    else:
+        return "gpt-4o-mini"
 
 
 class Agent:
@@ -60,7 +67,7 @@ class Agent:
         # Knowledge base
         knowledge_base: Union["KnowledgeBase", bool, Path, None] = None,
         # Model and tools
-        model: Annotated[str | None, f"Default to {DEFAULT_MODEL}"] = None,
+        model: Annotated[str | None, f"Default to {get_default_model()}"] = None,
         options: Optional["ModelOptions"] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
@@ -71,6 +78,7 @@ class Agent:
     ):
         from .tools import ToolRegistry
         from .utils.session import get_global_cache_dir
+        from agentia.llm import create_llm_backend
 
         # Init simple fields
         self.__is_initialized = False
@@ -96,12 +104,12 @@ class Agent:
         self.persist = persist
         self.icon = icon
         self.log = LOGGER.getChild(self.id)
-        self.__config_logger(log_level)
+        self.__init_logger(log_level)
         icon_and_name = ((icon or "") + " " + (name or "")).strip()
         self.log.info(
             f"Creating Agent: {self.id} {f'({icon_and_name})' if icon_and_name else ''}"
         )
-        model = model or DEFAULT_MODEL
+        model = model or get_default_model()
         self.description = description
         self.colleagues: dict[str, "Agent"] = {}
         self.context: Any = None
@@ -141,9 +149,22 @@ class Agent:
         self.__init_memory()
         # Init history and backend
         self.__history = History(instructions=self.__instructions)
-        self.__init_backend(model, options, api_key)
+        self.__backend = create_llm_backend(
+            model=model,
+            options=options,
+            api_key=api_key,
+            tools=self.__tools,
+            history=self.__history,
+        )
 
         weakref.finalize(self, Agent.__sweeper, self.session_id, self.persist)
+
+    @staticmethod
+    def __sweeper(session_id: str, persist: bool):
+        from .utils.session import delete_session
+
+        if not persist:
+            delete_session(session_id)
 
     @property
     def history(self) -> History:
@@ -157,7 +178,7 @@ class Agent:
     def tools(self) -> "ToolRegistry":
         return self.__backend.tools
 
-    def __config_logger(self, log_level: str | int | None):
+    def __init_logger(self, log_level: str | int | None):
         if log_level is None:
             if "LOG_LEVEL" in os.environ:
                 log_level = os.environ["LOG_LEVEL"]
@@ -166,55 +187,6 @@ class Agent:
             else:
                 log_level = logging.WARNING
         self.log.setLevel(log_level)
-
-    @staticmethod
-    def __sweeper(session_id: str, persist: bool):
-        from .utils.session import delete_session
-
-        if not persist:
-            delete_session(session_id)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.__sweeper(self.session_id, self.persist)
-
-    def open_configs_file(self):
-        config_file = self.agent_data_folder / "config"
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-        return shelve.open(config_file)
-
-    @staticmethod
-    def set_default_model(model: str):
-        global DEFAULT_MODEL
-        DEFAULT_MODEL = model
-
-    @staticmethod
-    def set_global_cache_dir(path: Path):
-        global _global_cache_dir
-        _global_cache_dir = path
-        path.mkdir(parents=True, exist_ok=True)
-
-    @staticmethod
-    def is_server() -> bool:
-        v = os.environ.get("AGENTIA_SERVER", None)
-        return v not in [None, "", "0", "false", "FALSE", "False"]
-
-    @staticmethod
-    def is_cli() -> bool:
-        v = os.environ.get("AGENTIA_CLI", None)
-        return v not in [None, "", "0", "false", "FALSE", "False"]
-
-    async def init(self):
-        if self.__is_initialized:
-            return
-        self.__is_initialized = True
-        self.log.info("Agent Initializing ...")
-        await self.__init_plugins()
-        self.log.info("Agent Initialized")
-        for c in self.colleagues.values():
-            await c.init()
 
     async def __init_plugins(self):
         agent_path = (
@@ -227,54 +199,6 @@ class Agent:
         await self.__backend.tools.init(silent=not Agent.is_cli())
         if Agent.is_cli():
             rich.print()
-
-    def __init_backend(
-        self, model: str, options: Optional["ModelOptions"], api_key: str | None
-    ):
-        from .llm import LLMBackend, ModelOptions
-
-        if ":" in model:
-            provider = model.split(":")[0]
-            model = model.split(":")[1]
-        elif "OPENAI_BASE_URL" in os.environ:
-            provider = "openai"
-        else:
-            provider = "openrouter"
-        assert provider in [
-            "openai",
-            "openrouter",
-            "deepseek",
-        ], f"Unknown provider: {provider}"
-        if provider == "openai":
-            from .llm.openai import OpenAIBackend
-
-            self.__backend: LLMBackend = OpenAIBackend(
-                model=model,
-                tools=self.__tools,
-                options=options or ModelOptions(),
-                history=self.__history,
-                api_key=api_key,
-            )
-        elif provider == "deepseek":
-            from .llm.deepseek import DeepSeekBackend
-
-            self.__backend: LLMBackend = DeepSeekBackend(
-                model=model,
-                tools=self.__tools,
-                options=options or ModelOptions(),
-                history=self.__history,
-                api_key=api_key,
-            )
-        else:
-            from .llm.openrouter import OpenRouterBackend
-
-            self.__backend: LLMBackend = OpenRouterBackend(
-                model=model,
-                tools=self.__tools,
-                options=options or ModelOptions(),
-                history=self.__history,
-                api_key=api_key,
-            )
 
     def __add_colleague(self, colleague: "Agent"):
         if colleague.name is None:
@@ -439,6 +363,37 @@ class Agent:
         else:
             self.__instructions += f"\n\nYOUR PREVIOUS MEMORY: \n{content}"
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.__sweeper(self.session_id, self.persist)
+
+    def open_configs_file(self):
+        config_file = self.agent_data_folder / "config"
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        return shelve.open(config_file)
+
+    @staticmethod
+    def is_server() -> bool:
+        v = os.environ.get("AGENTIA_SERVER", None)
+        return v not in [None, "", "0", "false", "FALSE", "False"]
+
+    @staticmethod
+    def is_cli() -> bool:
+        v = os.environ.get("AGENTIA_CLI", None)
+        return v not in [None, "", "0", "false", "FALSE", "False"]
+
+    async def init(self):
+        if self.__is_initialized:
+            return
+        self.__is_initialized = True
+        self.log.info("Agent Initializing ...")
+        await self.__init_plugins()
+        self.log.info("Agent Initialized")
+        for c in self.colleagues.values():
+            await c.init()
+
     def reset(self):
         self.history.reset()
 
@@ -546,6 +501,7 @@ class Agent:
         self.knowledge_base.add_temporary_documents(files)
 
     def all_agents(self) -> set["Agent"]:
+        """Collect all active agents, including colleagues"""
         agents = set()
         agents.add(self)
         for agent in self.colleagues.values():

@@ -10,16 +10,33 @@ import agentia.utils.config as cfg
 import agentia.utils.session as sess
 import logging
 
-
-st.set_page_config(initial_sidebar_state="collapsed")
+utils.page_setup()
 
 
 ALL_AGENTS = cfg.get_all_agents()
 
 
+def unload_session_agent():
+    if a := st.session_state.get("agent"):
+        if a.id == agent:  # type: ignore
+            del st.session_state["agent"]
+
+
 @st.dialog("New Agent")
 def new_agent_dialog():
     utils.new_agent()
+
+
+@st.dialog("Delete Agent")
+def delete_agent_dialog(agent: str):
+    st.write("Are you sure you want to delete this agent?")
+    if st.button("DELETE", type="primary"):
+        sess.delete_agent(agent)
+        del st.session_state["initial_agent"]
+        del st.session_state["initial_doc"]
+        unload_session_agent()
+        del st.query_params["agent"]
+        st.rerun()
 
 
 if "agent" in st.query_params:
@@ -79,12 +96,8 @@ assert agent.config and agent.config_path
 
 st.write("")
 
-settings_tab, plugins_tab, delete_tab = st.tabs(
-    [
-        "🤖&nbsp;&nbsp;&nbsp;**Agent Settings**",
-        "🧩&nbsp;&nbsp;&nbsp;**Plugins**",
-        "🗑️&nbsp;&nbsp;&nbsp;**Delete**",
-    ]
+(settings_tab, plugins_tab) = st.tabs(
+    ["🤖&nbsp;&nbsp;&nbsp;**Agent Settings**", "🧩&nbsp;&nbsp;&nbsp;**Plugins**"]
 )
 
 
@@ -154,9 +167,14 @@ def render_settings_tab():
             update_string_field("user")
 
             cfg.save(agent.config_path, doc)
+            unload_session_agent()
             st.rerun()
         except ValueError as e:
             st.error("ERROR: " + str(e))
+    st.divider()
+    with st.expander(":red[**DANGER ZONE**]"):
+        if st.button("Delete Agent", type="primary"):
+            delete_agent_dialog(agent.id)
 
 
 with settings_tab:
@@ -188,6 +206,7 @@ def render_plugins_tab():
     if new_enabled != curr_enabled:
         doc["agent"]["plugins"] = new_enabled  # type: ignore
         cfg.save(agent.config_path, doc)
+        unload_session_agent()
         st.rerun()
 
     # Configs
@@ -208,28 +227,9 @@ def render_plugins_tab():
                 if st.button("Save", type="primary", key=P.id() + ".save"):
                     doc.setdefault("plugins", tomlkit.table())[P.id()] = new_config  # type: ignore
                     cfg.save(agent.config_path, doc)
+                    unload_session_agent()
                     st.rerun()
 
 
 with plugins_tab:
     render_plugins_tab()
-
-
-@st.dialog("Delete Agent")
-def delete_agent(agent: str):
-    st.write("Are you sure you want to delete this agent?")
-    if st.button("DELETE", type="primary"):
-        sess.delete_agent(agent)
-        del st.session_state["initial_agent"]
-        del st.session_state["initial_doc"]
-        if a := st.session_state.get("agent"):
-            if a.id == agent:  # type: ignore
-                del st.session_state["agent"]
-        del st.query_params["agent"]
-        st.rerun()
-
-
-with delete_tab:
-    if st.button("Delete This Agent", type="primary"):
-        # Delete agent
-        delete_agent(selected_agent.id)

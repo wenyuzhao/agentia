@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Sequence, TypeVar, Callable
+from typing import Literal, Sequence, TypeVar, Callable
 from slugify import slugify
 import streamlit as st
 import uuid
@@ -120,6 +120,19 @@ def new_agent():
         if "initial_doc" in st.session_state:
             del st.session_state["initial_doc"]
         st.rerun()
+
+
+def page_setup():
+    st.set_page_config(initial_sidebar_state="auto")
+    st.html(
+        r"""
+        <style>
+            .stAppDeployButton {
+                visibility: hidden;
+            }
+        </style>
+        """
+    )
 
 
 from . import chat

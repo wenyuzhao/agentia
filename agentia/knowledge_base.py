@@ -4,7 +4,6 @@ from llama_index.core.query_engine import CitationQueryEngine
 import os
 from llama_index.core import SimpleDirectoryReader
 from llama_index.core.schema import NodeWithScore
-from llama_index.core.base.response.schema import Response
 from agentia.utils.retrieval.vector_store import VectorStore, is_file_supported
 from agentia.utils.retrieval.retriever import TOP_K, MultiRetriever
 

@@ -19,7 +19,7 @@ import agentia._app.utils as utils
 import agentia.utils.config as cfg
 import agentia.utils.session as sess
 
-st.set_page_config(initial_sidebar_state="collapsed")
+utils.page_setup()
 
 ALL_AGENTS = cfg.get_all_agents()
 ALL_AGENT_IDS = [a.id for a in ALL_AGENTS]

@@ -1,7 +1,8 @@
 import abc
 from dataclasses import dataclass
 from logging import Logger
-from typing import Any, AsyncGenerator, Literal, Sequence, overload
+import os
+from typing import Any, AsyncGenerator, Literal, Optional, Sequence, overload
 
 from ..tools import ToolRegistry
 from ..message import AssistantMessage, Message, Event
@@ -231,3 +232,55 @@ class LLMBackend:
                     yield message
             self.history.add(message)
             self.log.debug(message)
+
+
+def create_llm_backend(
+    *,
+    model: str,
+    options: Optional["ModelOptions"],
+    api_key: str | None,
+    tools: ToolRegistry,
+    history: History,
+) -> LLMBackend:
+    if ":" in model:
+        provider = model.split(":")[0]
+        model = model.split(":")[1]
+    elif "OPENAI_BASE_URL" in os.environ:
+        provider = "openai"
+    else:
+        provider = "openrouter"
+    assert provider in [
+        "openai",
+        "openrouter",
+        "deepseek",
+    ], f"Unknown provider: {provider}"
+    if provider == "openai":
+        from .openai import OpenAIBackend
+
+        return OpenAIBackend(
+            model=model,
+            tools=tools,
+            options=options or ModelOptions(),
+            history=history,
+            api_key=api_key,
+        )
+    elif provider == "deepseek":
+        from .deepseek import DeepSeekBackend
+
+        return DeepSeekBackend(
+            model=model,
+            tools=tools,
+            options=options or ModelOptions(),
+            history=history,
+            api_key=api_key,
+        )
+    else:
+        from .openrouter import OpenRouterBackend
+
+        return OpenRouterBackend(
+            model=model,
+            tools=tools,
+            options=options or ModelOptions(),
+            history=history,
+            api_key=api_key,
+        )
