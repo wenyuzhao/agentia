@@ -15,6 +15,7 @@ from typing import (
     TYPE_CHECKING,
 )
 import shelve
+from filelock import BaseFileLock, FileLock
 import rich
 import rich.panel
 from slugify import slugify
@@ -131,19 +132,47 @@ class ChatCompletion(Generic[M]):
         super().__init__()
         self.__agen = agen
         self.__agent = agent
+        self.__lock: Optional[BaseFileLock] = None
+        self.__lock_session()  # type: ignore
+
+        weakref.finalize(self, ChatCompletion.__finalize, self.__lock)
+
+    @staticmethod
+    def __finalize(lock: Optional[BaseFileLock]):
+        if lock is not None and lock.is_locked:
+            lock.release()
 
     async def __save_history(self):
         if not self.__agent.persist:
             return
         await self.__agent.save()
 
+    def __lock_session(self):
+        if self.__agent.persist:
+            self.__agent.session_data_folder.mkdir(parents=True, exist_ok=True)
+            self.__lock = FileLock(self.__agent.session_data_folder / "lock")
+            self.__lock.acquire()
+
+    def __unlock_session(self):
+        if self.__agent.persist and self.__lock is not None:
+            self.__lock.release()
+            self.__lock = None
+
+    async def __end_of_stream(self, error: bool):
+        if not error:
+            await self.__save_history()
+        self.__unlock_session()  # type: ignore
+
     async def __anext__(self) -> M:
         await self.__agent.init()
         try:
             return await self.__agen.__anext__()
         except StopAsyncIteration as e:
-            await self.__save_history()
-            raise StopAsyncIteration from e
+            await self.__end_of_stream(False)
+            raise e
+        except BaseException as e:
+            await self.__end_of_stream(True)
+            raise e
 
     def __aiter__(self):
         return self
