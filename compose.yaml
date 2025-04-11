@@ -10,7 +10,6 @@ services:
       - ./data/.cache:/app/.cache
     environment:
       # Required environment variables
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?}
       # Environment variables for plugins
       # mstodo
