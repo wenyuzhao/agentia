@@ -134,7 +134,8 @@ try:
         "gmail": GmailPlugin,
     }
 except ImportError as e:
-    raise e from e
+    # raise e from e
+    pass
 
 
 for name, cls in ALL_PLUGINS.items():
