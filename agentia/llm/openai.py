@@ -76,17 +76,26 @@ class OpenAIBackend(LLMBackend):
 
     @overload
     async def _chat_completion_request(
-        self, messages: Sequence[Message], stream: Literal[False]
+        self,
+        messages: Sequence[Message],
+        stream: Literal[False],
+        response_format: Any | None,
     ) -> AssistantMessage: ...
 
     @overload
     async def _chat_completion_request(
-        self, messages: Sequence[Message], stream: Literal[True]
+        self,
+        messages: Sequence[Message],
+        stream: Literal[True],
+        response_format: Any | None,
     ) -> MessageStream: ...
 
     @override
     async def _chat_completion_request(
-        self, messages: Sequence[Message], stream: bool
+        self,
+        messages: Sequence[Message],
+        stream: bool,
+        response_format: Any | None,
     ) -> AssistantMessage | MessageStream:
         msgs: list[ChatCompletionMessageParam] = [
             self.__message_to_ccmp(m) for m in messages
@@ -96,6 +105,8 @@ class OpenAIBackend(LLMBackend):
             "messages": msgs,
             **self.options.as_kwargs(),
         }
+        if response_format is not None:
+            self.extra_body["response_format"] = response_format
         if not self.tools.is_empty():
             if self.support_tools():
                 args["tools"] = self.tools.to_json()

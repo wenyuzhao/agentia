@@ -407,6 +407,7 @@ class Agent:
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
+        response_format: Any | None = None,
     ) -> "ChatCompletion[AssistantMessage]": ...
 
     @overload
@@ -416,6 +417,7 @@ class Agent:
         *,
         stream: Literal[True],
         events: Literal[False] = False,
+        response_format: Any | None = None,
     ) -> "ChatCompletion[MessageStream]": ...
 
     @overload
@@ -425,6 +427,7 @@ class Agent:
         *,
         stream: Literal[False] = False,
         events: Literal[True],
+        response_format: Any | None = None,
     ) -> "ChatCompletion[AssistantMessage | Event]": ...
 
     @overload
@@ -434,6 +437,7 @@ class Agent:
         *,
         stream: Literal[True],
         events: Literal[True],
+        response_format: Any | None = None,
     ) -> "ChatCompletion[MessageStream | Event]": ...
 
     def chat_completion(
@@ -442,6 +446,7 @@ class Agent:
         *,
         stream: bool = False,
         events: bool = False,
+        response_format: Any | None = None,
     ) -> Union[
         "ChatCompletion[MessageStream]",
         "ChatCompletion[AssistantMessage]",
@@ -452,13 +457,21 @@ class Agent:
             messages = [UserMessage(messages)]
         self.__load_files(messages)
         if stream and events:
-            return self.__backend.chat_completion(messages, stream=True, events=True)
+            return self.__backend.chat_completion(
+                messages, stream=True, events=True, response_format=response_format
+            )
         elif stream:
-            return self.__backend.chat_completion(messages, stream=True, events=False)
+            return self.__backend.chat_completion(
+                messages, stream=True, events=False, response_format=response_format
+            )
         elif events:
-            return self.__backend.chat_completion(messages, stream=False, events=True)
+            return self.__backend.chat_completion(
+                messages, stream=False, events=True, response_format=response_format
+            )
         else:
-            return self.__backend.chat_completion(messages, stream=False, events=False)
+            return self.__backend.chat_completion(
+                messages, stream=False, events=False, response_format=response_format
+            )
 
     def __load_files(self, messages: Sequence[Message]):
         old_messages = [m for m in messages]

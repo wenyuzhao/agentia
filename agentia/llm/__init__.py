@@ -74,6 +74,7 @@ class LLMBackend:
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
+        response_format: Any | None,
     ) -> ChatCompletion[AssistantMessage]: ...
 
     @overload
@@ -83,6 +84,7 @@ class LLMBackend:
         *,
         stream: Literal[True],
         events: Literal[False] = False,
+        response_format: Any | None,
     ) -> ChatCompletion[MessageStream]: ...
 
     @overload
@@ -92,6 +94,7 @@ class LLMBackend:
         *,
         stream: Literal[False] = False,
         events: Literal[True],
+        response_format: Any | None,
     ) -> ChatCompletion[AssistantMessage | Event]: ...
 
     @overload
@@ -101,10 +104,16 @@ class LLMBackend:
         *,
         stream: Literal[True],
         events: Literal[True],
+        response_format: Any | None,
     ) -> ChatCompletion[MessageStream | Event]: ...
 
     def chat_completion(
-        self, messages: Sequence[Message], *, stream: bool = False, events: bool = False
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: bool = False,
+        events: bool = False,
+        response_format: Any | None,
     ) -> (
         ChatCompletion[MessageStream]
         | ChatCompletion[AssistantMessage]
@@ -114,33 +123,45 @@ class LLMBackend:
         a = self.tools._agent
         if stream and events:
             return ChatCompletion(
-                a, self._chat_completion(messages, stream=True, events=True)  # type: ignore
+                a,
+                self._chat_completion(
+                    messages, stream=True, events=True, response_format=response_format
+                ),  # type: ignore
             )
         elif stream:
             return ChatCompletion(
-                a, self._chat_completion(messages, stream=True, events=False)  # type: ignore
+                a, self._chat_completion(messages, stream=True, events=False, response_format=response_format)  # type: ignore
             )
         elif events:
             return ChatCompletion(
-                a, self._chat_completion(messages, stream=False, events=True)  # type: ignore
+                a, self._chat_completion(messages, stream=False, events=True, response_format=response_format)  # type: ignore
             )
         else:
             return ChatCompletion(
-                self.tools._agent, self._chat_completion(messages, stream=False, events=False)  # type: ignore
+                self.tools._agent, self._chat_completion(messages, stream=False, events=False, response_format=response_format)  # type: ignore
             )
 
     @overload
     async def _chat_completion_request(
-        self, messages: list[Message], stream: Literal[False]
+        self,
+        messages: list[Message],
+        stream: Literal[False],
+        response_format: Any | None,
     ) -> AssistantMessage: ...
 
     @overload
     async def _chat_completion_request(
-        self, messages: Sequence[Message], stream: Literal[True]
+        self,
+        messages: Sequence[Message],
+        stream: Literal[True],
+        response_format: Any | None,
     ) -> MessageStream: ...
 
     async def _chat_completion_request(
-        self, messages: Sequence[Message], stream: bool
+        self,
+        messages: Sequence[Message],
+        stream: bool,
+        response_format: Any | None,
     ) -> AssistantMessage | MessageStream:
         raise NotImplementedError()
 
@@ -151,6 +172,7 @@ class LLMBackend:
         *,
         stream: Literal[False],
         events: Literal[False],
+        response_format: Any | None,
     ) -> AsyncGenerator[AssistantMessage, None]: ...
 
     @overload
@@ -160,6 +182,7 @@ class LLMBackend:
         *,
         stream: Literal[True],
         events: Literal[False],
+        response_format: Any | None,
     ) -> AsyncGenerator[MessageStream, None]: ...
 
     @overload
@@ -169,6 +192,7 @@ class LLMBackend:
         *,
         stream: Literal[False],
         events: Literal[True],
+        response_format: Any | None,
     ) -> AsyncGenerator[AssistantMessage | Event, None]: ...
 
     @overload
@@ -178,10 +202,16 @@ class LLMBackend:
         *,
         stream: Literal[True],
         events: Literal[True],
+        response_format: Any | None,
     ) -> AsyncGenerator[MessageStream | Event, None]: ...
 
     async def _chat_completion(
-        self, messages: Sequence[Message], *, stream: bool, events: bool
+        self,
+        messages: Sequence[Message],
+        *,
+        stream: bool,
+        events: bool,
+        response_format: Any | None,
     ) -> (
         AsyncGenerator[MessageStream, None]
         | AsyncGenerator[AssistantMessage, None]
@@ -195,11 +225,15 @@ class LLMBackend:
         message: AssistantMessage
         trimmed_history = self.history.get_for_inference()
         if stream:
-            s = await self._chat_completion_request(trimmed_history, stream=True)
+            s = await self._chat_completion_request(
+                trimmed_history, stream=True, response_format=response_format
+            )
             yield s
             message = await s.wait_for_completion()
         else:
-            message = await self._chat_completion_request(trimmed_history, stream=False)
+            message = await self._chat_completion_request(
+                trimmed_history, stream=False, response_format=response_format
+            )
             if message.content is not None:
                 yield message
         self.history.add(message)
@@ -221,12 +255,14 @@ class LLMBackend:
             # Submit results
             message: AssistantMessage
             if stream:
-                r = await self._chat_completion_request(trimmed_history, stream=True)
+                r = await self._chat_completion_request(
+                    trimmed_history, stream=True, response_format=response_format
+                )
                 yield r
                 message = await r.wait_for_completion()
             else:
                 message = await self._chat_completion_request(
-                    trimmed_history, stream=False
+                    trimmed_history, stream=False, response_format=response_format
                 )
                 if message.content is not None:
                     yield message
