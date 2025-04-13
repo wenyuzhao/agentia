@@ -220,7 +220,7 @@ if prompt := st.chat_input(
                             async for s in response:
                                 streamed_text += s
                                 msg.markdown(streamed_text)
-                    m = await response.wait_for_completion()
+                    m = await response
                     if m.tool_calls:
                         wrapper.empty()
             else:

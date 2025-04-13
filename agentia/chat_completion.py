@@ -1,3 +1,4 @@
+import abc
 from typing import (
     TYPE_CHECKING,
     AsyncGenerator,
@@ -16,25 +17,33 @@ if TYPE_CHECKING:
     from agentia.agent import Agent
 
 
-class MessageStream:
+class MessageStream(abc.ABC):
     type: Literal["message.stream"] = "message.stream"
     reasoning: Optional["ReasoningMessageStream"] = None
 
     def __aiter__(self) -> AsyncIterator[str]:
         raise NotImplementedError()
 
-    async def wait_for_completion(self) -> AssistantMessage:
+    @abc.abstractmethod
+    async def _wait_for_completion(self) -> AssistantMessage:
         raise NotImplementedError()
 
+    def __await__(self):
+        return self._wait_for_completion().__await__()
 
-class ReasoningMessageStream:
+
+class ReasoningMessageStream(abc.ABC):
     type: Literal["message.stream.reasoning"] = "message.stream.reasoning"
 
     def __aiter__(self) -> AsyncIterator[str]:
         raise NotImplementedError()
 
-    async def wait_for_completion(self) -> str:
+    @abc.abstractmethod
+    async def _wait_for_completion(self) -> str:
         raise NotImplementedError()
+
+    def __await__(self):
+        return self._wait_for_completion().__await__()
 
 
 M = TypeVar(
@@ -81,16 +90,14 @@ class ChatCompletion(Generic[M]):
     def __aiter__(self):
         return self
 
-    async def __await_impl(self) -> str:
-        last_message = ""
+    async def __await_impl(self) -> AssistantMessage:
+        last_message: Message | None = None
         async for msg in self:
             if isinstance(msg, Message):
-                assert isinstance(msg.content, str)
-                last_message = msg.content
+                last_message = msg
             if isinstance(msg, MessageStream):
-                last_message = ""
-                async for delta in msg:
-                    last_message += delta
+                last_message = await msg
+        assert last_message is not None
         return last_message
 
     def __await__(self):

@@ -286,7 +286,7 @@ class ChatMessageStream(MessageStream):
             async for _ in self.reasoning:
                 ...
             assert isinstance(self.reasoning, ReasoningMessageStreamImpl)
-            self.__final_reasoning = await self.reasoning.wait_for_completion()
+            self.__final_reasoning = await self.reasoning
             if self.reasoning.leftover:
                 leftover = self.reasoning.leftover
                 self.reasoning.leftover = None
@@ -302,7 +302,8 @@ class ChatMessageStream(MessageStream):
     def __aiter__(self) -> AsyncIterator[str]:
         return self
 
-    async def wait_for_completion(self) -> AssistantMessage:
+    @override
+    async def _wait_for_completion(self) -> AssistantMessage:
         if self.reasoning:
             assert isinstance(self.reasoning, ReasoningMessageStreamImpl)
             if self.__final_message is not None:
@@ -355,7 +356,8 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
     def __aiter__(self) -> AsyncIterator[str]:
         return self
 
-    async def wait_for_completion(self) -> str:
+    @override
+    async def _wait_for_completion(self) -> str:
         async for _ in self:
             ...
         assert self.__final_message is not None

@@ -229,7 +229,7 @@ class LLMBackend:
                 trimmed_history, stream=True, response_format=response_format
             )
             yield s
-            message = await s.wait_for_completion()
+            message = await s
         else:
             message = await self._chat_completion_request(
                 trimmed_history, stream=False, response_format=response_format
@@ -259,7 +259,7 @@ class LLMBackend:
                     trimmed_history, stream=True, response_format=response_format
                 )
                 yield r
-                message = await r.wait_for_completion()
+                message = await r
             else:
                 message = await self._chat_completion_request(
                     trimmed_history, stream=False, response_format=response_format

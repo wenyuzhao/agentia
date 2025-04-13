@@ -37,7 +37,7 @@ async def test_function_call():
             assert delta is None or isinstance(delta, str)
             content += delta
             print(" - ", delta)
-        msg = await stream.wait_for_completion()
+        msg = await stream
         if msg.role == "assistant":
             all_assistant_content += content
         print(msg)
