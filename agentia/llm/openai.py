@@ -1,7 +1,10 @@
 import abc
+import inspect
 import json
 import os
 from typing import AsyncIterator, Literal, Any, Sequence, overload, override
+
+from pydantic import BaseModel
 
 from agentia.chat_completion import MessageStream, ReasoningMessageStream
 from agentia.history import History
@@ -40,6 +43,7 @@ from openai.types.chat.chat_completion_chunk import (
 )
 import openai
 from openai.types.chat import ChatCompletionChunk
+from openai.lib._parsing._completions import type_to_response_format_param  # type: ignore
 
 
 class OpenAIBackend(LLMBackend):
@@ -106,6 +110,10 @@ class OpenAIBackend(LLMBackend):
             **self.options.as_kwargs(),
         }
         if response_format is not None:
+            if inspect.isclass(response_format) and issubclass(
+                response_format, BaseModel
+            ):
+                response_format = type_to_response_format_param(response_format)  # type: ignore
             self.extra_body["response_format"] = response_format
         if not self.tools.is_empty():
             if self.support_tools():

@@ -572,8 +572,8 @@ class Agent:
         await agent.init()
         conversation = self.history.get_formatted_history()
         result = await agent.chat_completion(conversation)
-        self.history.update_summary(result)
-        return result
+        self.history.update_summary(result.content or "")
+        return result.content or ""
 
 
 __all__ = ["Agent"]

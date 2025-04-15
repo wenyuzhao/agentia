@@ -66,6 +66,10 @@ class ChatCompletion(Generic[M]):
         self.__agent = agent
         self.__lock: SessionLock = SessionLock(agent)
 
+    @property
+    def agent(self) -> "Agent":
+        return self.__agent
+
     async def __save_history(self):
         if not self.__agent.persist:
             return

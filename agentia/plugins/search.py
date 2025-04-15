@@ -89,7 +89,7 @@ class SearchPlugin(Plugin):
             instructions="Extract keywords from the given query. Just return the keywords without any additional text.",
         )
         keywords = await agent.chat_completion(query)
-        return keywords
+        return (keywords.content or "").strip()
 
     @tool
     async def web_search(
