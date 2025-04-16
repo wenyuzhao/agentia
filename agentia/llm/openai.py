@@ -270,10 +270,12 @@ class ChatMessageStream(MessageStream):
         if self.__final_message is not None:
             raise StopAsyncIteration()
         try:
+            assert self.__aiter is not None
             chunk = await self.__aiter.__anext__()
         except StopAsyncIteration:
             self.__message.tool_calls = self.__get_final_merged_tool_calls()
             self.__final_message = self.__message
+            self.__aiter = None
             raise StopAsyncIteration()
         if hasattr(chunk, "error"):
             raise RuntimeError(chunk.error["message"])  # type: ignore
@@ -340,6 +342,7 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
         if self.__final_message is not None:
             raise StopAsyncIteration()
         try:
+            assert self.__aiter is not None
             chunk = await self.__aiter.__anext__()
             delta = chunk.choices[0].delta.to_dict()
             reasoning = delta.get("reasoning")
@@ -353,6 +356,7 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
         except StopAsyncIteration:
             self.__final_message = self.__message
             self.leftover = self.__delta
+            self.__aiter = None
             raise StopAsyncIteration()
 
     async def __anext__(self) -> str:
