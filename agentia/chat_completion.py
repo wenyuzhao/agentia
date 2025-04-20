@@ -87,7 +87,7 @@ class ChatCompletion(Generic[M]):
         except StopAsyncIteration as e:
             await self.__end_of_stream(False)
             raise e
-        except BaseException as e:
+        except Exception as e:
             await self.__end_of_stream(True)
             raise e
 

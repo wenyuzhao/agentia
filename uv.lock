@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "agentia"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "llama-index" },

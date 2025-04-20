@@ -16,5 +16,5 @@ class CodePlugin(Plugin):
             try:
                 exec(python_code)
                 return f.getvalue()
-            except BaseException as e:
+            except Exception as e:
                 return {"error": str(e), "traceback": repr(traceback.format_exc())}

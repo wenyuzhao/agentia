@@ -154,7 +154,7 @@ async def chat(websocket: WebSocket, agent_id: str, session_id: str):
                         await websocket.send_json(
                             {"type": "error", "error": "Invalid request"}
                         )
-            except BaseException as e:
+            except Exception as e:
                 agent.log.error(e)
                 await websocket.send_json({"error": str(e)})
     except WebSocketDisconnect as e:

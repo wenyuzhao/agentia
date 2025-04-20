@@ -324,7 +324,8 @@ class ToolRegistry:
                 result = await result_or_coroutine
             else:
                 result = result_or_coroutine
-        except BaseException as e:
+        except Exception as e:
+            print(f"TOOL#{tool_id} {name} ERROR: {e}")
             self._agent.log.error(e)
             raise ToolResult({"error": f"Failed to run tool `{name}`: {e}"}) from e
         result_s = json.dumps(result)

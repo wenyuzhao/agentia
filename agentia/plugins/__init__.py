@@ -10,14 +10,14 @@ if TYPE_CHECKING:
 
 
 class PluginInitError(RuntimeError):
-    def __init__(self, plugin: str, original: BaseException) -> None:
+    def __init__(self, plugin: str, original: Exception) -> None:
         self.plugin = plugin
         self.msg = str(original)
         self.original = original
         super().__init__(f"Plugin {plugin} failed to initialize: {self.msg}")
 
 
-class ToolResult(BaseException):
+class ToolResult(Exception):
     __result: Any
 
     def __init__(self, result: Any):
