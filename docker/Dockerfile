@@ -9,7 +9,7 @@ ADD . /app
 
 # Sync the project into a new environment, using the frozen lockfile
 WORKDIR /app
-RUN uv sync --all-groups --frozen
+RUN uv sync --all-extras --all-groups --frozen
 
 # Install `setup` command
 ENV PATH="/app/docker:$PATH"
