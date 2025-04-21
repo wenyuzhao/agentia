@@ -154,6 +154,9 @@ class ToolRegistry:
                 # integer type
                 case x if x == int:
                     prop["type"] = "integer"
+                # boolean type
+                case x if x == bool:
+                    prop["type"] = "boolean"
                 # string enum
                 case x if get_origin(x) == Annotated and get_args(x)[0] == str:
                     prop["type"] = "string"
@@ -324,8 +327,10 @@ class ToolRegistry:
                 result = await result_or_coroutine
             else:
                 result = result_or_coroutine
+        except EOFError as e:
+            raise e
         except Exception as e:
-            print(f"TOOL#{tool_id} {name} ERROR: {e}")
+            print(f"TOOL#{tool_id} {name} ERROR: <{e}> <{type(e)}>")
             self._agent.log.error(e)
             raise ToolResult({"error": f"Failed to run tool `{name}`: {e}"}) from e
         result_s = json.dumps(result)
