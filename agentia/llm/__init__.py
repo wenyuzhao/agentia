@@ -228,13 +228,14 @@ class LLMBackend:
             s = await self._chat_completion_request(
                 trimmed_history, stream=True, response_format=response_format
             )
-            yield s
+            if await s._ensure_non_empty():
+                yield s
             message = await s
         else:
             message = await self._chat_completion_request(
                 trimmed_history, stream=False, response_format=response_format
             )
-            if message.content is not None:
+            if message.content or message.reasoning:
                 yield message
         self.history.add(message)
         self.log.debug(message)
@@ -258,13 +259,14 @@ class LLMBackend:
                 r = await self._chat_completion_request(
                     trimmed_history, stream=True, response_format=response_format
                 )
-                yield r
+                if await r._ensure_non_empty():
+                    yield r
                 message = await r
             else:
                 message = await self._chat_completion_request(
                     trimmed_history, stream=False, response_format=response_format
                 )
-                if message.content is not None:
+                if message.content or message.reasoning:
                     yield message
             self.history.add(message)
             self.log.debug(message)
@@ -278,7 +280,7 @@ def create_llm_backend(
     tools: ToolRegistry,
     history: History,
 ) -> LLMBackend:
-    if ":" in model:
+    if ":" in model and "/" not in model.split(":")[0]:
         provider = model.split(":")[0]
         model = model.split(":")[1]
     elif "OPENAI_BASE_URL" in os.environ:

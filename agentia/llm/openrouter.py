@@ -35,13 +35,20 @@ class OpenRouterBackend(OpenAIBackend):
             }
         if v := os.environ.get("OPENROUTER_INCLUDE_REASONING"):
             include_reasoning = v.lower() in ["true", "1", "yes", "y"]
-            self.has_reasoning = self.__model_has_reasoning(model)
-            if not self.has_reasoning:
+            model_has_reasoning = self.__model_has_reasoning(model)
+            if not model_has_reasoning:
                 include_reasoning = False
         else:
-            self.has_reasoning = False
-            include_reasoning = False
-        self.extra_body["include_reasoning"] = include_reasoning
+            model_has_reasoning = self.__model_has_reasoning(model)
+            include_reasoning = model_has_reasoning
+        if model_has_reasoning:
+            self.extra_body["reasoning"] = {
+                "exclude": not include_reasoning,
+            }
+            if effort := os.environ.get("OPENROUTER_REASONING_EFFORT"):
+                if effort.lower() in ["high", "medium", "low"]:
+                    self.extra_body["reasoning"]["effort"] = effort.lower()
+        self.has_reasoning = model_has_reasoning and include_reasoning
         self.extra_body["transforms"] = ["middle-out"]
 
     def get_default_model(self) -> str:

@@ -128,8 +128,7 @@ class OpenAIBackend(LLMBackend):
                 extra_body=self.extra_body,
                 stream=True,
             )
-            cms = ChatMessageStream(response, self.has_reasoning)
-            return cms
+            return ChatMessageStream(response, self.has_reasoning)
         else:
             response = await self.client.chat.completions.create(
                 **args,
@@ -223,9 +222,7 @@ class OpenAIBackend(LLMBackend):
 
 class ChatMessageStream(MessageStream):
     def __init__(
-        self,
-        response: openai.AsyncStream[ChatCompletionChunk],
-        has_reasoning: bool,
+        self, response: openai.AsyncStream[ChatCompletionChunk], has_reasoning: bool
     ):
         self.__aiter = response.__aiter__()
         self.__message = AssistantMessage()
@@ -233,7 +230,30 @@ class ChatMessageStream(MessageStream):
         self.__final_message: AssistantMessage | None = None
         self.__final_reasoning: str | None = None
         if has_reasoning:
-            self.reasoning = ReasoningMessageStreamImpl(response)
+            self.reasoning = ReasoningMessageStreamImpl(response, self)
+        self.__leftover: str | None = None
+        self.__leftover_in_final_content: str | None = False
+
+    @override
+    async def _ensure_non_empty(self) -> bool:
+        """
+        The stream can be empty (e.g. for tool calls).
+        Before returning the stream to the user, we will call this method to fetch the first chunk, ahd skip empty ones.
+        """
+        try:
+            if self.reasoning:
+                non_empty = await self.reasoning._ensure_non_empty()
+                if not non_empty:
+                    print("Reasoning stream is empty")
+                    self.reasoning = None
+                    return self.__leftover is not None
+                else:
+                    return True
+            self.__leftover = await anext(self)
+            self.__leftover_in_final_content = True
+            return True
+        except StopAsyncIteration:
+            return False
 
     def __get_final_merged_tool_calls(self) -> list[ToolCall]:
         return [
@@ -241,7 +261,7 @@ class ChatMessageStream(MessageStream):
                 id=t.id or "",
                 function=FunctionCall(
                     name=t.function.name or "",
-                    arguments=json.loads(t.function.arguments or ""),
+                    arguments=json.loads(t.function.arguments or "{}"),
                 ),
                 type="function",
             )
@@ -292,18 +312,21 @@ class ChatMessageStream(MessageStream):
         return delta.content or ""
 
     async def __anext__(self) -> str:
+        # Drain reasoning stream first
         if self.reasoning is not None and not self.__final_reasoning:
             async for _ in self.reasoning:
                 ...
             assert isinstance(self.reasoning, ReasoningMessageStreamImpl)
             self.__final_reasoning = await self.reasoning
-            if self.reasoning.leftover:
-                leftover = self.reasoning.leftover
-                self.reasoning.leftover = None
+        # if there is a prefetched chunk or a leftover from reasoning stream, return it
+        if self.__leftover is not None:
+            leftover = self.__leftover
+            self.__leftover = None
+            if not self.__leftover_in_final_content:
                 if self.__message.content is None:
                     self.__message.content = ""
                 self.__message.content += leftover
-                return leftover
+            return leftover
         while True:
             delta = await self.__anext_impl()
             if len(delta) > 0:
@@ -331,12 +354,23 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
     def __init__(
         self,
         response: openai.AsyncStream[ChatCompletionChunk],
+        main_stream: ChatMessageStream,
     ):
         self.__aiter = response.__aiter__()
         self.__message = ""
         self.__final_message: str | None = None
         self.__delta = None
-        self.leftover: str | None = None
+        self.__first_chunk: str | None = None
+        self.__main_stream = main_stream
+
+    @override
+    async def _ensure_non_empty(self) -> bool:
+        assert self.__first_chunk is None
+        try:
+            self.__first_chunk = await anext(self)
+            return True
+        except StopAsyncIteration:
+            return False
 
     async def __anext_impl(self) -> str:
         if self.__final_message is not None:
@@ -355,11 +389,24 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
             return reasoning or ""
         except StopAsyncIteration:
             self.__final_message = self.__message
-            self.leftover = self.__delta
+            self.__main_stream._ChatMessageStream__leftover = self.__delta
             self.__aiter = None
             raise StopAsyncIteration()
 
+    async def __take_prefetched_chunk(self):
+        if self.__first_chunk is not None:
+            delta = self.__first_chunk
+            self.__first_chunk = None
+            if self.__message is None:
+                self.__message = ""
+            self.__message += delta
+            return delta
+        return None
+
     async def __anext__(self) -> str:
+        # if there is a prefetched chunk, return it
+        if c := await self.__take_prefetched_chunk():
+            return c
         while True:
             delta = await self.__anext_impl()
             if len(delta) > 0:

@@ -25,6 +25,10 @@ class MessageStream(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
+    async def _ensure_non_empty(self) -> bool:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
     async def _wait_for_completion(self) -> AssistantMessage:
         raise NotImplementedError()
 
@@ -34,6 +38,10 @@ class MessageStream(abc.ABC):
 
 class ReasoningMessageStream(abc.ABC):
     type: Literal["message.stream.reasoning"] = "message.stream.reasoning"
+
+    @abc.abstractmethod
+    async def _ensure_non_empty(self) -> bool:
+        raise NotImplementedError()
 
     def __aiter__(self) -> AsyncIterator[str]:
         raise NotImplementedError()
