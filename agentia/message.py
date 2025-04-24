@@ -270,6 +270,7 @@ class ToolCallEvent:
     description: str
     arguments: dict[str, Any]
     result: Any | None = None
+    metadata: Any | None = None
     role: Literal["event.tool_call"] = "event.tool_call"
 
 

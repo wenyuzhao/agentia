@@ -39,6 +39,7 @@ NAME_TAG = "agentia_tool_name"
 DISPLAY_NAME_TAG = "agentia_tool_display_name"
 IS_TOOL_TAG = "agentia_tool_is_tool"
 DESCRIPTION_TAG = "agentia_tool_description"
+METADATA_TAG = "agentia_tool_metadata"
 
 
 @dataclass
@@ -48,6 +49,7 @@ class ToolInfo:
     description: str
     parameters: dict[str, Any]
     callable: Callable[..., Any]
+    metadata: Any | None = None
 
     def to_json(self) -> JSON:
         return {
@@ -118,6 +120,7 @@ class ToolRegistry:
                 description=t.description,
                 parameters=t.properties,
                 callable=call_client_tool,
+                metadata=None,
             )
 
     def __add_function(self, f: Callable[..., Any]):
@@ -208,6 +211,7 @@ class ToolRegistry:
             description=getattr(f, DESCRIPTION_TAG, f.__doc__) or "",
             parameters=params,
             callable=f,
+            metadata=getattr(f, METADATA_TAG, None),
         )
         self.__functions[tool_info.name] = tool_info
         return tool_info
@@ -351,6 +355,7 @@ class ToolRegistry:
                 display_name=info.display_name,
                 description=info.description,
                 arguments=t.function.arguments,  # type: ignore
+                metadata=info.metadata,
             )
             yield event
             raw_result = {}
@@ -367,6 +372,7 @@ class ToolRegistry:
                 description=info.description,
                 arguments=t.function.arguments,  # type: ignore
                 result=raw_result,
+                metadata=info.metadata,
             )
             yield event
             if not isinstance(raw_result, str):

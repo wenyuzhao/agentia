@@ -22,6 +22,7 @@ def tool(
     name: str | None = None,
     display_name: str | None = None,
     description: str | None = None,
+    metadata: Any | None = None,
 ) -> Callable[..., Callable[..., R]]: ...
 
 
@@ -29,6 +30,7 @@ def tool(
     name: str | Callable[..., R] | None = None,
     display_name: str | None = None,
     description: str | None = None,
+    metadata: Any | None = None,
 ) -> Callable[..., R] | Callable[[Callable[..., R]], Callable[..., R]]:
 
     def __tool_impl(callable: Callable[..., R]) -> Callable[..., R]:
@@ -38,6 +40,7 @@ def tool(
             NAME_TAG,
             DISPLAY_NAME_TAG,
             DESCRIPTION_TAG,
+            METADATA_TAG,
         )
 
         if isinstance(name, str):
@@ -48,6 +51,9 @@ def tool(
 
         if isinstance(description, str):
             setattr(callable, DESCRIPTION_TAG, description)
+
+        if metadata is not None:
+            setattr(callable, METADATA_TAG, metadata)
 
         setattr(callable, IS_TOOL_TAG, True)
 
