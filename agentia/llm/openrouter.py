@@ -33,13 +33,23 @@ class OpenRouterBackend(OpenAIBackend):
             self.extra_body["provider"] = {
                 "order": [x.strip() for x in providers.strip().split(",")]
             }
-        self.has_reasoning = self.__model_has_reasoning(model)
+        if v := os.environ.get("OPENROUTER_INCLUDE_REASONING"):
+            include_reasoning = v.lower() in ["true", "1", "yes", "y"]
+            self.has_reasoning = self.__model_has_reasoning(model)
+            if not self.has_reasoning:
+                include_reasoning = False
+        else:
+            self.has_reasoning = False
+            include_reasoning = False
+        self.extra_body["include_reasoning"] = include_reasoning
         self.extra_body["transforms"] = ["middle-out"]
 
     def get_default_model(self) -> str:
         return "openrouter:openai/gpt-4o-mini"
 
     def __model_has_reasoning(self, model: str):
+        if v := os.environ.get("OPENROUTER_HAS_REASONING"):
+            return v.lower() in ["true", "1", "yes", "y"]
         global _REASONING_MODELS
         if model in _REASONING_MODELS:
             return _REASONING_MODELS[model]
