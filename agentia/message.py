@@ -16,6 +16,7 @@ from typing import (
 import json
 import abc
 from dataclasses import dataclass, field
+import uuid
 
 if TYPE_CHECKING:
     from openai.types.chat import (
@@ -286,9 +287,9 @@ class CommunicationEvent:
 
 @dataclass
 class UserConsentEvent:
-    id: str
     message: str
     response: bool | None = None
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
     role: Literal["event.user_consent"] = "event.user_consent"
 
 

@@ -301,12 +301,24 @@ class ToolRegistry:
             result_or_coroutine = func(*args, **kw_args)
             if inspect.isasyncgen(result_or_coroutine):
                 try:
+                    next_value = None
                     while True:
-                        yielded = await anext(result_or_coroutine)
-                        if isinstance(yielded, UserConsentEvent | CommunicationEvent):
+                        if next_value is not None:
+                            yielded = await result_or_coroutine.asend(next_value)
+                        else:
+                            yielded = await anext(result_or_coroutine)
+                        if isinstance(yielded, UserConsentEvent):
+                            assert (
+                                yielded.response is None
+                            ), "Newly created user consent event should not have a response"
                             self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                             yield yielded
-                        if isinstance(yielded, ToolResult):
+                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
+                            next_value = yielded.response
+                        elif isinstance(yielded, CommunicationEvent):
+                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
+                            yield yielded
+                        elif isinstance(yielded, ToolResult):
                             result = yielded.result
                             break
                 except StopAsyncIteration as e:
@@ -315,12 +327,25 @@ class ToolRegistry:
                     result = e.result
             elif inspect.isgenerator(result_or_coroutine):
                 try:
+                    next_value = None
                     while True:
-                        yielded = next(result_or_coroutine)
-                        if isinstance(yielded, UserConsentEvent | CommunicationEvent):
+                        if next_value is not None:
+                            yielded = result_or_coroutine.send(next_value)
+                        else:
+                            yielded = next(result_or_coroutine)
+                        next_value = None
+                        if isinstance(yielded, UserConsentEvent):
+                            assert (
+                                yielded.response is None
+                            ), "Newly created user consent event should not have a response"
                             self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                             yield yielded
-                        if isinstance(yielded, ToolResult):
+                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
+                            next_value = yielded.response
+                        elif isinstance(yielded, CommunicationEvent):
+                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
+                            yield yielded
+                        elif isinstance(yielded, ToolResult):
                             result = yielded.result
                             break
                 except StopIteration as e:
