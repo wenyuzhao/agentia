@@ -11,14 +11,18 @@ from typing import (
     Sequence,
     Any,
     override,
+    TYPE_CHECKING,
 )
 import json
-from dataclasses import dataclass, field
-from openai.types.chat import (
-    ChatCompletionContentPartTextParam,
-    ChatCompletionContentPartImageParam,
-)
 import abc
+from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from openai.types.chat import (
+        ChatCompletionContentPartTextParam,
+        ChatCompletionContentPartImageParam,
+    )
+
 
 JSON: TypeAlias = (
     Mapping[str, "JSON"] | Sequence["JSON"] | str | int | float | bool | None
@@ -89,7 +93,7 @@ class ContentPartText:
     def __init__(self, content: str) -> None:
         self.content = content
 
-    def to_openai_content_part(self) -> ChatCompletionContentPartTextParam:
+    def to_openai_content_part(self) -> "ChatCompletionContentPartTextParam":
         return {"type": "text", "text": self.content}
 
 
@@ -97,7 +101,7 @@ class ContentPartImage:
     def __init__(self, url: str) -> None:
         self.url = url
 
-    def to_openai_content_part(self) -> ChatCompletionContentPartImageParam:
+    def to_openai_content_part(self) -> "ChatCompletionContentPartImageParam":
         return {"type": "image_url", "image_url": {"url": self.url}}
 
 

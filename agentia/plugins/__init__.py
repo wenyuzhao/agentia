@@ -109,33 +109,39 @@ class Plugin:
 
 ALL_PLUGINS: dict[str, type[Plugin]] = {}
 
-try:
-    from .calc import CalculatorPlugin
-    from .clock import ClockPlugin
-    from .code import CodePlugin
-    from .memory import MemoryPlugin
-    from .mstodo import MSToDoPlugin
-    from .search import SearchPlugin
-    from .dalle import DallEPlugin
-    from .vision import VisionPlugin
-    from .web import WebPlugin
-    from .gmail import GmailPlugin
+if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
+    "1",
+    "true",
+    "yes",
+    "y",
+]:
+    try:
+        from .calc import CalculatorPlugin
+        from .clock import ClockPlugin
+        from .code import CodePlugin
+        from .memory import MemoryPlugin
+        from .mstodo import MSToDoPlugin
+        from .search import SearchPlugin
+        from .dalle import DallEPlugin
+        from .vision import VisionPlugin
+        from .web import WebPlugin
+        from .gmail import GmailPlugin
 
-    ALL_PLUGINS = {
-        "calc": CalculatorPlugin,
-        "clock": ClockPlugin,
-        "code": CodePlugin,
-        "memory": MemoryPlugin,
-        "mstodo": MSToDoPlugin,
-        "search": SearchPlugin,
-        "dalle": DallEPlugin,
-        "vision": VisionPlugin,
-        "web": WebPlugin,
-        "gmail": GmailPlugin,
-    }
-except ImportError as e:
-    # raise e from e
-    pass
+        ALL_PLUGINS = {
+            "calc": CalculatorPlugin,
+            "clock": ClockPlugin,
+            "code": CodePlugin,
+            "memory": MemoryPlugin,
+            "mstodo": MSToDoPlugin,
+            "search": SearchPlugin,
+            "dalle": DallEPlugin,
+            "vision": VisionPlugin,
+            "web": WebPlugin,
+            "gmail": GmailPlugin,
+        }
+    except ImportError as e:
+        # raise e from e
+        pass
 
 
 for name, cls in ALL_PLUGINS.items():
