@@ -396,7 +396,7 @@ class ToolRegistry:
                 display_name=info.display_name,
                 description=info.description,
                 arguments=t.function.arguments,  # type: ignore
-                result=raw_result,
+                result=raw_result if raw_result is not None else {},
                 metadata=info.metadata,
             )
             yield event
