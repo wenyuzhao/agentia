@@ -28,7 +28,7 @@ from .message import (
     CommunicationEvent,
 )
 from .chat_completion import ChatCompletion, MessageStream, ReasoningMessageStream
-from .plugins import Plugin, tool
+from .plugins import Plugin, tool, PluginInitError
 
 __all__ = [
     # submodules
@@ -53,6 +53,7 @@ __all__ = [
     # plugins
     "Plugin",
     "tool",
+    "PluginInitError",
     # utils
     "init_logging",
 ]
