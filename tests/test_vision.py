@@ -9,8 +9,8 @@ dotenv.load_dotenv()
 
 @pytest.mark.asyncio
 async def test_vision():
-    gpt = Agent(model="gpt-4o-mini")
-    response = gpt.chat_completion(
+    agent = Agent(model="gpt-4o-mini")
+    response = agent.run(
         [
             UserMessage(
                 content=[

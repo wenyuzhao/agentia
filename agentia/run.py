@@ -63,7 +63,7 @@ M = TypeVar(
 )
 
 
-class ChatCompletion(Generic[M]):
+class Run(Generic[M]):
     def __init__(
         self,
         agent: "Agent",
@@ -116,4 +116,4 @@ class ChatCompletion(Generic[M]):
         return self.__await_impl().__await__()
 
 
-__all__ = ["ChatCompletion", "MessageStream", "ReasoningMessageStream"]
+__all__ = ["Run", "MessageStream", "ReasoningMessageStream"]

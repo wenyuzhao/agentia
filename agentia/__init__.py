@@ -27,7 +27,7 @@ from .message import (
     ToolCallEvent,
     CommunicationEvent,
 )
-from .chat_completion import ChatCompletion, MessageStream, ReasoningMessageStream
+from .run import Run, MessageStream, ReasoningMessageStream
 from .plugins import Plugin, tool, PluginInitError, ToolResult
 
 __all__ = [
@@ -46,8 +46,8 @@ __all__ = [
     "UserConsentEvent",
     "ToolCallEvent",
     "CommunicationEvent",
-    # chat_completion
-    "ChatCompletion",
+    # run
+    "Run",
     "MessageStream",
     "ReasoningMessageStream",
     # plugins

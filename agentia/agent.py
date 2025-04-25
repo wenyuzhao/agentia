@@ -27,7 +27,7 @@ from agentia import LOGGER
 if TYPE_CHECKING:
     from agentia.utils.config import Config
     from agentia.knowledge_base import KnowledgeBase
-    from agentia.chat_completion import ChatCompletion, MessageStream
+    from agentia.run import Run, MessageStream
 
 from .message import *
 from .history import History
@@ -238,7 +238,7 @@ class Agent:
             yield CommunicationEvent(
                 id=cid, parent=leader.id, child=target.id, message=message
             )
-            response = target.chat_completion(
+            response = target.run(
                 [
                     SystemMessage(
                         f"{leader.name} is directly talking to you ({target.name}) right now, not the user.\n\n{leader.name}'s INFO: {leader.description}\n\nYou are now talking and replying to {leader.name} not the user.",
@@ -401,46 +401,46 @@ class Agent:
         return self.__tools.get_plugin(type)
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message] | str,
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
         response_format: Any | None = None,
-    ) -> "ChatCompletion[AssistantMessage]": ...
+    ) -> "Run[AssistantMessage]": ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message] | str,
         *,
         stream: Literal[True],
         events: Literal[False] = False,
         response_format: Any | None = None,
-    ) -> "ChatCompletion[MessageStream]": ...
+    ) -> "Run[MessageStream]": ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message] | str,
         *,
         stream: Literal[False] = False,
         events: Literal[True],
         response_format: Any | None = None,
-    ) -> "ChatCompletion[AssistantMessage | Event]": ...
+    ) -> "Run[AssistantMessage | Event]": ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message] | str,
         *,
         stream: Literal[True],
         events: Literal[True],
         response_format: Any | None = None,
-    ) -> "ChatCompletion[MessageStream | Event]": ...
+    ) -> "Run[MessageStream | Event]": ...
 
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message] | str,
         *,
@@ -448,28 +448,28 @@ class Agent:
         events: bool = False,
         response_format: Any | None = None,
     ) -> Union[
-        "ChatCompletion[MessageStream]",
-        "ChatCompletion[AssistantMessage]",
-        "ChatCompletion[MessageStream | Event]",
-        "ChatCompletion[AssistantMessage | Event]",
+        "Run[MessageStream]",
+        "Run[AssistantMessage]",
+        "Run[MessageStream | Event]",
+        "Run[AssistantMessage | Event]",
     ]:
         if isinstance(messages, str):
             messages = [UserMessage(messages)]
         self.__load_files(messages)
         if stream and events:
-            return self.__backend.chat_completion(
+            return self.__backend.run(
                 messages, stream=True, events=True, response_format=response_format
             )
         elif stream:
-            return self.__backend.chat_completion(
+            return self.__backend.run(
                 messages, stream=True, events=False, response_format=response_format
             )
         elif events:
-            return self.__backend.chat_completion(
+            return self.__backend.run(
                 messages, stream=False, events=True, response_format=response_format
             )
         else:
-            return self.__backend.chat_completion(
+            return self.__backend.run(
                 messages, stream=False, events=False, response_format=response_format
             )
 
@@ -571,7 +571,7 @@ class Agent:
         )
         await agent.init()
         conversation = self.history.get_formatted_history()
-        result = await agent.chat_completion(conversation)
+        result = await agent.run(conversation)
         self.history.update_summary(result.content or "")
         return result.content or ""
 

@@ -88,7 +88,7 @@ class SearchPlugin(Plugin):
         agent = self.agent.anonymized(
             instructions="Extract keywords from the given query. Just return the keywords without any additional text.",
         )
-        keywords = await agent.chat_completion(query)
+        keywords = await agent.run(query)
         return (keywords.content or "").strip()
 
     @tool

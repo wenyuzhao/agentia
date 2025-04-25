@@ -111,10 +111,10 @@ async def delete_session(agent_id: str, session_id: str):
     return {"success": True}
 
 
-async def run_chat_completion(websocket: WebSocket, agent: Agent, prompt: str):
+async def run(websocket: WebSocket, agent: Agent, prompt: str):
     old_summary = agent.history.summary
     await websocket.send_json({"type": "response.start"})
-    async for e in agent.chat_completion(prompt, stream=True, events=True):
+    async for e in agent.run(prompt, stream=True, events=True):
         if isinstance(e, Event):
             await websocket.send_json({"type": "event", "event": dataclasses.asdict(e)})
         else:
@@ -149,7 +149,7 @@ async def chat(websocket: WebSocket, agent_id: str, session_id: str):
                         await websocket.send_json({"type": "pong"})
                     case "prompt":
                         prompt = req["prompt"]
-                        await run_chat_completion(websocket, agent, prompt)
+                        await run(websocket, agent, prompt)
                     case _:
                         await websocket.send_json(
                             {"type": "error", "error": "Invalid request"}

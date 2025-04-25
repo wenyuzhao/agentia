@@ -3,7 +3,7 @@ import asyncio
 import streamlit as st
 
 from agentia.agent import CommunicationEvent
-from agentia.chat_completion import MessageStream
+from agentia.run import MessageStream
 from agentia.message import (
     AssistantMessage,
     ContentPartImage,
@@ -191,9 +191,7 @@ if prompt := st.chat_input(
 
     # Call the model and stream the response
     async def write_stream():
-        stream = agent.chat_completion(
-            messages=[user_message], stream=True, events=True
-        )
+        stream = agent.run(messages=[user_message], stream=True, events=True)
         async for response in stream:
             if isinstance(response, MessageStream):
                 wrapper = messages_container.empty()

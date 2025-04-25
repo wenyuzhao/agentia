@@ -6,7 +6,7 @@ from typing import AsyncIterator, Literal, Any, Sequence, overload, override
 
 from pydantic import BaseModel
 
-from agentia.chat_completion import MessageStream, ReasoningMessageStream
+from agentia.run import MessageStream, ReasoningMessageStream
 from agentia.history import History
 
 from . import LLMBackend, ModelOptions
@@ -232,7 +232,7 @@ class ChatMessageStream(MessageStream):
         if has_reasoning:
             self.reasoning = ReasoningMessageStreamImpl(response, self)
         self.__leftover: str | None = None
-        self.__leftover_in_final_content: str | None = False
+        self.__leftover_in_final_content: bool = False
 
     @override
     async def _ensure_non_empty(self) -> bool:
@@ -389,7 +389,7 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
             return reasoning or ""
         except StopAsyncIteration:
             self.__final_message = self.__message
-            self.__main_stream._ChatMessageStream__leftover = self.__delta
+            self.__main_stream._ChatMessageStream__leftover = self.__delta  # type: ignore
             self.__aiter = None
             raise StopAsyncIteration()
 

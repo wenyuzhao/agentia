@@ -16,7 +16,7 @@ def get_weather(location: Annotated[str, "The city name"]):
 agent = Agent(tools=[get_weather])
 
 # Run the agent with the tool
-response = await agent.chat_completion("What is the weather like in boston?")
+response = await agent.run("What is the weather like in boston?")
 
 print(response)
 

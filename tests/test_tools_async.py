@@ -28,10 +28,8 @@ async def get_current_weather(
 
 @pytest.mark.asyncio
 async def test_function_call():
-    gpt = Agent(model="openai/gpt-4o-mini", tools=[get_current_weather])
-    response = gpt.chat_completion(
-        [UserMessage(content="What is the weather like in boston?")]
-    )
+    agent = Agent(model="openai/gpt-4o-mini", tools=[get_current_weather])
+    response = agent.run([UserMessage(content="What is the weather like in boston?")])
     all_assistant_content = ""
     async for msg in response:
         if msg.role == "assistant":

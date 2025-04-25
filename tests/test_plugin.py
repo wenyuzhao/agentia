@@ -29,10 +29,8 @@ async def test_weather_and_memory_plugin():
     file = "_test-data.csv"
     with open(file, "w+") as f:
         f.write("")
-    gpt = Agent(model="openai/gpt-4o-mini", tools=[FakeWeatherPlugin()])
-    response = gpt.chat_completion(
-        [UserMessage(content="What is the weather like in boston?")]
-    )
+    agent = Agent(model="openai/gpt-4o-mini", tools=[FakeWeatherPlugin()])
+    response = agent.run([UserMessage(content="What is the weather like in boston?")])
     all_assistant_content: str = ""
     async for msg in response:
         if msg.role == "assistant":

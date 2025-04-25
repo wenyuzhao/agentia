@@ -6,7 +6,7 @@ from typing import Any, AsyncGenerator, Literal, Optional, Sequence, overload
 
 from ..tools import ToolRegistry
 from ..message import AssistantMessage, Message, Event
-from ..chat_completion import ChatCompletion, MessageStream
+from ..run import Run, MessageStream
 from ..history import History
 
 from dataclasses import dataclass
@@ -68,46 +68,46 @@ class LLMBackend:
     def get_default_model(self) -> str: ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message],
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
         response_format: Any | None,
-    ) -> ChatCompletion[AssistantMessage]: ...
+    ) -> Run[AssistantMessage]: ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message],
         *,
         stream: Literal[True],
         events: Literal[False] = False,
         response_format: Any | None,
-    ) -> ChatCompletion[MessageStream]: ...
+    ) -> Run[MessageStream]: ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message],
         *,
         stream: Literal[False] = False,
         events: Literal[True],
         response_format: Any | None,
-    ) -> ChatCompletion[AssistantMessage | Event]: ...
+    ) -> Run[AssistantMessage | Event]: ...
 
     @overload
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message],
         *,
         stream: Literal[True],
         events: Literal[True],
         response_format: Any | None,
-    ) -> ChatCompletion[MessageStream | Event]: ...
+    ) -> Run[MessageStream | Event]: ...
 
-    def chat_completion(
+    def run(
         self,
         messages: Sequence[Message],
         *,
@@ -115,30 +115,30 @@ class LLMBackend:
         events: bool = False,
         response_format: Any | None,
     ) -> (
-        ChatCompletion[MessageStream]
-        | ChatCompletion[AssistantMessage]
-        | ChatCompletion[MessageStream | Event]
-        | ChatCompletion[AssistantMessage | Event]
+        Run[MessageStream]
+        | Run[AssistantMessage]
+        | Run[MessageStream | Event]
+        | Run[AssistantMessage | Event]
     ):
         a = self.tools._agent
         if stream and events:
-            return ChatCompletion(
+            return Run(
                 a,
-                self._chat_completion(
+                self._run(
                     messages, stream=True, events=True, response_format=response_format
                 ),  # type: ignore
             )
         elif stream:
-            return ChatCompletion(
-                a, self._chat_completion(messages, stream=True, events=False, response_format=response_format)  # type: ignore
+            return Run(
+                a, self._run(messages, stream=True, events=False, response_format=response_format)  # type: ignore
             )
         elif events:
-            return ChatCompletion(
-                a, self._chat_completion(messages, stream=False, events=True, response_format=response_format)  # type: ignore
+            return Run(
+                a, self._run(messages, stream=False, events=True, response_format=response_format)  # type: ignore
             )
         else:
-            return ChatCompletion(
-                self.tools._agent, self._chat_completion(messages, stream=False, events=False, response_format=response_format)  # type: ignore
+            return Run(
+                self.tools._agent, self._run(messages, stream=False, events=False, response_format=response_format)  # type: ignore
             )
 
     @overload
@@ -166,7 +166,7 @@ class LLMBackend:
         raise NotImplementedError()
 
     @overload
-    async def _chat_completion(
+    async def _run(
         self,
         messages: Sequence[Message],
         *,
@@ -176,7 +176,7 @@ class LLMBackend:
     ) -> AsyncGenerator[AssistantMessage, None]: ...
 
     @overload
-    async def _chat_completion(
+    async def _run(
         self,
         messages: Sequence[Message],
         *,
@@ -186,7 +186,7 @@ class LLMBackend:
     ) -> AsyncGenerator[MessageStream, None]: ...
 
     @overload
-    async def _chat_completion(
+    async def _run(
         self,
         messages: Sequence[Message],
         *,
@@ -196,7 +196,7 @@ class LLMBackend:
     ) -> AsyncGenerator[AssistantMessage | Event, None]: ...
 
     @overload
-    async def _chat_completion(
+    async def _run(
         self,
         messages: Sequence[Message],
         *,
@@ -205,7 +205,7 @@ class LLMBackend:
         response_format: Any | None,
     ) -> AsyncGenerator[MessageStream | Event, None]: ...
 
-    async def _chat_completion(
+    async def _run(
         self,
         messages: Sequence[Message],
         *,

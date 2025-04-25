@@ -23,6 +23,8 @@ class DallEPlugin(Plugin):
             prompt=prompt,
             model="dall-e-3",
         )
+        if not response.data or len(response.data) == 0:
+            raise ValueError("No image generated.")
         return {
             "image_url": response.data[0].url,
         }

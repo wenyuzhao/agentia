@@ -1,4 +1,5 @@
 import os
+from typing import Any
 from agentia.history import History
 from . import ModelOptions
 from ..tools import ToolRegistry
@@ -42,12 +43,13 @@ class OpenRouterBackend(OpenAIBackend):
             model_has_reasoning = self.__model_has_reasoning(model)
             include_reasoning = model_has_reasoning
         if model_has_reasoning:
-            self.extra_body["reasoning"] = {
+            reasoning: dict[str, Any] = {
                 "exclude": not include_reasoning,
             }
             if effort := os.environ.get("OPENROUTER_REASONING_EFFORT"):
                 if effort.lower() in ["high", "medium", "low"]:
-                    self.extra_body["reasoning"]["effort"] = effort.lower()
+                    reasoning["effort"] = effort.lower()
+            self.extra_body["reasoning"] = reasoning
         self.has_reasoning = model_has_reasoning and include_reasoning
         self.extra_body["transforms"] = ["middle-out"]
 

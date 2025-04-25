@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 from agentia.agent import Agent
-from agentia.chat_completion import ChatCompletion, MessageStream
+from agentia.run import Run, MessageStream
 from agentia.message import Event, ToolCallEvent, CommunicationEvent
 from agentia.message import Message, UserMessage
 from agentia.utils.config import load_agent_from_config
@@ -11,13 +11,13 @@ import dotenv
 dotenv.load_dotenv()
 
 
-async def __dump(agent: Agent, completion: ChatCompletion[MessageStream | Event]):
+async def __dump(agent: Agent, run: Run[MessageStream | Event]):
     def print_name_and_icon(name: str | None, icon: str | None, end: str = "\n"):
         name = name or "Agent"
         name_and_icon = f"[{icon} {name}]" if icon else f"[{name}]"
         rich.print(f"[bold blue]{name_and_icon}[/bold blue]", end=end, flush=True)
 
-    async for msg in completion:
+    async for msg in run:
         if isinstance(msg, Message):
             print_name_and_icon(agent.name, agent.icon)
             print(msg.content)
@@ -65,9 +65,7 @@ async def __run_async(agent: Agent):
                 break
         except EOFError:
             break
-        response = agent.chat_completion(
-            [UserMessage(prompt)], stream=True, events=True
-        )
+        response = agent.run(prompt, stream=True, events=True)
         await __dump(agent, response)
 
 
