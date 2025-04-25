@@ -280,12 +280,24 @@ def create_llm_backend(
     tools: ToolRegistry,
     history: History,
 ) -> LLMBackend:
-    if ":" in model and "/" not in model.split(":")[0]:
-        provider = model.split(":")[0]
-        model = model.split(":")[1]
+    """
+    :param model: The model name to use.
+        * `openai/gpt-3.5-turbo` - by default this will use openrouter backend, if the environment variable `AGENTIA_LLM_BACKEND` is not set.
+        * `[openai] gpt-3.5-turbo` - this will use openai backend
+    """
+    model = model.strip()
+    if model.startswith("[") and "]" in model:
+        # The model string has a [provider] prefix. parse it.
+        provider = model.split("]", 1)[0][1:].strip().lower()
+        model = model.split("]", 1)[1].strip()
+    elif "AGENTIA_LLM_BACKEND" in os.environ:
+        # The environment variable AGENTIA_LLM_BACKEND is set. use it.
+        provider = os.environ["AGENTIA_LLM_BACKEND"].strip().lower()
     elif "OPENAI_BASE_URL" in os.environ:
+        # The user overrides the OPENAI_BASE_URL. Just use openai backend for maximum compatibility.
         provider = "openai"
     else:
+        # The user did not specify a provider. use openrouter backend by default.
         provider = "openrouter"
     assert provider in [
         "openai",

@@ -34,7 +34,7 @@ async def get_current_weather2(
 
 @pytest.mark.asyncio
 async def test_function_call():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[get_current_weather])
+    agent = Agent(model="[openrouter] openai/gpt-4o-mini", tools=[get_current_weather])
     run = agent.run("What is the weather like in boston?")
     all_assistant_content = ""
     async for msg in run:
