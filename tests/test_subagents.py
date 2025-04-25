@@ -28,7 +28,7 @@ async def test_subagents():
     )
 
     run = leader.run(
-        "ask your subagents to write a quick sort algorithm in python and then review it once. return the code and the review",
+        "ask your subagents to write a hello-world program in python and let the reviewer to check if it is correct. return the code and the review",
         events=True,
     )
 
