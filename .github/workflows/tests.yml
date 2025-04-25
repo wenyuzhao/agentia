@@ -17,3 +17,5 @@ jobs:
           uv sync --all-extras --all-groups --frozen
       - name: Run PyTest
         run: uv run pytest
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
