@@ -238,7 +238,7 @@ class Agent:
             yield CommunicationEvent(
                 id=cid, parent=leader.id, child=target.id, message=message
             )
-            response = target.run(
+            run = target.run(
                 [
                     SystemMessage(
                         f"{leader.name} is directly talking to you ({target.name}) right now, not the user.\n\n{leader.name}'s INFO: {leader.description}\n\nYou are now talking and replying to {leader.name} not the user.",
@@ -247,7 +247,7 @@ class Agent:
                 ]
             )
             last_message = ""
-            async for m in response:
+            async for m in run:
                 if isinstance(
                     m, Union[UserMessage, SystemMessage, AssistantMessage, ToolMessage]
                 ):
@@ -403,7 +403,7 @@ class Agent:
     @overload
     def run(
         self,
-        messages: Sequence[Message] | str,
+        messages: Sequence[Message] | UserMessage | str,
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
@@ -413,7 +413,7 @@ class Agent:
     @overload
     def run(
         self,
-        messages: Sequence[Message] | str,
+        messages: Sequence[Message] | UserMessage | str,
         *,
         stream: Literal[True],
         events: Literal[False] = False,
@@ -423,7 +423,7 @@ class Agent:
     @overload
     def run(
         self,
-        messages: Sequence[Message] | str,
+        messages: Sequence[Message] | UserMessage | str,
         *,
         stream: Literal[False] = False,
         events: Literal[True],
@@ -433,7 +433,7 @@ class Agent:
     @overload
     def run(
         self,
-        messages: Sequence[Message] | str,
+        messages: Sequence[Message] | UserMessage | str,
         *,
         stream: Literal[True],
         events: Literal[True],
@@ -442,7 +442,7 @@ class Agent:
 
     def run(
         self,
-        messages: Sequence[Message] | str,
+        messages: Sequence[Message] | UserMessage | str,
         *,
         stream: bool = False,
         events: bool = False,
@@ -455,6 +455,8 @@ class Agent:
     ]:
         if isinstance(messages, str):
             messages = [UserMessage(messages)]
+        elif isinstance(messages, UserMessage):
+            messages = [messages]
         self.__load_files(messages)
         if stream and events:
             return self.__backend.run(

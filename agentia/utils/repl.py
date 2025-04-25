@@ -65,8 +65,8 @@ async def __run_async(agent: Agent):
                 break
         except EOFError:
             break
-        response = agent.run(prompt, stream=True, events=True)
-        await __dump(agent, response)
+        run = agent.run(prompt, stream=True, events=True)
+        await __dump(agent, run)
 
 
 def run(agent: Agent | str):

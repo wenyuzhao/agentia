@@ -10,20 +10,18 @@ dotenv.load_dotenv()
 @pytest.mark.asyncio
 async def test_vision():
     agent = Agent(model="gpt-4o-mini")
-    response = agent.run(
-        [
-            UserMessage(
-                content=[
-                    ContentPartText("What is this animal?"),
-                    ContentPartImage(
-                        "https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png"
-                    ),
-                ],
-            ),
-        ]
+    run = agent.run(
+        UserMessage(
+            content=[
+                ContentPartText("What is this animal?"),
+                ContentPartImage(
+                    "https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png"
+                ),
+            ],
+        ),
     )
     all_assistant_content = ""
-    async for msg in response:
+    async for msg in run:
         assert msg.content is None or isinstance(msg.content, str)
         all_assistant_content += msg.content or ""
         print(msg)
