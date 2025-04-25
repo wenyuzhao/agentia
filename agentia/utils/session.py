@@ -194,7 +194,7 @@ class SessionLock:
             self.__lock = None
 
 
-def load_history(agent: Agent, colleagues=True):
+def load_history(agent: Agent, subagents=True):
     """Load the history for a session"""
     if not agent.persist:
         return
@@ -202,11 +202,11 @@ def load_history(agent: Agent, colleagues=True):
     if not history_file.exists():
         return
     agent.history._load(history_file)
-    if colleagues:
+    if subagents:
         with shelve.open(history_file) as db:
-            for k, v in db.get("colleagues", {}).items():
-                colleague = agent.colleagues.get(k)
-                if colleague is None:
+            for k, v in db.get("subagents", {}).items():
+                subagent = agent.subagents.get(k)
+                if subagent is None:
                     continue
-                colleague.session_id = v
-                load_history(colleague, False)
+                subagent.session_id = v
+                load_history(subagent, False)

@@ -63,7 +63,7 @@ class Agent:
         instructions: str | None = None,
         user: str | None = None,
         # Cooperation
-        colleagues: list["Agent"] | None = None,
+        subagents: list["Agent"] | None = None,
         # Knowledge base
         knowledge_base: Union["KnowledgeBase", bool, Path, None] = None,
         # Model and tools
@@ -111,7 +111,7 @@ class Agent:
         )
         model = model or get_default_model()
         self.description = description
-        self.colleagues: dict[str, "Agent"] = {}
+        self.subagents: dict[str, "Agent"] = {}
         self.context: Any = None
         self.config: Optional["Config"] = None
         self.config_path: Optional[Path] = None
@@ -136,9 +136,9 @@ class Agent:
             self.__instructions = (
                 f"YOU ARE NOW TALKING TO THE USER.\n{self.__instructions or ''}"
             )
-        # Init colleagues
-        if colleagues is not None and len(colleagues) > 0:
-            self.__init_cooperation(colleagues)
+        # Init subagents
+        if subagents is not None and len(subagents) > 0:
+            self.__init_cooperation(subagents)
         # Init knowledge base (Step 1)
         self.knowledge_base: Optional["KnowledgeBase"] = None
         if knowledge_base is not False and knowledge_base is not None:
@@ -200,19 +200,19 @@ class Agent:
         if Agent.is_cli():
             rich.print()
 
-    def __add_colleague(self, colleague: "Agent"):
-        if colleague.name is None:
+    def __add_subagent(self, agent: "Agent"):
+        if agent.name is None:
             raise ValueError("Agent name is required for cooperation.")
-        if colleague.description is None:
+        if agent.description is None:
             raise ValueError("Agent description is required for cooperation.")
-        if colleague.id in self.colleagues:
+        if agent.id in self.subagents:
             return
-        self.colleagues[colleague.id] = colleague
-        # Add a tool to dispatch a job to one colleague
-        agent_ids = [agent.id for agent in self.colleagues.values()]
+        self.subagents[agent.id] = agent
+        # Add a tool to dispatch a job to a subagent
+        agent_ids = [agent.id for agent in self.subagents.values()]
         leader = self
-        description = f"Send a message or dispatch a job to a person below as yourself ({leader.name}), and get the response from them. Note that the person does not have any context except what you explicitly told them, so give them the details as precise and as much as possible. They cannot contact each other, not the user, please coordinate everything between them properly by yourself. Here are a list of people with their description:\n"
-        for agent in self.colleagues.values():
+        description = f"Send a message or dispatch a job to a person/subagent below as yourself ({leader.name}), and get the response from them. Note that the person does not have any context except what you explicitly told them, so give them the details as precise and as much as possible. They cannot contact each other, not the user, please coordinate everything between them properly by yourself. Here are a list of people with their description:\n"
+        for agent in self.subagents.values():
             description += (
                 f" * ID={agent.id} NAME={agent.name} -- {agent.description}\n"
             )
@@ -233,7 +233,7 @@ class Agent:
         ):
             self.log.debug(f"COMMUNICATE {leader.id} -> {id}: {repr(message)}")
 
-            target = self.colleagues[id]
+            target = self.subagents[id]
             cid = uuid.uuid4().hex
             yield CommunicationEvent(
                 id=cid, parent=leader.id, child=target.id, message=message
@@ -270,16 +270,16 @@ class Agent:
 
         self.__tools._add_dispatch_tool(communiate)
 
-    def __init_cooperation(self, colleagues: list["Agent"]):
-        if len(colleagues) == 0:
+    def __init_cooperation(self, subagents: list["Agent"]):
+        if len(subagents) == 0:
             return
         if self.name is None:
             raise ValueError("Agent name is required for cooperation.")
         if self.description is None:
             raise ValueError("Agent description is required for cooperation.")
-        # Leader can dispatch jobs to colleagues
-        for colleague in colleagues:
-            self.__add_colleague(colleague)
+        # Leader can dispatch jobs to subagents
+        for agent in subagents:
+            self.__add_subagent(agent)
 
     def __init_knowledge_base(
         self, source: Union["KnowledgeBase", Path, None]
@@ -391,7 +391,7 @@ class Agent:
         self.log.info("Agent Initializing ...")
         await self.__init_plugins()
         self.log.info("Agent Initialized")
-        for c in self.colleagues.values():
+        for c in self.subagents.values():
             await c.init()
 
     def reset(self):
@@ -516,10 +516,10 @@ class Agent:
         self.knowledge_base.add_temporary_documents(files)
 
     def all_agents(self) -> set["Agent"]:
-        """Collect all active agents, including colleagues"""
+        """Collect all active agents, including subagents"""
         agents = set()
         agents.add(self)
-        for agent in self.colleagues.values():
+        for agent in self.subagents.values():
             agents.update(agent.all_agents())
         return agents
 
@@ -543,10 +543,10 @@ class Agent:
         if self.history._first_conversation_just_finished():
             await self.summarise()
         self.history._save(history_file)
-        # Colleagues session IDs
+        # Subagent session IDs
         with shelve.open(history_file) as db:
-            db["colleagues"] = {
-                k: v.session_id for k, v in self.colleagues.items() if v.persist
+            db["subagents"] = {
+                k: v.session_id for k, v in self.subagents.items() if v.persist
             }
         # Save summary
         config_file = self.session_data_folder / "config"

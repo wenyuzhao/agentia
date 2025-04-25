@@ -156,7 +156,7 @@ def display_message(message: Message | Event, expanded=False):
                 st.write(title)
         case m if isinstance(m, CommunicationEvent):
             with messages_container.chat_message("assistant"):
-                c = agent.colleagues[m.child].name
+                c = agent.subagents[m.child].name
                 direction = "->" if m.response is None else "<-"
                 comm = f"{agent.name} {direction} {c}"
                 title = f":blue[:material/smart_toy: **COMMUNICATE:**&nbsp;&nbsp;&nbsp;{comm}]"

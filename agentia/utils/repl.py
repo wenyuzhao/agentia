@@ -44,7 +44,7 @@ async def __dump(agent: Agent, run: Run[MessageStream | Event]):
                     f"[magenta][[bold]✨ TOOL:[/bold] {msg.display_name}][/magenta]"
                 )
             elif isinstance(msg, CommunicationEvent):
-                c = agent.colleagues[msg.child].name
+                c = agent.subagents[msg.child].name
                 direction = "->" if msg.response is None else "<-"
                 rich.print(
                     f"[magenta][[bold]✨ COMMUNICATE:[/bold] {agent.name} {direction} {c}][/magenta] [dim]{msg.message}[/dim]"

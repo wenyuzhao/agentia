@@ -22,7 +22,7 @@ class AgentConfig(BaseModel):
     instructions: str | None = None
     model: str | None = None
     knowledge_base: str | bool = False
-    colleagues: list[str] = Field(default_factory=list)
+    subagents: list[str] = Field(default_factory=list)
     user: str | None = None
     plugins: list[str] | None = None
 
@@ -107,26 +107,26 @@ def __load_agent_from_config(
         return agents[file]
     # Create tools
     tools, tool_configs = __create_tools(config)
-    # Load colleagues
-    colleagues: list[Agent] = []
-    colleague_session_ids: dict[str, str] = {}
+    # Load subagents
+    subagents: list[Agent] = []
+    subagent_session_ids: dict[str, str] = {}
     if persist and session_id:
         history = get_global_cache_dir() / "sessions" / session_id / "history"
         history.parent.mkdir(parents=True, exist_ok=True)
         with shelve.open(history) as db:
-            colleague_session_ids: dict[str, str] = db.get("colleagues", {})
-    for child_id in config.agent.colleagues:
+            subagent_session_ids: dict[str, str] = db.get("subagents", {})
+    for child_id in config.agent.subagents:
         child_path = get_config_dir() / f"{child_id}.toml"
         if not child_path.is_file():
-            raise FileNotFoundError(f"Colleague config not found: {child_path}")
-        colleague = __load_agent_from_config(
+            raise FileNotFoundError(f"Agent config not found: {child_path}")
+        subagent = __load_agent_from_config(
             child_path,
             pending,
             agents,
             persist,
-            colleague_session_ids.get(child_id) if persist else None,
+            subagent_session_ids.get(child_id) if persist else None,
         )
-        colleagues.append(colleague)
+        subagents.append(subagent)
     # Create agent
 
     knowledge_base: str | bool = config.agent.knowledge_base
@@ -139,7 +139,7 @@ def __load_agent_from_config(
         model=config.agent.model,
         tools=tools,
         instructions=config.agent.instructions,
-        colleagues=colleagues,
+        subagents=subagents,
         knowledge_base=(
             Path(knowledge_base) if isinstance(knowledge_base, str) else knowledge_base
         ),
