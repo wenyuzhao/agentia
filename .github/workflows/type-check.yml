@@ -12,6 +12,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install Packages
         run: |
+          sudo apt-get install -y libomp-dev
           uv venv
           uv sync --all-extras --all-groups --frozen
       - name: Run Pyright
