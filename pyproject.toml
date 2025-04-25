@@ -6,7 +6,16 @@ authors = [{ name = "Wenyu Zhao", email = "wenyuzhaox@gmail.com" }]
 requires-python = ">=3.12,<4.0"
 readme = "README.md"
 license = "MIT"
-keywords = ["chatgpt", "gpt"]
+keywords = [
+    "chatgpt",
+    "gpt",
+    "llm",
+    "agent",
+    "tools",
+    "openai",
+    "openrouter",
+    "deepseek",
+]
 dependencies = [
     "python-dotenv>=1.0.0,<2",
     "openai>=1.58.1,<2",
