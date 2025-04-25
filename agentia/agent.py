@@ -131,11 +131,12 @@ class Agent:
         elif self.description and self.name:
             self.__instructions = f"YOUR ARE {self.name}, {self.description}\n\n{self.__instructions or ''}"
         if user:
-            self.__instructions = f"{self.__instructions or ''}\n\nYOU ARE NOW TALKING TO THE USER.\nMY INFO (THE USER): {user}"
+            self.__instructions = f"{self.__instructions or ''}\n\nYOU ARE TALKING TO THE USER.\nMY INFO (THE USER): {user}"
         else:
             self.__instructions = (
-                f"YOU ARE NOW TALKING TO THE USER.\n{self.__instructions or ''}"
+                f"{self.__instructions or ''}\n\nYOU ARE TALKING TO THE USER."
             )
+
         # Init subagents
         if subagents is not None and len(subagents) > 0:
             self.__init_cooperation(subagents)

@@ -244,7 +244,6 @@ class ChatMessageStream(MessageStream):
             if self.reasoning:
                 non_empty = await self.reasoning._ensure_non_empty()
                 if not non_empty:
-                    print("Reasoning stream is empty")
                     self.reasoning = None
                     return self.__leftover is not None
                 else:
@@ -397,9 +396,6 @@ class ReasoningMessageStreamImpl(ReasoningMessageStream):
         if self.__first_chunk is not None:
             delta = self.__first_chunk
             self.__first_chunk = None
-            if self.__message is None:
-                self.__message = ""
-            self.__message += delta
             return delta
         return None
 
