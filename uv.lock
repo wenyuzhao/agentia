@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "agentia"
-version = "0.0.8"
+version = "0.0.9"
 source = { editable = "." }
 dependencies = [
     { name = "llama-index" },
@@ -448,7 +448,7 @@ wheels = [
 
 [[package]]
 name = "chromadb"
-version = "1.0.6"
+version = "1.0.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bcrypt" },
@@ -481,13 +481,13 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1b/75/e192613ed43a87351d6d6b55825d84cdb2fefeec1bcb9ca319e4e7ddc9fa/chromadb-1.0.6.tar.gz", hash = "sha256:3015d952cd1bce064a06265a44768b01a1e977314385574c2be26c3ba802f957", size = 1154314 }
+sdist = { url = "https://files.pythonhosted.org/packages/51/e9/ba5e890debace86df886031c505b27684c5e043c8f9e77b5546ba1abad4d/chromadb-1.0.7.tar.gz", hash = "sha256:70419c0add91a6326677bcc90518c3ea3d2ec7952c714845a7f9d57d0d9d09eb", size = 1155548 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/af/61ad8153b8c1be96a4d24bf1fcdda02d89a4ea6615927175daaae818a76c/chromadb-1.0.6-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b8c4ca895803a38711b690cd9cd0c65e7186915403d2dc46a7f8342dde09ff76", size = 17623580 },
-    { url = "https://files.pythonhosted.org/packages/02/76/07f6862cae1a497db52e5cbb321d465815e7e6c4dc1b91218e95fe8a8230/chromadb-1.0.6-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:fa160bd792e320c3460bbd5389e5b008907e012d73583a484d35b7abc3dbdf32", size = 16915984 },
-    { url = "https://files.pythonhosted.org/packages/9c/1d/87fef1593862ce43b4d9403ec7daa7649f9d8e54e1e561882a010b478638/chromadb-1.0.6-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:15cef3cd93b5fd5de9c1a56f8ab4858534a522a09a4207996c8d94e564d303da", size = 17407440 },
-    { url = "https://files.pythonhosted.org/packages/5d/55/6cf12977304b42503cd10953d56ded4f109982bf55f45f9b21f00c6be152/chromadb-1.0.6-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2d67081bb92f4366e22c2bd9157618cbef93daa274351816a95a0e6e1d1546ff", size = 18291216 },
-    { url = "https://files.pythonhosted.org/packages/7b/5d/a277458f47ad8a1cdec10d08fc408ac6da188877536cc9e4bbf691a157c8/chromadb-1.0.6-cp39-abi3-win_amd64.whl", hash = "sha256:ea0de6c4210d984ea67717d9f932bcf912409427ca241014f49d3e22f79f3126", size = 18230710 },
+    { url = "https://files.pythonhosted.org/packages/e3/e9/4a33bba524992d7473fbe0182378926865fd0beb38140b7adef345ca1c90/chromadb-1.0.7-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:dd5cb62a1bf22399f189a3eef1510b6b0a8111040cb0024bbba9d019a662781e", size = 17649960 },
+    { url = "https://files.pythonhosted.org/packages/e1/03/a05f15c65f15d30aaee7140ef51b4e4795a9c1d2cebeb5d110ff648d8a1b/chromadb-1.0.7-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:96c9310b6a6426860e0e45123113059930120d7df0599cb14e2cace64dd3c5d0", size = 16945680 },
+    { url = "https://files.pythonhosted.org/packages/df/5c/0c82ad86843e4c2d8736caef03ac88b4b461a45e0e7f8add3031bd598849/chromadb-1.0.7-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b38d7ae02ade8fc1af42ce78da219f6ac479b66ea2d0af5ca3544422b8abd66a", size = 17464880 },
+    { url = "https://files.pythonhosted.org/packages/7d/37/66846c00e87a8c9c9fb07e58a06a23a4f9d46bdd82b9411fd10a49080413/chromadb-1.0.7-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2da6530b60c56e4f53096f773764d009ba65dc11f07bdaaf4d6a26d3b2d8b094", size = 18333226 },
+    { url = "https://files.pythonhosted.org/packages/3f/9a/b502962b2bcd608bed94ef670a7dce8a8976df6dc4d732bbc28e4184e6e8/chromadb-1.0.7-cp39-abi3-win_amd64.whl", hash = "sha256:358d3f199cf833432eadd12706c89867384ad0587e908ab94e3d674fc840ed6f", size = 18289673 },
 ]
 
 [[package]]
@@ -798,7 +798,7 @@ wheels = [
 
 [[package]]
 name = "google-api-python-client"
-version = "2.167.0"
+version = "2.168.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core" },
@@ -807,9 +807,9 @@ dependencies = [
     { name = "httplib2" },
     { name = "uritemplate" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/d1/3a23d5b4b967f08aebbfe76e2651416869a765791fbc42f4b78774f48137/google_api_python_client-2.167.0.tar.gz", hash = "sha256:a458d402572e1c2caf9db090d8e7b270f43ff326bd9349c731a86b19910e3995", size = 12725129 }
+sdist = { url = "https://files.pythonhosted.org/packages/45/81/7eefb49f3421fb55724b436eb024ad114e52bf42295fc9aa771f1bb2da4a/google_api_python_client-2.168.0.tar.gz", hash = "sha256:10759c3c8f5bbb17752b349ff336963ab215db150f34594a5581d5cd9b5add41", size = 12774671 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/53/12/4a5322bf1d044114ce59736bb2c260d8d3f843cbedbaa34b553dcad8d9da/google_api_python_client-2.167.0-py2.py3-none-any.whl", hash = "sha256:ce25290cc229505d770ca5c8d03850e0ae87d8e998fc6dd743ecece018baa396", size = 13235609 },
+    { url = "https://files.pythonhosted.org/packages/20/65/0127a66916b5777513dba9cc05b22aab89242750b191ccc19dd8f60d5cc9/google_api_python_client-2.168.0-py3-none-any.whl", hash = "sha256:ebf27fc318a3cf682dc994cefc46b6794eafee91d91fc659d46e018155ace530", size = 13287365 },
 ]
 
 [[package]]
@@ -940,24 +940,24 @@ wheels = [
 
 [[package]]
 name = "h11"
-version = "0.14.0"
+version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f5/38/3af3d3633a34a3316095b39c8e8fb4853a28a536e55d347bd8d8e9a14b03/h11-0.14.0.tar.gz", hash = "sha256:8f19fbbe99e72420ff35c00b27a34cb9937e902a8b810e2c88300c6f0a3b699d", size = 100418 }
+sdist = { url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1", size = 101250 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/04/ff642e65ad6b90db43e668d70ffb6736436c7ce41fcc549f4e9472234127/h11-0.14.0-py3-none-any.whl", hash = "sha256:e3fe4ac4b851c468cc8363d500db52c2ead036020723024a109d37346efaa761", size = 58259 },
+    { url = "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86", size = 37515 },
 ]
 
 [[package]]
 name = "httpcore"
-version = "1.0.8"
+version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
     { name = "h11" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/45/ad3e1b4d448f22c0cff4f5692f5ed0666658578e358b8d58a19846048059/httpcore-1.0.8.tar.gz", hash = "sha256:86e94505ed24ea06514883fd44d2bc02d90e77e7979c8eb71b90f41d364a1bad", size = 85385 }
+sdist = { url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8", size = 85484 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/8d/f052b1e336bb2c1fc7ed1aaed898aa570c0b61a09707b108979d9fc6e308/httpcore-1.0.8-py3-none-any.whl", hash = "sha256:5254cf149bcb5f75e9d1b2b9f729ea4a4b883d1ad7379fc632b727cec23674be", size = 78732 },
+    { url = "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55", size = 78784 },
 ]
 
 [[package]]
@@ -2217,7 +2217,7 @@ wheels = [
 
 [[package]]
 name = "posthog"
-version = "3.25.0"
+version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backoff" },
@@ -2227,9 +2227,9 @@ dependencies = [
     { name = "requests" },
     { name = "six" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/85/a9/ec3bbc23b6f3c23c52e0b5795b1357cca74aa5cfb254213f1e471fef9b4d/posthog-3.25.0.tar.gz", hash = "sha256:9168f3e7a0a5571b6b1065c41b3c171fbc68bfe72c3ac0bfd6e3d2fcdb7df2ca", size = 75968 }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/86/992fa5e9447475e7be7398ea9bb1f0784a961ab6cfd43459306631d31600/posthog-4.0.0.tar.gz", hash = "sha256:f6310a74924f9897a2a07cefb432196e48feb9e923522a48a3d98274bf354b21", size = 78023 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/e2/c158366e621562ef224f132e75c1d1c1fce6b078a19f7d8060451a12d4b9/posthog-3.25.0-py2.py3-none-any.whl", hash = "sha256:85db78c13d1ecb11aed06fad53759c4e8fb3633442c2f3d0336bc0ce8a585d30", size = 89115 },
+    { url = "https://files.pythonhosted.org/packages/af/51/398725e37e1e087b4499f8769340aec1e5904b632f13d106b150bf577831/posthog-4.0.0-py2.py3-none-any.whl", hash = "sha256:8dfc160510a3eddbaac11991e255bba89bf38b630c0958e68279aa4a12fe465b", size = 92020 },
 ]
 
 [[package]]
@@ -3046,16 +3046,16 @@ wheels = [
 
 [[package]]
 name = "tavily-python"
-version = "0.6.0"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "requests" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2b/87/caeaa971974ab8e1d04b80fd43f799268047a42877fb153cb1b22729a252/tavily_python-0.6.0.tar.gz", hash = "sha256:4e792b43fa45dee8d6d91d57a1ea38a2e637bfc3511ebf92f7ae3c326185d982", size = 109080 }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/d2/6d224fb40f4be1791c100fa64c502e477497d38fffa56cf7ebe293352afb/tavily_python-0.7.0.tar.gz", hash = "sha256:fb5fc0fc04e3f064ed44240463eeacde06d74cd2f4d2033e8aabf0b06a0902b6", size = 16142 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/a7/0dbf48dac571d407c26e23587ae6dd18d89a6cd09b4128122f3e59f29047/tavily_python-0.6.0-py3-none-any.whl", hash = "sha256:95212d246cfbf7b0cf6cac266df5c2c3def389aba4216e0c7a37085817f8c98c", size = 45730 },
+    { url = "https://files.pythonhosted.org/packages/dd/29/6901ab127a63ff213c8a346698236fd996d0daa6066cd5892390f475eb2f/tavily_python-0.7.0-py3-none-any.whl", hash = "sha256:6697eb18d6e15b64446855c43bc7ae291af009c7b847264082bbfcf6fe4be255", size = 14598 },
 ]
 
 [[package]]
