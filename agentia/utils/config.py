@@ -35,7 +35,9 @@ def check_plugins(configs: PluginConfigs) -> PluginConfigs:
         if config is False or config is None:
             continue
         if name not in ALL_PLUGINS:
-            raise ValueError(f"Unknown plugin: {name}")
+            raise ValueError(
+                f"Unknown plugin: {name}. Available plugins: {', '.join(ALL_PLUGINS.keys())}"
+            )
         config = config if isinstance(config, dict) else {}
         ALL_PLUGINS[name].validate_config(config)
     return configs

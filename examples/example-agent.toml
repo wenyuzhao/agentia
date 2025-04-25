@@ -8,14 +8,13 @@ description = "A helpful assistant"
 # (OPTIONAL) Detailed instructions for the agent.
 instructions = """
 You are a helpful assistant.
-Please always respond with a jok
 """
 # (OPTIONAL) OpenRouter model name
-model = "openai/o3-mini"
+model = "openai/gpt-4o-mini"
 # (OPTIONAL) A short description of yourself to the agent.
-user = "William, 你的老板"
+user = "Bob, your boss"
 # (OPTIONAL) The list of plugins to load.
-plugins = ["calc", "clock", "search", "web", "mstodo"]
+plugins = ["calc", "clock"]
 
 
 # Plugin options
