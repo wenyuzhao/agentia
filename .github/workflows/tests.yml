@@ -1,0 +1,18 @@
+name: Pyright Type Checks
+
+on: [push, pull_request]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+      - name: Install Packages
+        run: |
+          uv venv
+          uv sync --all-extras --all-groups --frozen
+      - name: Run PyTest
+        run: uv run pytest
