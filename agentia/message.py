@@ -290,6 +290,8 @@ class UserConsentEvent:
     message: str
     response: bool | None = None
     metadata: Any | None = None
+    tool: str | None = None
+    plugin: str | None = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     role: Literal["event.user_consent"] = "event.user_consent"
 

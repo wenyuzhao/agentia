@@ -28,7 +28,7 @@ from .message import (
     CommunicationEvent,
 )
 from .run import Run, MessageStream, ReasoningMessageStream
-from .plugins import Plugin, tool, PluginInitError, ToolResult
+from .plugins import Plugin, tool, PluginInitError, ToolResult, register_plugin
 
 __all__ = [
     # submodules
@@ -55,6 +55,7 @@ __all__ = [
     "tool",
     "PluginInitError",
     "ToolResult",
+    "register_plugin",
     # utils
     "init_logging",
 ]

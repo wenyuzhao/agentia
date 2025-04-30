@@ -10,7 +10,7 @@ from typing import (
 from agentia.message import JSON
 
 
-R = TypeVar("R", Coroutine[Any, Any, Optional[JSON | str]], Optional[JSON | str])
+R = TypeVar("R", Coroutine[Any, Any, Optional[Any | str]], Optional[Any | str])
 
 
 @overload

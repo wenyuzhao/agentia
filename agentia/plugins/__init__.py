@@ -28,18 +28,7 @@ class ToolResult(Exception):
         return self.__result
 
 
-def _streamlit_enabled():
-    try:
-        import streamlit
-
-        return True
-    except ImportError:
-        return False
-
-
 class Plugin:
-    STREAMLIT_ENABLED: bool = _streamlit_enabled()
-
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
 
@@ -138,8 +127,11 @@ for name, cls in ALL_PLUGINS.items():
     cls._BUILTIN_ID = name
 
 
-def register_plugin(name: str) -> Callable[[Type[Plugin]], Type[Plugin]]:
-    assert name not in ALL_PLUGINS, f"Plugin {name} already registered"
+def register_plugin(
+    name: str, overwrite: bool = False
+) -> Callable[[Type[Plugin]], Type[Plugin]]:
+    if not overwrite:
+        assert name not in ALL_PLUGINS, f"Plugin {name} already registered"
 
     def wrapper(cls: Type[Plugin]):
         ALL_PLUGINS[name] = cls

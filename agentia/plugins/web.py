@@ -15,7 +15,9 @@ class WebPlugin(Plugin):
     async def init(self):
         self.__tavily: TavilyClient | None = None
 
-        if api_key := os.environ.get("TAVILY_API_KEY"):
+        if api_key := self.config.get("tavily_api_key") or os.environ.get(
+            "TAVILY_API_KEY"
+        ):
             self.__tavily = TavilyClient(api_key=api_key)
 
     def __embed_file(self, content: bytes, file_ext: str):

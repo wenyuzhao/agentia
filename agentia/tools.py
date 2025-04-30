@@ -68,6 +68,7 @@ class ClientTool(BaseModel):
 class ToolRegistry:
     def __init__(self, agent: "Agent", tools: Tools | None = None) -> None:
         self.__functions: dict[str, ToolInfo] = {}
+        self.__plugin_of_function: dict[str, str] = {}
         self.__plugins: list[Plugin] = []
         self._agent = agent
         for t in tools or []:
@@ -230,6 +231,7 @@ class ToolRegistry:
                     tool_info.display_name = plugin_name + "@" + tool_info.display_name
                 del self.__functions[old_name]
                 self.__functions[tool_info.name] = tool_info
+            self.__plugin_of_function[tool_info.name] = p.id()
         # Add the plugin to the list of plugins
         self.__plugins.append(p)
         # Call the plugin's register method
@@ -311,6 +313,8 @@ class ToolRegistry:
                             assert (
                                 yielded.response is None
                             ), "Newly created user consent event should not have a response"
+                            yielded.tool = name
+                            yielded.plugin = self.__plugin_of_function.get(name)
                             self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                             yield yielded
                             self._agent.log.info(f"TOOL#{tool_id} {yielded}")

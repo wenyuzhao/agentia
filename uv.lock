@@ -90,6 +90,7 @@ name = "agentia-app"
 version = "0.0.1"
 source = { editable = "agentia-app" }
 dependencies = [
+    { name = "agentia" },
     { name = "google-api-python-client" },
     { name = "google-auth-oauthlib" },
     { name = "pymstodo" },
@@ -99,6 +100,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agentia", editable = "." },
     { name = "google-api-python-client", specifier = ">=2.169.0" },
     { name = "google-auth-oauthlib", specifier = ">=1.2.2" },
     { name = "pymstodo", specifier = ">=0.2.0" },
