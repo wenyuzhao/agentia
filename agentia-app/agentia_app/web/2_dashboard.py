@@ -5,7 +5,7 @@ from tomlkit.container import Container
 
 from agentia import Agent
 from agentia.plugins import ALL_PLUGINS, Plugin
-import agentia._app.utils as utils
+import agentia_app.utils as utils
 import agentia.utils.config as cfg
 import agentia.utils.session as sess
 import logging

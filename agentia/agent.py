@@ -183,8 +183,6 @@ class Agent:
         if log_level is None:
             if "LOG_LEVEL" in os.environ:
                 log_level = os.environ["LOG_LEVEL"]
-            elif Agent.is_server():
-                log_level = logging.INFO
             else:
                 log_level = logging.WARNING
         self.log.setLevel(log_level)
@@ -374,11 +372,6 @@ class Agent:
         config_file = self.agent_data_folder / "config"
         config_file.parent.mkdir(parents=True, exist_ok=True)
         return shelve.open(config_file)
-
-    @staticmethod
-    def is_server() -> bool:
-        v = os.environ.get("AGENTIA_SERVER", None)
-        return v not in [None, "", "0", "false", "FALSE", "False"]
 
     @staticmethod
     def is_cli() -> bool:

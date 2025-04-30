@@ -43,12 +43,6 @@ class Plugin:
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
 
-    @staticmethod
-    def is_server() -> bool:
-        from ..agent import Agent
-
-        return Agent.is_server()
-
     @classmethod
     def name(cls) -> str:
         if cls.NAME:
@@ -120,24 +114,20 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         from .clock import ClockPlugin
         from .code import CodePlugin
         from .memory import MemoryPlugin
-        from .mstodo import MSToDoPlugin
         from .search import SearchPlugin
         from .dalle import DallEPlugin
         from .vision import VisionPlugin
         from .web import WebPlugin
-        from .gmail import GmailPlugin
 
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
             "clock": ClockPlugin,
             "code": CodePlugin,
             "memory": MemoryPlugin,
-            "mstodo": MSToDoPlugin,
             "search": SearchPlugin,
             "dalle": DallEPlugin,
             "vision": VisionPlugin,
             "web": WebPlugin,
-            "gmail": GmailPlugin,
         }
     except ImportError as e:
         # raise e from e

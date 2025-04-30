@@ -2,8 +2,8 @@ from datetime import datetime
 import os
 
 from tomlkit.container import Container
-from ..decorators import *
-from . import Plugin
+from agentia import tool, Plugin
+from agentia.plugins import register_plugin
 from typing import Annotated, Any, Literal, override, TYPE_CHECKING
 from dataclasses import asdict
 
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from pymstodo import TaskList, Task
 
 
+@register_plugin("mstodo")
 class MSToDoPlugin(Plugin):
     def __test_token(self, client_id: str, client_secret: str, token: Any):
         import pymstodo
@@ -38,8 +39,6 @@ class MSToDoPlugin(Plugin):
                 if self.__test_token(client_id, client_secret, cache[key]):
                     token = cache[key]
             if token is None:
-                if self.is_server():
-                    raise RuntimeError("Please setup the plugin on dashboard")
                 auth_url = pymstodo.ToDoConnection.get_auth_url(client_id)
                 redirect_resp = input(
                     f"Go here and authorize:\n{auth_url}\n\nPaste the full redirect URL below:\n"
@@ -56,7 +55,7 @@ class MSToDoPlugin(Plugin):
     @classmethod
     @override
     def __options__(cls, agent: str, config: Container):
-        from agentia._app.utils.oauth import OAuth2Client
+        from agentia_app.utils.oauth import OAuth2Client
 
         oauth_client = OAuth2Client.azure_ad(agent, cls.id())
         oauth_client.login_panel(

@@ -1,0 +1,44 @@
+[project]
+name = "agentia-app"
+version = "0.0.1"
+description = "Agentia Web App and API Server"
+authors = [{ name = "Wenyu Zhao", email = "wenyuzhaox@gmail.com" }]
+requires-python = ">=3.12"
+readme = "README.md"
+license = "MIT"
+keywords = [
+    "chatgpt",
+    "gpt",
+    "llm",
+    "agent",
+    "tools",
+    "openai",
+    "openrouter",
+    "deepseek",
+]
+dependencies = [
+    "google-api-python-client>=2.169.0",
+    "google-auth-oauthlib>=1.2.2",
+    "pymstodo>=0.2.0",
+    "streamlit>=1.45.0",
+    "streamlit-oauth>=0.1.11",
+]
+
+[project.urls]
+Repository = "https://github.com/wenyuzhao/agentia"
+
+[project.scripts]
+agentia-app = "agentia_app.main:main"
+
+[tool.hatch.build.targets.sdist]
+include = ["agentia_app"]
+
+[tool.hatch.build.targets.wheel]
+include = ["agentia_app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

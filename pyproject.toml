@@ -54,11 +54,9 @@ plugins = [
     "dataforseo-client>=1.0.45",
     "markdownify>=1.1.0",
     "tavily-python>=0.5.4",
-    "google-api-python-client>=2.166.0",
-    "google-auth-oauthlib>=1.2.1",
 ]
 # Include all plugins, the web app, and the API server
-all = ["agentia[plugins]", "streamlit>=1.44.0", "streamlit-oauth>=0.1.11"]
+all = ["agentia[plugins]"]
 
 [tool.hatch.build.targets.sdist]
 include = ["agentia"]
@@ -72,3 +70,6 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv.workspace]
+members = ["agentia-app"]

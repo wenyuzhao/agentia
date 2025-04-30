@@ -1,9 +1,9 @@
 from typing import Any
 
-from ..decorators import *
-from . import Plugin
+from agentia import tool, Plugin
+from agentia.plugins import register_plugin
 import os
-from typing import Annotated, Any, Literal, override, TYPE_CHECKING
+from typing import Annotated, Any, override
 import json
 
 from google.auth.transport.requests import Request
@@ -26,6 +26,7 @@ SCOPES = [
 ]
 
 
+@register_plugin("gmail")
 class GmailPlugin(Plugin):
     @override
     async def init(self):
@@ -55,8 +56,6 @@ class GmailPlugin(Plugin):
                 except Exception as e:
                     self.agent.log.error(f"Error loading token: {e}")
                     ...
-            if self.is_server():
-                raise RuntimeError("Please setup the plugin on dashboard")
             client_id = os.environ.get("AUTH_GOOGLE_NATIVE_CLIENT_ID")
             client_secret = os.environ.get("AUTH_GOOGLE_NATIVE_CLIENT_SECRET")
             if client_id is None or client_secret is None:
@@ -89,7 +88,7 @@ class GmailPlugin(Plugin):
     @classmethod
     @override
     def __options__(cls, agent: str, config: Container):
-        from agentia._app.utils.oauth import OAuth2Client
+        from agentia_app.utils.oauth import OAuth2Client
 
         oauth_client = OAuth2Client.google(agent, cls.id())
         oauth_client.login_panel(

@@ -15,7 +15,7 @@ from agentia.message import (
 )
 from agentia import Agent
 from agentia.plugins import PluginInitError
-import agentia._app.utils as utils
+import agentia_app.utils as utils
 import agentia.utils.config as cfg
 import agentia.utils.session as sess
 
