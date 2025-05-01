@@ -1,5 +1,5 @@
-from agentia import Agent
-from agentia.plugins import tool, Plugin
+from agentia import Agent, tool
+from agentia.plugins import Plugin
 from typing import Literal, Annotated
 import pytest
 import dotenv
