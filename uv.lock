@@ -14,9 +14,10 @@ members = [
 
 [[package]]
 name = "agentia"
-version = "0.0.10"
+version = "0.0.11"
 source = { editable = "." }
 dependencies = [
+    { name = "filelock" },
     { name = "openai" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -62,6 +63,7 @@ dev = [
 requires-dist = [
     { name = "agentia", extras = ["plugins"], marker = "extra == 'all'" },
     { name = "dataforseo-client", marker = "extra == 'plugins'", specifier = ">=1.0.45" },
+    { name = "filelock", specifier = ">=3.18.0" },
     { name = "llama-index", marker = "extra == 'plugins'", specifier = ">=0.12.34,<0.13" },
     { name = "llama-index-vector-stores-chroma", marker = "extra == 'plugins'", specifier = ">=0.4.1,<0.5" },
     { name = "markdownify", marker = "extra == 'plugins'", specifier = ">=1.1.0" },
@@ -92,7 +94,7 @@ dev = [
 
 [[package]]
 name = "agentia-app"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "agentia-app" }
 dependencies = [
     { name = "agentia" },
