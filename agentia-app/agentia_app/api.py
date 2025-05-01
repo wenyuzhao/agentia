@@ -8,6 +8,8 @@ from agentia import LOGGER
 import agentia.utils.config as cfg
 import agentia.utils.session as sess
 
+import agentia_app.plugins  # Import all plugins to register them
+
 app = FastAPI(root_path="/api")
 
 

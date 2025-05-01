@@ -8,6 +8,9 @@ import uuid
 import tomlkit
 
 
+import agentia_app.plugins  # Import all plugins to register them
+
+
 def flex(
     flex_direction: str = "row",
     align_items: str = "center",
