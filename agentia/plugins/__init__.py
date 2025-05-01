@@ -55,21 +55,15 @@ class Plugin(abc.ABC):
             key += f".{k}"
         return key
 
-    def __init__(self):
+    def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
         self.agent: "Agent"
 
     @classmethod
     def instantiate(cls, config: dict[str, Any]) -> Self:
-        """
-        Instantiate the plugin with the given config.
-        This is called when the agent is created.
-        """
+        """Instantiate the plugin with the given config."""
         try:
-            if cls.__dict__.__contains__("__init__"):
-                obj = cls(**(config or {}))
-            else:
-                obj = cls()
+            obj = cls(**(config or {}))
             obj.config = config
             return obj
         except Exception as e:
