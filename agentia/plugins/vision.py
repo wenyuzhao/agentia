@@ -6,8 +6,8 @@ from openai import AsyncOpenAI
 
 
 class VisionPlugin(Plugin):
-    def __init__(self, config: Any = None):
-        super().__init__(config)
+    def __init__(self):
+        super().__init__()
         self.client = AsyncOpenAI()
 
     @tool

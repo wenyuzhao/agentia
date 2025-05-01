@@ -19,6 +19,12 @@ class History:
     def update_summary(self, summary: str) -> None:
         self.summary = summary
 
+    def add_instructions(self, instructions: str) -> None:
+        if self._instructions is None:
+            self._instructions = instructions
+        else:
+            self._instructions += "\n\n" + instructions.strip()
+
     def get_for_inference(self) -> list[Message]:
         """
         Get the recent messages for inference

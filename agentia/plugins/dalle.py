@@ -6,9 +6,9 @@ from openai import AsyncOpenAI
 
 
 class DallEPlugin(Plugin):
-    def __init__(self, config: Any = None):
-        super().__init__(config)
-        self.client = AsyncOpenAI()
+    def __init__(self, api_key: str | None = None):
+        super().__init__()
+        self.client = AsyncOpenAI(api_key=api_key)
 
     @tool
     async def generate_image(

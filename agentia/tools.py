@@ -104,6 +104,9 @@ class ToolRegistry:
     def _add_file_search_tool(self, f: Callable[..., Any]):
         return self.__add_function(f)
 
+    def add_tool(self, f: Callable[..., Any]):
+        return self.__add_function(f)
+
     def add_client_tools(self, tools: list[ClientTool]):
         async def call_client_tool(tool_name: str, **kwargs):
             tool = next(t for t in tools if t.name == tool_name)

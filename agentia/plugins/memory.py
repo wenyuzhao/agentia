@@ -8,6 +8,9 @@ from filelock import FileLock
 class MemoryPlugin(Plugin):
     async def init(self):
         self.__momery_cache = self.agent.agent_data_folder / "memory"
+        if self.__momery_cache.exists():
+            content = self.__momery_cache.read_text().strip()
+            self.agent.history.add_instructions(f"YOUR PREVIOUS MEMORY: \n{content}")
 
     @tool
     def remember(

@@ -7,10 +7,6 @@ import traceback
 
 
 class CodePlugin(Plugin):
-    def __init__(self, config: Any = None):
-        super().__init__(config)
-        self.user_consent_required: bool = config.get("user_consent", False)
-
     def user_consent(self, code: str):
         """Acquire user consent before executing code."""
         if self.agent.user_consent_enabled:

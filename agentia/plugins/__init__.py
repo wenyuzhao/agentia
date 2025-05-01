@@ -1,8 +1,9 @@
+import abc
 import os
 import tomlkit.container
 from ..decorators import tool
 from ..message import Message
-from typing import TYPE_CHECKING, Any, Callable, Type
+from typing import TYPE_CHECKING, Any, Callable, Self, Type
 import tomlkit
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ class ToolResult(Exception):
         return self.__result
 
 
-class Plugin:
+class Plugin(abc.ABC):
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
 
@@ -56,9 +57,22 @@ class Plugin:
             key += f".{k}"
         return key
 
-    def __init__(self, config: Any = None):
-        self.config = config or {}
+    def __init__(self):
+        self.config: dict[str, Any] = {}
         self.agent: "Agent"
+
+    @classmethod
+    def instantiate(cls, config: dict[str, Any]) -> Self:
+        """
+        Instantiate the plugin with the given config.
+        This is called when the agent is created.
+        """
+        try:
+            obj = cls(**config)
+            obj.config = config
+            return obj
+        except Exception as e:
+            raise PluginInitError(cls.id(), e) from e
 
     def _register(self, agent: "Agent"):
         self.agent = agent
@@ -108,6 +122,8 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         from .vision import VisionPlugin
         from .web import WebPlugin
 
+        # from .knowledge_base import KnowledgeBasePlugin
+
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
             "clock": ClockPlugin,
@@ -117,6 +133,7 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
             "dalle": DallEPlugin,
             "vision": VisionPlugin,
             "web": WebPlugin,
+            # "knowledge_base": KnowledgeBasePlugin,
         }
     except ImportError as e:
         # raise e from e

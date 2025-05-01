@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import (
     Annotated,
+    Callable,
     Literal,
     Optional,
     Sequence,
@@ -147,8 +148,6 @@ class Agent:
             self.knowledge_base = self.__init_knowledge_base(
                 knowledge_base if knowledge_base is not True else None
             )
-        # Init memory
-        self.__init_memory()
         # Init history and backend
         self.__history = History(instructions=self.__instructions)
         self.__backend = create_llm_backend(
@@ -348,24 +347,9 @@ class Agent:
 
         return knowledge_base
 
-    def __init_memory(self):
-        from .plugins.memory import MemoryPlugin
-
-        mem_plugin = self.get_plugin(MemoryPlugin)
-        if mem_plugin is None:
-            return
-
-        if not (self.agent_data_folder / "memory").exists():
-            return
-        content = (self.agent_data_folder / "memory").read_text().strip()
-
-        if len(content) == 0:
-            return
-
-        if self.__instructions is None:
-            self.__instructions = f"YOUR PREVIOUS MEMORY: \n{content}"
-        else:
-            self.__instructions += f"\n\nYOUR PREVIOUS MEMORY: \n{content}"
+    def add_tool(self, f: Callable[..., Any]):
+        """Add a tool to the agent"""
+        self.__tools.add_tool(f)
 
     def __enter__(self):
         return self

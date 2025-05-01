@@ -35,6 +35,31 @@ from dataforseo_client.api.serp_api import SerpApi
 
 
 class SearchPlugin(Plugin):
+    def __init__(
+        self,
+        dataforseo_username: str | None = None,
+        dataforseo_password: str | None = None,
+        tavily_api_key: str | None = None,
+        country: str = "Australia",
+    ):
+        super().__init__()
+        username = dataforseo_username or os.environ.get("AUTH_DATAFORSEO_USERNAME")
+        password = dataforseo_password or os.environ.get("AUTH_DATAFORSEO_PASSWORD")
+        if username is None or password is None:
+            raise ValueError(
+                "DataForSEO username and password must be provided either as arguments or environment variables."
+            )
+        self.__country = country
+        if self.__country not in _ALL_COUNTRIES:
+            raise ValueError(f"Invalid country: {self.__country}")
+        self.__client = dfs_api_provider.ApiClient(
+            dfs_config.Configuration(username=username, password=password)
+        )
+        self.__api = SerpApi(self.__client)
+        self.__tavily: TavilyClient | None = None
+        if api_key := tavily_api_key or os.environ.get("TAVILY_API_KEY"):
+            self.__tavily = TavilyClient(api_key=api_key)
+
     @override
     async def init(self):
         username = os.environ["AUTH_DATAFORSEO_USERNAME"]

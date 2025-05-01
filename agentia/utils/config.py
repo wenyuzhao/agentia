@@ -79,7 +79,7 @@ def __create_tools(config: Config) -> tuple[list[Plugin], dict[str, Any]]:
             raise ValueError(f"Invalid config for tool {name}: must be a dict or null")
         c = c if isinstance(c, dict) else {}
         tool_configs[name] = c
-        tools.append(PluginCls(config=c))
+        tools.append(PluginCls.instantiate(config=c))
     return tools, tool_configs
 
 
