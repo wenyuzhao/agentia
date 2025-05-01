@@ -17,19 +17,17 @@ keywords = [
     "deepseek",
 ]
 dependencies = [
-    "python-dotenv>=1.0.0,<2",
     "openai>=1.58.1,<2",
-    "requests>=2.31.0,<3",
-    "pyyaml>=6.0.2,<7",
-    "typer>=0.12.5,<0.13",
-    "llama-index>=0.12.9,<0.13",
-    "llama-index-vector-stores-chroma>=0.4.1,<0.5",
-    "python-slugify>=8.0.4,<9",
-    "tiktoken>=0.8.0,<0.9",
     "pydantic>=2.10.4",
-    "shortuuid>=1.0.13",
+    "python-dotenv>=1.0.0,<2",
+    "python-slugify>=8.0.4,<9",
+    "pyyaml>=6.0.2,<7",
+    "requests>=2.31.0,<3",
     "rich>=14.0.0",
+    "shortuuid>=1.0.13",
+    "tiktoken>=0.8.0,<0.9",
     "tomlkit>=0.13.2",
+    "typer>=0.12.5,<0.13",
 ]
 
 [project.urls]
@@ -50,9 +48,12 @@ dev = [
 [project.optional-dependencies]
 # Include all plugins
 plugins = [
-    "pymstodo>=0.2.0",
     "dataforseo-client>=1.0.45",
+    "llama-index>=0.12.34,<0.13",
+    "llama-index-vector-stores-chroma>=0.4.1,<0.5",
     "markdownify>=1.1.0",
+    "protobuf==3.20.*",
+    "pymstodo>=0.2.0",
     "tavily-python>=0.5.4",
 ]
 # Include all plugins, the web app, and the API server

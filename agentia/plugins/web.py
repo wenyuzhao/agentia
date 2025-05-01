@@ -1,11 +1,11 @@
-from io import BytesIO
 import os
+
+from agentia.plugins.knowledge_base import KnowledgeBasePlugin
 from ..decorators import *
 from . import Plugin
-from typing import Annotated, override
+from typing import Annotated
 import requests
 from markdownify import markdownify
-import uuid
 from tavily import TavilyClient
 
 
@@ -16,30 +16,30 @@ class WebPlugin(Plugin):
         if api_key := tavily_api_key or os.environ.get("TAVILY_API_KEY"):
             self.__tavily = TavilyClient(api_key=api_key)
 
-    def __embed_file(self, content: bytes, file_ext: str):
-        assert self.agent.knowledge_base is not None
-        with BytesIO(content) as f:
-            ext = file_ext if file_ext.startswith(".") else "." + file_ext
-            f.name = str(uuid.uuid4()) + ext
-            # self.agent.knowledge_base.add_document(f)
-            # file_name = f.name
-            raise NotImplementedError
-        return {
-            "file_name": file_name,
-            "hint": f"This is a .{file_ext} file and it is embeded in the knowledge base. Use _file_search to query the content.",
-        }
+    def __embed_file(self, url: str, res: requests.Response):
+        kbase = self.agent.get_plugin(KnowledgeBasePlugin)
+        if kbase is None:
+            return None
+        assert kbase.knowledge_base is not None
+        if name := kbase.knowledge_base.add_doc_from_url(url):
+            return {
+                "file_name": name,
+                "content_type": res.headers.get("content-type"),
+                "hint": f"This file is embeded into the knowledge base for you. Use tools to search its content.",
+            }
+        return None
 
     def __get(self, url: str):
         res = requests.get(url)
         res.raise_for_status()
         content_type = res.headers.get("content-type")
-        # if content_type == "application/pdf":
-        #     # Add this file to the knowledge base
-        #     if self.agent.knowledge_base is not None:
-        #         return self.__embed_file(res.content, "pdf")
-        #     return {"content": "This is a PDF file. You don't know how to view it."}
-        md = markdownify(res.text)
-        return {"content": md}
+        if content_type == "text/html":
+            md = markdownify(res.text)
+            return {"content": md, "content_type": content_type}
+        if r := self.__embed_file(url, res):
+            return r
+        # If the content is not supported, return the raw content
+        return {"content": res.text, "content_type": content_type}
 
     @tool
     def get_webpage_content(

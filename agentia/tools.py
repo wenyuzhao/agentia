@@ -98,12 +98,6 @@ class ToolRegistry:
                     )
                 raise PluginInitError(plugin.id(), e) from e
 
-    def _add_dispatch_tool(self, f: Callable[..., Any]):
-        return self.__add_function(f)
-
-    def _add_file_search_tool(self, f: Callable[..., Any]):
-        return self.__add_function(f)
-
     def add_tool(self, f: Callable[..., Any]):
         return self.__add_function(f)
 
@@ -366,7 +360,7 @@ class ToolRegistry:
         except EOFError as e:
             raise e
         except Exception as e:
-            print(f"TOOL#{tool_id} {name} ERROR: <{e}> <{type(e)}>")
+            # print(f"TOOL#{tool_id} {name} ERROR: <{e}> <{type(e)}>")
             self._agent.log.error(e)
             raise ToolResult({"error": f"Failed to run tool `{name}`: {e}"}) from e
         result_s = json.dumps(result)

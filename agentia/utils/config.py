@@ -21,7 +21,6 @@ class AgentConfig(BaseModel):
     description: str | None = None
     instructions: str | None = None
     model: str | None = None
-    knowledge_base: str | bool = False
     subagents: list[str] = Field(default_factory=list)
     user: str | None = None
     plugins: list[str] | None = None
@@ -89,7 +88,6 @@ def __load_agent_from_config(
     agents: dict[Path, Agent],
     persist: bool,
     session_id: str | None,
-    log_level: str | int | None = None,
 ):
     """Load a bot from a configuration file"""
     import agentia.utils.session as sess
@@ -131,7 +129,6 @@ def __load_agent_from_config(
         subagents.append(subagent)
     # Create agent
 
-    knowledge_base: str | bool = config.agent.knowledge_base
     agent_id = file.stem
     agent = Agent(
         id=agent_id,
@@ -142,13 +139,9 @@ def __load_agent_from_config(
         tools=tools,
         instructions=config.agent.instructions,
         subagents=subagents,
-        knowledge_base=(
-            Path(knowledge_base) if isinstance(knowledge_base, str) else knowledge_base
-        ),
         user=config.agent.user,
         persist=persist,
         session_id=session_id,
-        log_level=log_level,
     )
     agent.config = config
     agent.config_path = file.resolve()
@@ -213,10 +206,7 @@ def get_agent_config_file(name: str) -> Path:
 
 
 def load_agent_from_config(
-    name: str | Path,
-    persist: bool,
-    session_id: str | None,
-    log_level: str | int | None = None,
+    name: str | Path, persist: bool, session_id: str | None
 ) -> Agent:
     config_dir = get_config_dir()
     """Load a bot from a configuration file"""
@@ -240,9 +230,7 @@ def load_agent_from_config(
             raise FileNotFoundError(f"Agent config not found: {name}")
     if config_path.stem.startswith(("_", ".", "-")):
         raise ValueError(f"Invalid agent file name: {config_path.stem}")
-    return __load_agent_from_config(
-        config_path, set(), {}, persist, session_id, log_level
-    )
+    return __load_agent_from_config(config_path, set(), {}, persist, session_id)
 
 
 def get_all_agents() -> list[AgentInfo]:

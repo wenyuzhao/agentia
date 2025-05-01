@@ -1,5 +1,4 @@
 from datetime import datetime
-from io import BytesIO, StringIO
 import logging
 from pathlib import Path
 from typing import (
@@ -10,6 +9,7 @@ from typing import (
     Sequence,
     Type,
     Any,
+    TypeVar,
     Union,
     overload,
     TYPE_CHECKING,
@@ -27,7 +27,6 @@ from agentia import LOGGER
 
 if TYPE_CHECKING:
     from agentia.utils.config import Config
-    from agentia.knowledge_base import KnowledgeBase
     from agentia.run import Run, MessageStream
 
 from .message import *
@@ -36,7 +35,7 @@ from .history import History
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .tools import ToolInfo, ToolRegistry, Tools
+    from .tools import ToolRegistry, Tools
     from .plugins import Plugin
     from .llm import ModelOptions
 
@@ -52,6 +51,9 @@ def get_default_model() -> str:
         return "gpt-4o-mini"
 
 
+PluginType = TypeVar("PluginType", bound="Plugin")
+
+
 class Agent:
     def __init__(
         self,
@@ -65,14 +67,11 @@ class Agent:
         user: str | None = None,
         # Cooperation
         subagents: list["Agent"] | None = None,
-        # Knowledge base
-        knowledge_base: Union["KnowledgeBase", bool, Path, None] = None,
         # Model and tools
         model: Annotated[str | None, f"Default to {get_default_model()}"] = None,
         options: Optional["ModelOptions"] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
-        log_level: str | int | None = None,
         # Session recovery
         persist: bool = False,
         session_id: str | None = None,
@@ -105,7 +104,7 @@ class Agent:
         self.persist = persist
         self.icon = icon
         self.log = LOGGER.getChild(self.id)
-        self.__init_logger(log_level)
+        self.__init_logger()
         icon_and_name = ((icon or "") + " " + (name or "")).strip()
         self.log.info(
             f"Creating Agent: {self.id} {f'({icon_and_name})' if icon_and_name else ''}"
@@ -142,12 +141,6 @@ class Agent:
         # Init subagents
         if subagents is not None and len(subagents) > 0:
             self.__init_cooperation(subagents)
-        # Init knowledge base (Step 1)
-        self.knowledge_base: Optional["KnowledgeBase"] = None
-        if knowledge_base is not False and knowledge_base is not None:
-            self.knowledge_base = self.__init_knowledge_base(
-                knowledge_base if knowledge_base is not True else None
-            )
         # Init history and backend
         self.__history = History(instructions=self.__instructions)
         self.__backend = create_llm_backend(
@@ -183,13 +176,8 @@ class Agent:
     def tools(self) -> "ToolRegistry":
         return self.__backend.tools
 
-    def __init_logger(self, log_level: str | int | None):
-        if log_level is None:
-            if "LOG_LEVEL" in os.environ:
-                log_level = os.environ["LOG_LEVEL"]
-            else:
-                log_level = logging.WARNING
-        self.log.setLevel(log_level)
+    def __init_logger(self):
+        self.log.setLevel(os.environ.get("LOG_LEVEL", logging.WARNING))
 
     async def __init_plugins(self):
         agent_path = (
@@ -271,7 +259,7 @@ class Agent:
                 }
             )
 
-        self.__tools._add_dispatch_tool(communiate)
+        self.__tools.add_tool(communiate)
 
     def __init_cooperation(self, subagents: list["Agent"]):
         if len(subagents) == 0:
@@ -283,69 +271,6 @@ class Agent:
         # Leader can dispatch jobs to subagents
         for agent in subagents:
             self.__add_subagent(agent)
-
-    def __init_knowledge_base(
-        self, source: Union["KnowledgeBase", Path, None]
-    ) -> "KnowledgeBase":
-        from agentia.knowledge_base import KnowledgeBase
-
-        # Get session store persist path
-        session_store = self.session_data_folder / "knowledge-base"
-        session_store.mkdir(parents=True, exist_ok=True)
-        # Load knowledge base
-        if isinstance(source, KnowledgeBase):
-            # Load a pre-existing knowledge base
-            knowledge_base = source
-            knowledge_base.add_session_store(session_store)
-        elif isinstance(source, Path):
-            # Load knowledge base from a collection of documents
-            persist_dir = self.agent_data_folder / "knowledge-base"
-            knowledge_base = KnowledgeBase(
-                global_store=persist_dir,
-                global_docs=source,
-                session_store=session_store,
-            )
-        else:
-            # Create a new knowledge base or load a pre-existing one
-            knowledge_base = KnowledgeBase(
-                global_store=self.agent_data_folder / "knowledge-base",
-                session_store=session_store,
-            )
-        # Update instructions
-        global_vector_store = knowledge_base.vector_stores["global"]
-        if len(global_vector_store.initial_files or []) > 0:
-            files = global_vector_store.initial_files or []
-            if self.__instructions is not None:
-                self.__instructions += f"\n\nFILES: {', '.join(files)}"
-            else:
-                self.__instructions = f"FILES: {', '.join(files)}"
-
-        # File search tool
-
-        agent = self
-
-        from .decorators import tool
-
-        @tool(name="_file_search")
-        async def file_search(
-            query: Annotated[str, "The query to search for files"],
-            filename: Annotated[
-                str | None,
-                "The optional filename of the file to search from. If not provided, search from all files.",
-            ] = None,
-        ):
-            """Similarity-based search for related file segments in the knowledge base"""
-            if filename is None:
-                agent.log.debug(f"FILE-SEARCH {query}")
-            else:
-                agent.log.debug(f"FILE-SEARCH {query} ({filename})")
-            assert agent.knowledge_base is not None
-            response = await agent.knowledge_base.query(query, filename)
-            return response
-
-        self.__tools._add_file_search_tool(file_search)
-
-        return knowledge_base
 
     def add_tool(self, f: Callable[..., Any]):
         """Add a tool to the agent"""
@@ -380,8 +305,13 @@ class Agent:
     def reset(self):
         self.history.reset()
 
-    def get_plugin(self, type: Type["Plugin"]) -> Optional["Plugin"]:
-        return self.__tools.get_plugin(type)
+    def get_plugin(self, type: Type[PluginType]) -> Optional[PluginType]:
+        p = self.__tools.get_plugin(type)
+        if p is None:
+            return None
+        if not isinstance(p, type):
+            return None
+        return p
 
     @overload
     def run(
@@ -440,7 +370,6 @@ class Agent:
             messages = [UserMessage(messages)]
         elif isinstance(messages, UserMessage):
             messages = [messages]
-        self.__load_files(messages)
         if stream and events:
             return self.__backend.run(
                 messages, stream=True, events=True, response_format=response_format
@@ -458,46 +387,6 @@ class Agent:
                 messages, stream=False, events=False, response_format=response_format
             )
 
-    def __load_files(self, messages: Sequence[Message]):
-        old_messages = [m for m in messages]
-        messages = []
-        files: list[BytesIO] = []
-        for m in old_messages:
-            if isinstance(m, UserMessage) and m.files:
-                filenames = []
-                for file in m.files:
-                    if isinstance(file, str) or isinstance(file, Path):
-                        with open(file, "rb") as f:
-                            f = BytesIO(f.read())
-                            f.name = str(file)
-                            files.append(f)
-                            filenames.append(str(file))
-                    elif isinstance(file, BytesIO):
-                        files.append(file)
-                        if not file.name:
-                            raise ValueError(
-                                "File name is required for BytesIO objects."
-                            )
-                        filenames.append(file.name)
-                    elif isinstance(file, StringIO):
-                        if not file.name:
-                            raise ValueError(
-                                "File name is required for StringIO objects."
-                            )
-                        filenames.append(file.name)
-                        f = BytesIO(file.getvalue().encode())
-                        f.name = f.name
-                        files.append(f)
-                messages.append(
-                    SystemMessage(f"UPLOADED-FILES: {', '.join(filenames)}")
-                )
-            messages.append(m)
-        if len(files) == 0:
-            return
-        if self.knowledge_base is None:
-            raise ValueError("Knowledge base is disabled.")
-        self.knowledge_base.add_temporary_documents(files)
-
     def all_agents(self) -> set["Agent"]:
         """Collect all active agents, including subagents"""
         agents = set()
@@ -508,14 +397,11 @@ class Agent:
 
     @staticmethod
     def load_from_config(
-        config: str | Path,
-        persist: bool = False,
-        session_id: str | None = None,
-        log_level: str | int | None = None,
+        config: str | Path, persist: bool = False, session_id: str | None = None
     ):
         from .utils.config import load_agent_from_config
 
-        return load_agent_from_config(config, persist, session_id, log_level)
+        return load_agent_from_config(config, persist, session_id)
 
     async def save(self):
         if not self.persist:
@@ -541,13 +427,11 @@ class Agent:
         self, instructions: str | None = None, tools: Optional["Tools"] = None
     ) -> "Agent":
         """Create an agent with no name, no description, and by default no tools"""
-        agent = Agent(
+        return Agent(
             instructions=instructions,
             model=self.__backend.get_default_model(),
             tools=tools,
-            log_level=logging.WARNING,
         )
-        return agent
 
     async def summarise(self) -> str:
         """Summarise the history as a short title"""

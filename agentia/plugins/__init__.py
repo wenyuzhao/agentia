@@ -121,8 +121,7 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         from .dalle import DallEPlugin
         from .vision import VisionPlugin
         from .web import WebPlugin
-
-        # from .knowledge_base import KnowledgeBasePlugin
+        from .knowledge_base import KnowledgeBasePlugin
 
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
@@ -133,11 +132,11 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
             "dalle": DallEPlugin,
             "vision": VisionPlugin,
             "web": WebPlugin,
-            # "knowledge_base": KnowledgeBasePlugin,
+            "knowledge_base": KnowledgeBasePlugin,
         }
     except ImportError as e:
-        # raise e from e
         pass
+        # raise e
 
 
 for name, cls in ALL_PLUGINS.items():
