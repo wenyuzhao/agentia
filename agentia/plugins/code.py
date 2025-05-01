@@ -1,8 +1,8 @@
 from contextlib import redirect_stderr
 from agentia.message import UserConsentEvent
-from ..decorators import *
 from . import Plugin
-from typing import Annotated, Any
+from ..tools import tool
+from typing import Annotated
 import traceback
 
 

@@ -1,8 +1,6 @@
 import abc
 import os
 import tomlkit.container
-from ..decorators import tool
-from ..message import Message
 from typing import TYPE_CHECKING, Any, Callable, Self, Type
 import tomlkit
 

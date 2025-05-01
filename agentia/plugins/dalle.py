@@ -1,7 +1,7 @@
-from typing import Annotated, Any
+from typing import Annotated
 
-from ..decorators import *
 from . import Plugin
+from ..tools import tool
 from openai import AsyncOpenAI
 
 

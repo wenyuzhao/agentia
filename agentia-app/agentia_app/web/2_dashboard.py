@@ -51,7 +51,7 @@ else:
 # Load initial agent
 if "initial_agent" not in st.session_state:
     st.session_state["initial_agent"] = Agent.load_from_config(
-        init_agent_id, persist=False, log_level=logging.WARNING
+        init_agent_id, persist=False
     )
 init_agent: Agent = st.session_state["initial_agent"]
 init_agent_index = utils.find_index(ALL_AGENTS, lambda x: x.id == init_agent.id) or 0
@@ -86,9 +86,7 @@ if selected_agent.id != st.query_params.get("agent"):
     del st.session_state["initial_doc"]
     st.rerun()
 
-agent = Agent.load_from_config(
-    selected_agent.id, persist=False, log_level=logging.WARNING
-)
+agent = Agent.load_from_config(selected_agent.id, persist=False)
 
 assert init_agent.config and agent.config_path
 assert agent.config and agent.config_path

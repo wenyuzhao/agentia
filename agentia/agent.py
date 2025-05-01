@@ -208,7 +208,7 @@ class Agent:
                 f" * ID={agent.id} NAME={agent.name} -- {agent.description}\n"
             )
 
-        from .decorators import tool
+        from .tools import tool
         from .tools import ToolResult
 
         @tool(name="_communiate", description=description)

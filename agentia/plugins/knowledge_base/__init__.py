@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Annotated, Union
 
 from agentia.plugins.knowledge_base.knowledge_base import KnowledgeBase
-from .. import Plugin, tool
+from .. import Plugin
+from agentia.tools import tool
 
 
 TOP_K = 4

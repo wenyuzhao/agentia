@@ -13,9 +13,13 @@ from typing import (
     Sequence,
     TYPE_CHECKING,
     Type,
+    TypeVar,
     Union,
+    Coroutine,
+    Optional,
     get_args,
     get_origin,
+    overload,
 )
 
 import rich
@@ -410,3 +414,53 @@ class ToolRegistry:
             else:
                 raise NotImplementedError("legacy functions not supported")
             yield result_msg
+
+
+R = TypeVar("R", Coroutine[Any, Any, Optional[Any | str]], Optional[Any | str])
+
+
+@overload
+def tool(name: Callable[..., R]) -> Callable[..., R]: ...
+
+
+@overload
+def tool(
+    name: str | None = None,
+    display_name: str | None = None,
+    description: str | None = None,
+    metadata: Any | None = None,
+) -> Callable[..., Callable[..., R]]: ...
+
+
+def tool(
+    name: str | Callable[..., R] | None = None,
+    display_name: str | None = None,
+    description: str | None = None,
+    metadata: Any | None = None,
+) -> Callable[..., R] | Callable[[Callable[..., R]], Callable[..., R]]:
+
+    def __tool_impl(callable: Callable[..., R]) -> Callable[..., R]:
+        # store gpt function metadata to the callable object
+        if isinstance(name, str):
+            setattr(callable, NAME_TAG, name)
+        if isinstance(display_name, str):
+            setattr(callable, DISPLAY_NAME_TAG, display_name)
+        if isinstance(description, str):
+            setattr(callable, DESCRIPTION_TAG, description)
+        if metadata is not None:
+            setattr(callable, METADATA_TAG, metadata)
+        setattr(callable, IS_TOOL_TAG, True)
+        return callable
+
+    if (
+        name is not None
+        and (not isinstance(name, str))
+        and display_name is None
+        and description is None
+    ):
+        return __tool_impl(name)
+
+    return __tool_impl
+
+
+__all__ = ["Tool", "Tools", "ToolInfo", "ClientTool", "ToolRegistry"]

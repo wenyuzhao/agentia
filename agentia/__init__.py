@@ -28,7 +28,8 @@ from .message import (
     CommunicationEvent,
 )
 from .run import Run, MessageStream, ReasoningMessageStream
-from .plugins import Plugin, tool, PluginInitError, ToolResult, register_plugin
+from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
+from .tools import tool
 
 __all__ = [
     # submodules
