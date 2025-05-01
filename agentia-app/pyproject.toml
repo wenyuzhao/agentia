@@ -1,6 +1,6 @@
 [project]
 name = "agentia-app"
-version = "0.0.1"
+version = "0.0.2"
 description = "Agentia Web App and API Server"
 authors = [{ name = "Wenyu Zhao", email = "wenyuzhaox@gmail.com" }]
 requires-python = ">=3.12"
@@ -17,7 +17,7 @@ keywords = [
     "deepseek",
 ]
 dependencies = [
-    "agentia>=0.0.10",
+    "agentia>=0.0.11",
     "google-api-python-client>=2.169.0",
     "google-auth-oauthlib>=1.2.2",
     "pymstodo>=0.2.0",
