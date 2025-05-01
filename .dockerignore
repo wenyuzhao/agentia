@@ -6,3 +6,8 @@ Dockerfile
 /agentia-app/compose*.yaml
 /data
 /plugins
+/_*
+/tests
+/examples
+/dist
+/agents
