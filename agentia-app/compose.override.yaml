@@ -1,8 +1,8 @@
 services:
   agentia:
     build:
-      context: .
-      dockerfile: ./docker/Dockerfile
+      context: ..
+      dockerfile: ./agentia-app/docker/Dockerfile
     develop:
       watch:
         - action: sync

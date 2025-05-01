@@ -3,5 +3,6 @@
 __pycache__
 Dockerfile
 /compose*.yaml
+/agentia-app/compose*.yaml
 /data
 /plugins

@@ -11,10 +11,10 @@ touch /app/.cache/nginx/access.log
 touch /app/.cache/nginx/error.log
 
 # Start the first process
-uv run agentia serve app &
+uv run agentia-app start app &
 
 # Start the second process
-uv run agentia serve api &
+uv run agentia-app start api &
 
 nginx -g 'daemon off;' &
 
