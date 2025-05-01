@@ -119,6 +119,7 @@ class Agent:
         self.session_data_folder = (
             get_global_cache_dir() / "sessions" / f"{self.session_id}"
         )
+        self.__user_consent = False
         self.__tools = ToolRegistry(self, tools)
         # Generate instructions
         self.__instructions = instructions
@@ -166,6 +167,10 @@ class Agent:
 
         if not persist:
             delete_session(session_id)
+
+    @property
+    def user_consent_enabled(self) -> bool:
+        return self.__user_consent
 
     @property
     def history(self) -> History:
@@ -570,6 +575,15 @@ class Agent:
         result = await agent.run(conversation)
         self.history.update_summary(result.content or "")
         return result.content or ""
+
+    def enable_user_consent(self):
+        """
+        Require user consent for all important actions (e.g. executing code)
+
+        This only serves a hint to the plugins that they should ask for user consent.
+        Plugins may either ignore this or ask for user consent even if this is not set.
+        """
+        self.__user_consent = True
 
 
 __all__ = ["Agent"]

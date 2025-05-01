@@ -13,7 +13,7 @@ class CodePlugin(Plugin):
 
     def user_consent(self, code: str):
         """Acquire user consent before executing code."""
-        if self.user_consent_required:
+        if self.agent.user_consent_enabled:
             result = yield UserConsentEvent(
                 "Execute this code?", metadata={"code": code}
             )

@@ -47,10 +47,10 @@ agent = Agent.load_from_config("./alice.toml")
 3. Alternatively, start a REPL:
 
 ```bash
-uvx agentia repl alice
+uvx agentia alice
 ```
 
-# Multi-Agent Orchestration
+# Multi-Agent Orchestration (Experimental)
 
 Multi-agent orchestration is achieved by making leader/parent agents dispatching sub-tasks to their sub-agents.
 
