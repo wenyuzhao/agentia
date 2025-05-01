@@ -17,7 +17,7 @@ keywords = [
     "deepseek",
 ]
 dependencies = [
-    "agentia>=0.0.9",
+    "agentia>=0.0.10",
     "google-api-python-client>=2.169.0",
     "google-auth-oauthlib>=1.2.2",
     "pymstodo>=0.2.0",
