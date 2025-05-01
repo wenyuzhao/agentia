@@ -66,7 +66,10 @@ class Plugin(abc.ABC):
         This is called when the agent is created.
         """
         try:
-            obj = cls(**config)
+            if cls.__dict__.__contains__("__init__"):
+                obj = cls(**(config or {}))
+            else:
+                obj = cls()
             obj.config = config
             return obj
         except Exception as e:
