@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass
 import inspect
 import json
 import logging
@@ -29,6 +30,19 @@ if TYPE_CHECKING:
     from agentia.tools import Tools
 
 
+@dataclass
+class ImageUrl:
+    """
+    A special class for magic functions to represent an image URL argument.
+    """
+
+    url: str
+
+
+def _is_image_type(t: type) -> bool:
+    return issubclass(t, Image) or issubclass(t, ImageUrl) or (t == (ImageUrl | Image))
+
+
 class ToolFuncParam:
     def __init__(self, param: inspect.Parameter, fname: str, is_magic=False) -> None:
         self.is_magic = is_magic
@@ -44,7 +58,7 @@ class ToolFuncParam:
         self.schema = self.__get_json_schema()
 
     def __get_json_schema(self) -> dict[str, Any] | None:
-        if self.is_magic and issubclass(self.type, Image):
+        if self.is_magic and _is_image_type(self.type):
             return None
 
         if issubclass(self.type, BaseModel):
@@ -160,7 +174,7 @@ F = TypeVar("F", bound=Callable)
 
 def _gen_prompt(
     f: Callable, args: list[Any], kwargs: dict[str, Any]
-) -> tuple[str, list[tuple[ToolFuncParam, Image]]]:
+) -> tuple[str, list[tuple[ToolFuncParam, Image | ImageUrl]]]:
     desc = "You need to do the following task and return the result in JSON:\n\n"
     desc += "TASK NAME: " + f.__name__ + "\n"
     if doc := f.__doc__:
@@ -170,7 +184,7 @@ def _gen_prompt(
             f"WARNING: Function {f.__name__} has no docstring. It's recommended to use the docstring to provide the agent with a description of the task."
         )
     sig = inspect.signature(f)
-    images: list[tuple[ToolFuncParam, Image]] = []
+    images: list[tuple[ToolFuncParam, Image | ImageUrl]] = []
     if len(sig.parameters) > 0:
         params = [
             ToolFuncParam(p, f.__name__, is_magic=True)
@@ -236,8 +250,8 @@ def _gen_prompt(
                 pdesc += value_str + "\n"
             desc += pdesc
         for p, value in params_with_values.values():
-            if issubclass(p.type, Image):
-                value = cast(Image, value)
+            if _is_image_type(p.type):
+                value = cast(Image | ImageUrl, value)
                 images.append((p, value))
     return desc, images
 
@@ -296,28 +310,30 @@ def magic(
                 )
             ]
             for i, (p, image) in enumerate(images):
-                buffered = BytesIO()
-                image.save(buffered, format=image.format)
-                img_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                match image.format:
-                    case "JPEG":
-                        content_type = "jpeg"
-                    case "PNG":
-                        content_type = "png"
-                    case "GIF":
-                        content_type = "gif"
-                    case "BMP":
-                        content_type = "bmp"
-                    case "WEBP":
-                        content_type = "webp"
-                    case "ICO":
-                        content_type = "ico"
-                    case _:
-                        raise ValueError(f"Unsupported image format: {image.format}")
-                print(f"Image format: {image.format}")
-                base64_url = f"data:image/{content_type};base64,{img_data}"
-                with open("test.png.txt", "w+") as f:
-                    f.write(base64_url)
+                if isinstance(image, ImageUrl):
+                    url = image.url
+                else:
+                    buffered = BytesIO()
+                    image.save(buffered, format=image.format)
+                    img_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                    match image.format:
+                        case "JPEG":
+                            content_type = "jpeg"
+                        case "PNG":
+                            content_type = "png"
+                        case "GIF":
+                            content_type = "gif"
+                        case "BMP":
+                            content_type = "bmp"
+                        case "WEBP":
+                            content_type = "webp"
+                        case "ICO":
+                            content_type = "ico"
+                        case _:
+                            raise ValueError(
+                                f"Unsupported image format: {image.format}"
+                            )
+                    url = f"data:image/{content_type};base64,{img_data}"
                 s = f"Image Argument #{i}: {p.name}"
                 if p.description:
                     s += f"\nDescription: {p.description})"
@@ -325,7 +341,7 @@ def magic(
                     UserMessage(
                         content=[
                             ContentPartText(s),
-                            ContentPartImage(base64_url),
+                            ContentPartImage(url),
                         ],
                         role="user",
                     )

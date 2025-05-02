@@ -34,7 +34,7 @@ from .message import (
 from .run import Run, MessageStream, ReasoningMessageStream
 from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
 from .tools import tool
-from .utils.decorators import magic
+from .utils.decorators import magic, ImageUrl
 
 __all__ = [
     # submodules
@@ -65,4 +65,5 @@ __all__ = [
     # utils
     "init_logging",
     "magic",
+    "ImageUrl",
 ]
