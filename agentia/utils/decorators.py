@@ -1,3 +1,4 @@
+import asyncio
 from enum import Enum, StrEnum
 import inspect
 import json
@@ -18,6 +19,7 @@ from typing import (
     Annotated,
 )
 from pydantic import BaseModel, Field
+from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 
 
 class ToolFuncParam:
@@ -34,6 +36,18 @@ class ToolFuncParam:
         self.type_name = self.__get_type_name(t)
         self.is_self = self.name == "self"
         self.enum = self.__get_enum(t, enum_check)
+
+    def get_json_schema(self) -> dict[str, Any]:
+        if issubclass(self.type, BaseModel):
+            prop = to_strict_json_schema(self.type)
+        else:
+            prop = {}
+            prop["type"] = self.type_name
+            if self.enum is not None:
+                prop["enum"] = self.enum
+            if self.description:
+                prop["description"] = self.description
+        return prop
 
     def __get_desc(self) -> str | None:
         meta = (
@@ -87,6 +101,8 @@ class ToolFuncParam:
                 return "string"
             case x if issubclass(x, StrEnum) or issubclass(x, Enum):
                 return "string"
+            case x if issubclass(x, BaseModel):
+                return "object"
             case _other:
                 assert (
                     False
@@ -177,7 +193,7 @@ def tool(
     return __tool_impl
 
 
-R2 = TypeVar("R2", bound=Awaitable[Any])
+R2 = TypeVar("R2")
 
 
 def _gen_prompt(f: Callable[..., R2], args: list[Any], kwargs: dict[str, Any]) -> str:
@@ -238,15 +254,19 @@ def _gen_prompt(f: Callable[..., R2], args: list[Any], kwargs: dict[str, Any]) -
         desc += "USER'S INPUTS:\n\n"
         for p, value in params_with_values.values():
             pdesc = " * " + p.name + ": "
+            if isinstance(value, BaseModel):
+                value_str = value.model_dump_json()
+            else:
+                value_str = json.dumps(value)
             if p.description or p.enum:
                 pdesc += "\n"
                 if s := p.description:
                     pdesc += f"    * description: {s}\n"
                 if s := p.enum:
                     pdesc += f"    * possible values: {', '.join(s)}\n"
-                pdesc += "    * value: " + str(value) + "\n"
+                pdesc += "    * value: " + value_str + "\n"
             else:
-                pdesc += str(value) + "\n"
+                pdesc += value_str + "\n"
             desc += pdesc
     return desc
 
@@ -302,6 +322,13 @@ def agentify(
             else:
                 result = Result[return_type](**json_result)
                 return result.result
+
+        if not inspect.iscoroutinefunction(callable):
+
+            def __func_impl_sync(*args: Any, **kwargs: Any):
+                return asyncio.run(__func_impl(*args, **kwargs))
+
+            return __func_impl_sync  # type: ignore
 
         return __func_impl  # type: ignore
 

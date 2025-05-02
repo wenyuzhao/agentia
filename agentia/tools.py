@@ -21,7 +21,7 @@ from .plugins import Plugin, ToolResult
 from pydantic import BaseModel
 
 from agentia.utils.decorators import tool, ToolFuncParam
-
+from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 
 Tool = Plugin | Callable[..., Any]
 
@@ -124,17 +124,10 @@ class ToolRegistry:
             if pname == "self":
                 continue
             p = ToolFuncParam(param, fname)
-            # Get parameter info
-            prop = {}
-            prop["type"] = p.type_name
-            if p.enum is not None:
-                prop["enum"] = p.enum
-            if p.description:
-                prop["description"] = p.description
             # Add the parameter to the properties
             if p.required:
                 params["required"].append(pname)
-            params["properties"][pname] = prop
+            params["properties"][pname] = p.get_json_schema()
 
         tool_info = ToolInfo(
             name=fname,
@@ -186,27 +179,32 @@ class ToolRegistry:
         p_args: list[Any] = []
         kw_args: dict[str, Any] = {}
         for p in inspect.signature(callable).parameters.values():
+            if p.name == "self":
+                continue
+            param = ToolFuncParam(p, callable.__name__)
+            is_model = issubclass(param.type, BaseModel)
+
+            def get_value(name: str, default: Any):
+                if p.name not in args:
+                    return default
+                if is_model:
+                    return param.type(**args[p.name])
+                else:
+                    return args[p.name]
+
             match p.kind:
                 case Parameter.POSITIONAL_ONLY if p.annotation == Agent:
                     p_args.append(self._agent)
                 case Parameter.POSITIONAL_ONLY:
-                    default = (
-                        p.default if p.default != inspect.Parameter.empty else None
-                    )
-                    p_args.append(args[p.name] if p.name in args else default)
+                    default = p.default if p.default != Parameter.empty else None
+                    p_args.append(get_value(p.name, default))
                 case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY if (
                     p.annotation == Agent
                 ):
                     kw_args[p.name] = self._agent
                 case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY:
-                    if p.name == "__context__" and p.name not in args:
-                        # kw_args[p.name] = context
-                        raise ValueError(f"__context__ is not supported")
-                    else:
-                        default = (
-                            p.default if p.default != inspect.Parameter.empty else None
-                        )
-                        kw_args[p.name] = args[p.name] if p.name in args else default
+                    default = p.default if p.default != Parameter.empty else None
+                    kw_args[p.name] = get_value(p.name, default)
                 case other:
                     raise ValueError(f"{other} is not supported")
         return p_args, kw_args

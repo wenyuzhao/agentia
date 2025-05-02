@@ -12,6 +12,10 @@ def init_logging(level: logging._Level = logging.INFO):
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+import nest_asyncio
+
+nest_asyncio.apply()
+
 from . import message
 from . import plugins
 from . import utils
