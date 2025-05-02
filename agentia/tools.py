@@ -13,9 +13,9 @@ from typing import (
 
 import rich
 
-from agentia.agent import CommunicationEvent, ToolCallEvent, UserConsentEvent
+from agentia.agent import CommunicationEvent, ToolCallEvent, UserConsentEvent, Event
 
-from .message import JSON, FunctionCall, ToolCall, ToolMessage
+from .message import JSON, ClientToolCallEvent, FunctionCall, ToolCall, ToolMessage
 
 from .plugins import Plugin, ToolResult
 from pydantic import BaseModel
@@ -37,33 +37,106 @@ DESCRIPTION_TAG = "agentia_tool_description"
 METADATA_TAG = "agentia_tool_metadata"
 
 
-@dataclass
-class ToolInfo:
-    name: str
-    display_name: str
-    description: str
-    parameters: dict[str, Any]
-    callable: Callable[..., Any]
-    metadata: Any | None = None
-
-    def to_json(self) -> JSON:
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.parameters,
-        }
-
-
 class ClientTool(BaseModel):
     name: str
     description: str
     properties: dict[str, object]
+    metadata: Any | None = None
+
+
+class ToolInfo:
+    def __init__(
+        self,
+        f: Callable[..., Any],
+        plugin: Plugin | None = None,
+        client_tool: ClientTool | None = None,
+    ):
+        self.plugin = plugin
+        self.func = f
+        if client_tool:
+            self.name = client_tool.name
+            self.display_name = client_tool.name
+            self.description = client_tool.description
+            self.schema = {
+                "name": client_tool.name,
+                "description": client_tool.description or "",
+                "parameters": client_tool.properties,
+            }
+            self.metadata = client_tool.metadata
+            self.params = None
+            self.client_tool = client_tool
+        else:
+            if plugin:
+                self.name = (
+                    getattr(f, NAME_TAG, None) or f"{plugin.name()}__{f.__name__}"
+                )
+                self.display_name: str = (
+                    getattr(f, DISPLAY_NAME_TAG, None)
+                    or f"{plugin.name()}@{f.__name__}"
+                )
+            else:
+                self.name = getattr(f, NAME_TAG, f.__name__)
+                self.display_name: str = getattr(f, DISPLAY_NAME_TAG, self.name)
+            self.description: str = getattr(f, DESCRIPTION_TAG, f.__doc__) or ""
+            self.metadata = getattr(f, METADATA_TAG, None)
+            self.params = [
+                ToolFuncParam(p, self.func.__name__)
+                for p in inspect.signature(callable).parameters.values()
+                if p.name != "self"
+            ]
+            self.schema = self.get_json_schema(self.params)
+            self.client_tool = None
+
+    def get_json_schema(self, fparams: list[ToolFuncParam]) -> Any:
+        params: Any = {"type": "object", "properties": {}, "required": []}
+        for p in fparams:
+            if p.required:
+                params["required"].append(p.name)
+            params["properties"][p.name] = p.get_json_schema()
+        return {
+            "name": self.name,
+            "description": self.description or "",
+            "parameters": params,
+        }
+
+    def process_json_args(self, agent: "Agent", args: Any):
+        from .agent import Agent
+
+        p_args: list[Any] = []
+        kw_args: dict[str, Any] = {}
+
+        def get_value(name: str, default: Any, is_model: bool):
+            if name not in args:
+                return default
+            if is_model:
+                return p.type(**args[name])
+            else:
+                return args[name]
+
+        assert self.params is not None
+        for p in self.params:
+            is_model = issubclass(p.type, BaseModel)
+            match p.param.kind:
+                case Parameter.POSITIONAL_ONLY if p.param.annotation == Agent:
+                    p_args.append(agent)
+                case Parameter.POSITIONAL_ONLY:
+                    default = p.default if p.default != Parameter.empty else None
+                    p_args.append(get_value(p.name, default, is_model))
+                case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY if (
+                    p.param.annotation == Agent
+                ):
+                    kw_args[p.name] = agent
+                case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY:
+                    default = p.default if p.default != Parameter.empty else None
+                    kw_args[p.name] = get_value(p.name, default, is_model)
+                case other:
+                    raise ValueError(f"{other} is not supported")
+        return p_args, kw_args
 
 
 class ToolRegistry:
     def __init__(self, agent: "Agent", tools: Tools | None = None) -> None:
         self.__functions: dict[str, ToolInfo] = {}
-        self.__plugin_of_function: dict[str, str] = {}
         self.__plugins: list[Plugin] = []
         self._agent = agent
         for t in tools or []:
@@ -107,54 +180,22 @@ class ToolRegistry:
         for t in tools:
             if t.name in self.__functions:
                 raise ValueError(f"Tool `{t.name}` already exists")
-            self.__functions[t.name] = ToolInfo(
-                name=t.name,
-                display_name=t.name,
-                description=t.description,
-                parameters=t.properties,
-                callable=call_client_tool,
-                metadata=None,
-            )
+            self.__functions[t.name] = ToolInfo(call_client_tool, client_tool=t)
 
-    def __add_function(self, f: Callable[..., Any]):
-        fname = getattr(f, NAME_TAG, f.__name__)
-        params: Any = {"type": "object", "properties": {}, "required": []}
-        for pname, param in inspect.signature(f).parameters.items():
-            # Skip self parameter
-            if pname == "self":
-                continue
-            p = ToolFuncParam(param, fname)
-            # Add the parameter to the properties
-            if p.required:
-                params["required"].append(pname)
-            params["properties"][pname] = p.get_json_schema()
-
-        tool_info = ToolInfo(
-            name=fname,
-            display_name=getattr(f, DISPLAY_NAME_TAG, fname),
-            description=getattr(f, DESCRIPTION_TAG, f.__doc__) or "",
-            parameters=params,
-            callable=f,
-            metadata=getattr(f, METADATA_TAG, None),
-        )
+    def __add_function(
+        self,
+        f: Callable[..., Any],
+        plugin: Plugin | None = None,
+    ):
+        tool_info = ToolInfo(f, plugin=plugin)
         self.__functions[tool_info.name] = tool_info
-        return tool_info
 
     def __add_plugin(self, p: Plugin):
         # Add all functions from the plugin
-        plugin_name = p.name()
         for _n, method in inspect.getmembers(p, predicate=inspect.ismethod):
             if not getattr(method, IS_TOOL_TAG, False):
                 continue
-            tool_info = self.__add_function(method)
-            if not tool_info.name.startswith(plugin_name + "__"):
-                old_name = tool_info.name
-                tool_info.name = plugin_name + "__" + tool_info.name
-                if not hasattr(tool_info, DISPLAY_NAME_TAG):
-                    tool_info.display_name = plugin_name + "@" + tool_info.display_name
-                del self.__functions[old_name]
-                self.__functions[tool_info.name] = tool_info
-            self.__plugin_of_function[tool_info.name] = p.id()
+            self.__add_function(method, plugin=p)
         # Add the plugin to the list of plugins
         self.__plugins.append(p)
         # Call the plugin's register method
@@ -169,49 +210,13 @@ class ToolRegistry:
     def is_empty(self) -> bool:
         return len(self.__functions) == 0
 
-    def to_json(self) -> list[JSON]:
-        functions = [v.to_json() for (k, v) in self.__functions.items()]
+    def get_schema(self) -> list[Any]:
+        functions = [v.schema for (k, v) in self.__functions.items()]
         return [{"type": "function", "function": f} for f in functions]
-
-    def __filter_args(self, callable: Callable[..., Any], args: Any):
-        from .agent import Agent
-
-        p_args: list[Any] = []
-        kw_args: dict[str, Any] = {}
-        for p in inspect.signature(callable).parameters.values():
-            if p.name == "self":
-                continue
-            param = ToolFuncParam(p, callable.__name__)
-            is_model = issubclass(param.type, BaseModel)
-
-            def get_value(name: str, default: Any):
-                if p.name not in args:
-                    return default
-                if is_model:
-                    return param.type(**args[p.name])
-                else:
-                    return args[p.name]
-
-            match p.kind:
-                case Parameter.POSITIONAL_ONLY if p.annotation == Agent:
-                    p_args.append(self._agent)
-                case Parameter.POSITIONAL_ONLY:
-                    default = p.default if p.default != Parameter.empty else None
-                    p_args.append(get_value(p.name, default))
-                case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY if (
-                    p.annotation == Agent
-                ):
-                    kw_args[p.name] = self._agent
-                case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY:
-                    default = p.default if p.default != Parameter.empty else None
-                    kw_args[p.name] = get_value(p.name, default)
-                case other:
-                    raise ValueError(f"{other} is not supported")
-        return p_args, kw_args
 
     async def call_function(
         self, function_call: FunctionCall, tool_id: str | None
-    ) -> AsyncGenerator[UserConsentEvent | CommunicationEvent, None]:
+    ) -> AsyncGenerator[Event, None]:
         name = function_call.name
         args = function_call.arguments
         args_s = ""
@@ -225,24 +230,40 @@ class ToolRegistry:
         # key = func_name if not func_name.startswith("functions.") else func_name[10:]
         if name not in self.__functions:
             raise ToolResult({"error": f"Tool `{name}` not found"})
-        func = self.__functions[name].callable
-        args, kw_args = self.__filter_args(func, args)
+        func = self.__functions[name].func
+        if t := self.__functions[name].client_tool:
+            args2: dict[str, Any] = args  # type: ignore
+            e = ClientToolCallEvent(tool=t, args=args2)
+            result = yield e
+            raise NotImplementedError("Client tools are not supported yet.")
+            return
+        args, kw_args = self.__functions[name].process_json_args(self._agent, args)
         try:
-            result_or_coroutine = func(*args, **kw_args)
-            if inspect.isasyncgen(result_or_coroutine):
+            result = func(*args, **kw_args)
+            if inspect.isasyncgen(result) or inspect.isgenerator(result):
                 try:
                     next_value = None
                     while True:
-                        if next_value is not None:
-                            yielded = await result_or_coroutine.asend(next_value)
+                        if inspect.isasyncgen(result):
+                            if next_value is not None:
+                                yielded = await result.asend(next_value)
+                            else:
+                                yielded = await anext(result)
+                        elif inspect.isgenerator(result):
+                            if next_value is not None:
+                                yielded = result.send(next_value)
+                            else:
+                                yielded = next(result)
                         else:
-                            yielded = await anext(result_or_coroutine)
+                            assert False, "unreachable"
+                        next_value = None
                         if isinstance(yielded, UserConsentEvent):
                             assert (
                                 yielded.response is None
                             ), "Newly created user consent event should not have a response"
                             yielded.tool = name
-                            yielded.plugin = self.__plugin_of_function.get(name)
+                            if p := self.__functions[name].plugin:
+                                yielded.plugin = p.id()
                             self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                             yield yielded
                             self._agent.log.info(f"TOOL#{tool_id} {yielded}")
@@ -255,39 +276,14 @@ class ToolRegistry:
                             break
                 except StopAsyncIteration as e:
                     result = {}
-                except ToolResult as e:
-                    result = e.result
-            elif inspect.isgenerator(result_or_coroutine):
-                try:
-                    next_value = None
-                    while True:
-                        if next_value is not None:
-                            yielded = result_or_coroutine.send(next_value)
-                        else:
-                            yielded = next(result_or_coroutine)
-                        next_value = None
-                        if isinstance(yielded, UserConsentEvent):
-                            assert (
-                                yielded.response is None
-                            ), "Newly created user consent event should not have a response"
-                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
-                            yield yielded
-                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
-                            next_value = yielded.response
-                        elif isinstance(yielded, CommunicationEvent):
-                            self._agent.log.info(f"TOOL#{tool_id} {yielded}")
-                            yield yielded
-                        elif isinstance(yielded, ToolResult):
-                            result = yielded.result
-                            break
                 except StopIteration as e:
                     result = e.value
                 except ToolResult as e:
                     result = e.result
-            elif inspect.iscoroutine(result_or_coroutine):
-                result = await result_or_coroutine
+            elif inspect.iscoroutine(result):
+                result = await result
             else:
-                result = result_or_coroutine
+                result = result
         except EOFError as e:
             raise e
         except Exception as e:

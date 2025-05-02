@@ -18,7 +18,9 @@ import abc
 from dataclasses import dataclass, field
 import uuid
 
+
 if TYPE_CHECKING:
+    from agentia.tools import ClientTool
     from openai.types.chat import (
         ChatCompletionContentPartTextParam,
         ChatCompletionContentPartImageParam,
@@ -296,7 +298,18 @@ class UserConsentEvent:
     role: Literal["event.user_consent"] = "event.user_consent"
 
 
-Event: TypeAlias = ToolCallEvent | CommunicationEvent | UserConsentEvent
+@dataclass
+class ClientToolCallEvent:
+    tool: "ClientTool"
+    args: dict[str, Any]
+    response: Any | None = None
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    role: Literal["event.user_consent"] = "event.user_consent"
+
+
+Event: TypeAlias = (
+    ToolCallEvent | CommunicationEvent | UserConsentEvent | ClientToolCallEvent
+)
 
 __all__ = [
     "ToolCall",
@@ -317,4 +330,5 @@ __all__ = [
     "CommunicationEvent",
     "UserConsentEvent",
     "ToolCallEvent",
+    "ClientToolCallEvent",
 ]

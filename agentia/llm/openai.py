@@ -112,7 +112,7 @@ class OpenAIBackend(LLMBackend):
             self.extra_body["response_format"] = response_format
         if not self.tools.is_empty():
             if self.support_tools():
-                args["tools"] = self.tools.to_json()
+                args["tools"] = self.tools.get_schema()
                 args["tool_choice"] = "auto"
             else:
                 raise NotImplementedError("Functions are not supported")
