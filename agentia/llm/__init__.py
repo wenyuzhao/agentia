@@ -335,7 +335,7 @@ def create_llm_backend(
         provider = model.split("]", 1)[0][1:].strip().lower()
         model = model.split("]", 1)[1].strip()
     else:
-        provider = get_default_model()
+        provider = get_default_provider()
     assert provider in [
         "openai",
         "openrouter",
