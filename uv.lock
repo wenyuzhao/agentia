@@ -14,7 +14,7 @@ members = [
 
 [[package]]
 name = "agentia"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "." }
 dependencies = [
     { name = "filelock" },
@@ -1338,7 +1338,7 @@ wheels = [
 
 [[package]]
 name = "llama-cloud-services"
-version = "0.6.20"
+version = "0.6.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -1348,9 +1348,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/39/98/f8791475e629aa852211d703c422983618606608717212dfd1240c1669be/llama_cloud_services-0.6.20.tar.gz", hash = "sha256:1cba4d33e9c40eaa3cbf50e924c7b6371ba73be02830a615fcf86245c4f3a142", size = 32089 }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/cd/7cd8683becf26e88bca91cb467d35171f59a6f80c3e55ab56486fbf17a55/llama_cloud_services-0.6.21.tar.gz", hash = "sha256:f99c9bae14172d0acb8cb8ca20016795c9f9b32141fc694be77700d096c64e24", size = 32166 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cf/c0/b5195393895e7ad5ac1a621712151d5ab5541d52b2e438aaae60fc9d1c08/llama_cloud_services-0.6.20-py3-none-any.whl", hash = "sha256:f6878f602551112b0d7520b891dc88281ba6135285aaa4aaa89e55d684e7fb1f", size = 37081 },
+    { url = "https://files.pythonhosted.org/packages/91/12/8485afc9813574f0a1c9ca28df5dffa10e2fefa6cefddc73f4b3e36f0a5e/llama_cloud_services-0.6.21-py3-none-any.whl", hash = "sha256:f2982ab32884cd4b1774befb3eef56a1944c7a7c5b111a1d71c4d49ede8f7d3b", size = 37148 },
 ]
 
 [[package]]
@@ -1562,14 +1562,14 @@ wheels = [
 
 [[package]]
 name = "llama-parse"
-version = "0.6.20"
+version = "0.6.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "llama-cloud-services" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/94/8513644fd12fec78635bc8190f48b6cde5950277113b553dc3b4cf72dcab/llama_parse-0.6.20.tar.gz", hash = "sha256:73aabf19229a6d8f77c79864c39e8bda0b0acef6eb1f8f65fed656d875259e7c", size = 3536 }
+sdist = { url = "https://files.pythonhosted.org/packages/17/e7/584a7d1aa5ef64f578c9efb7a9633a86b07c03e38f229205debefe85839d/llama_parse-0.6.21.tar.gz", hash = "sha256:a0342ebc3f726106c414b39f609d4e47d9bb9dc00677fe9d3e5bccbac54c9bf6", size = 3537 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/90/7880cde59e61841a7f254bf22f1706c48cbd2453584255324bb32084abb2/llama_parse-0.6.20-py3-none-any.whl", hash = "sha256:7f99d42a0fa70530d0560d1235bba14a7c198c8db8c0fddd80c32ad61b1d5b10", size = 4946 },
+    { url = "https://files.pythonhosted.org/packages/67/72/cccdac06596fb1dcc53bb8114580d80081f0043e065bea468c935cbeec7e/llama_parse-0.6.21-py3-none-any.whl", hash = "sha256:fc61ce7b43de068b3e6503a6b3194d5480ee5dde7b11f03f9503bcfdea1f4168", size = 4945 },
 ]
 
 [[package]]
@@ -3055,16 +3055,16 @@ wheels = [
 
 [[package]]
 name = "tavily-python"
-version = "0.7.0"
+version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "requests" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e2/d2/6d224fb40f4be1791c100fa64c502e477497d38fffa56cf7ebe293352afb/tavily_python-0.7.0.tar.gz", hash = "sha256:fb5fc0fc04e3f064ed44240463eeacde06d74cd2f4d2033e8aabf0b06a0902b6", size = 16142 }
+sdist = { url = "https://files.pythonhosted.org/packages/64/53/9b2103156e221f00273021758b23666c7acb1462e02d9fb7e49bf9f9884d/tavily_python-0.7.1.tar.gz", hash = "sha256:ccbba587fa38d181d54670d6ce26e4f31ad9c7c7f0835d191b9bb542b085dc36", size = 16204 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dd/29/6901ab127a63ff213c8a346698236fd996d0daa6066cd5892390f475eb2f/tavily_python-0.7.0-py3-none-any.whl", hash = "sha256:6697eb18d6e15b64446855c43bc7ae291af009c7b847264082bbfcf6fe4be255", size = 14598 },
+    { url = "https://files.pythonhosted.org/packages/e1/ed/c861140bd072e91efce3a49ac6fc700f7bde0d696ce7fa288649859c70b6/tavily_python-0.7.1-py3-none-any.whl", hash = "sha256:a73c8e68925a62bfe08e3a8bb4434d64d4e62c82081cc8a68a071b78673e9590", size = 14638 },
 ]
 
 [[package]]
