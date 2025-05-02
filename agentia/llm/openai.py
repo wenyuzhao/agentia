@@ -131,6 +131,19 @@ class OpenAIBackend(LLMBackend):
                 extra_body=self.extra_body,
                 stream=False,
             )
+            if error := getattr(response, "error", None):
+                if raw := error.get("metadata", {}).get("raw"):
+                    print(raw)
+                    m = None
+                    try:
+                        m = json.loads(raw).get("error", {}).get("message")
+                    except Exception:
+                        ...
+                    if m:
+                        raise RuntimeError(m, error)
+                if m := error.get("message"):
+                    raise RuntimeError(m, error)
+                raise RuntimeError(error)
             if response.choices is None:
                 print(response)
                 raise RuntimeError("response.choices is None")
