@@ -3,6 +3,7 @@ import os
 import tomlkit.container
 from typing import TYPE_CHECKING, Any, Callable, Self, Type
 import tomlkit
+from ..utils.decorators import tool
 
 if TYPE_CHECKING:
     from ..agent import Agent

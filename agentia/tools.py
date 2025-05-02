@@ -1,25 +1,14 @@
 from dataclasses import dataclass
-from enum import Enum, StrEnum
 import inspect
 from inspect import Parameter
 import json
-import types
 from typing import (
-    Annotated,
     Any,
     AsyncGenerator,
     Callable,
-    Literal,
     Sequence,
     TYPE_CHECKING,
     Type,
-    TypeVar,
-    Union,
-    Coroutine,
-    Optional,
-    get_args,
-    get_origin,
-    overload,
 )
 
 import rich
@@ -30,6 +19,8 @@ from .message import JSON, FunctionCall, ToolCall, ToolMessage
 
 from .plugins import Plugin, ToolResult
 from pydantic import BaseModel
+
+from agentia.utils.decorators import tool, ToolFuncParam
 
 
 Tool = Plugin | Callable[..., Any]
@@ -132,79 +123,17 @@ class ToolRegistry:
             # Skip self parameter
             if pname == "self":
                 continue
+            p = ToolFuncParam(param, fname)
             # Get parameter info
             prop = {}
-            # Get parameter type inside Annotated
-            t = param.annotation
-            t = t if get_origin(t) != Annotated else get_args(t)[0]
-            if t == inspect.Parameter.empty:
-                t = str  # the default type is string
-            # Get parameter optionality
-            param_t_is_opt = False
-            is_optional = lambda x: (
-                (get_origin(x) is Union or get_origin(x) is types.UnionType)
-                and len(get_args(x)) == 2
-                and type(None) in get_args(x)
-            )
-            if is_optional(t):
-                t, param_t_is_opt = get_args(t)[0], True
-            param_default_is_empty = param.default == inspect.Parameter.empty
-            required = not param_t_is_opt and param_default_is_empty
-            # Get parameter type
-            assert not is_optional(t), "Optional types are not supported"
-            match t:
-                # string type
-                case x if x == str:
-                    prop["type"] = "string"
-                # integer type
-                case x if x == int:
-                    prop["type"] = "integer"
-                # boolean type
-                case x if x == bool:
-                    prop["type"] = "boolean"
-                # string enum
-                case x if get_origin(x) == Annotated and get_args(x)[0] == str:
-                    prop["type"] = "string"
-                    args = get_args(x)[1]
-                    for arg in args:
-                        if not isinstance(arg, str):
-                            raise ValueError(
-                                f"{fname}.{pname}: Literal members must be strings only"
-                            )
-                    prop["enum"] = [x for x in args]
-                case x if get_origin(x) == Literal:
-                    prop["type"] = "string"
-                    args = get_args(x)
-                    for arg in args:
-                        if not isinstance(arg, str):
-                            raise ValueError(
-                                f"{fname}.{pname}: Literal members must be strings only"
-                            )
-                    prop["enum"] = [x for x in args]
-                case x if issubclass(x, StrEnum) or issubclass(x, Enum):
-                    prop["type"] = "string"
-                    for arg in x:
-                        if not isinstance(arg, str):
-                            raise ValueError(
-                                f"{fname}.{pname}: Enum members must be strings only"
-                            )
-                    prop["enum"] = [x.value for x in x]
-                case _other:
-                    assert (
-                        False
-                    ), f"Invalid type annotation for parameter `{pname}` in function {fname}"
-            # Get parameter description
-            annotated_meta = (
-                get_args(param.annotation)[1]
-                if get_origin(param.annotation) == Annotated
-                else None
-            )
-            if desc := annotated_meta if isinstance(annotated_meta, str) else None:
-                prop["description"] = desc
-            # Add non-optional parameter to the required list
-            if required:
-                params["required"].append(pname)
+            prop["type"] = p.type_name
+            if p.enum is not None:
+                prop["enum"] = p.enum
+            if p.description:
+                prop["description"] = p.description
             # Add the parameter to the properties
+            if p.required:
+                params["required"].append(pname)
             params["properties"][pname] = prop
 
         tool_info = ToolInfo(
@@ -414,53 +343,6 @@ class ToolRegistry:
             else:
                 raise NotImplementedError("legacy functions not supported")
             yield result_msg
-
-
-R = TypeVar("R", Coroutine[Any, Any, Optional[Any | str]], Optional[Any | str])
-
-
-@overload
-def tool(name: Callable[..., R]) -> Callable[..., R]: ...
-
-
-@overload
-def tool(
-    name: str | None = None,
-    display_name: str | None = None,
-    description: str | None = None,
-    metadata: Any | None = None,
-) -> Callable[..., Callable[..., R]]: ...
-
-
-def tool(
-    name: str | Callable[..., R] | None = None,
-    display_name: str | None = None,
-    description: str | None = None,
-    metadata: Any | None = None,
-) -> Callable[..., R] | Callable[[Callable[..., R]], Callable[..., R]]:
-
-    def __tool_impl(callable: Callable[..., R]) -> Callable[..., R]:
-        # store gpt function metadata to the callable object
-        if isinstance(name, str):
-            setattr(callable, NAME_TAG, name)
-        if isinstance(display_name, str):
-            setattr(callable, DISPLAY_NAME_TAG, display_name)
-        if isinstance(description, str):
-            setattr(callable, DESCRIPTION_TAG, description)
-        if metadata is not None:
-            setattr(callable, METADATA_TAG, metadata)
-        setattr(callable, IS_TOOL_TAG, True)
-        return callable
-
-    if (
-        name is not None
-        and (not isinstance(name, str))
-        and display_name is None
-        and description is None
-    ):
-        return __tool_impl(name)
-
-    return __tool_impl
 
 
 __all__ = ["Tool", "Tools", "ToolInfo", "ClientTool", "ToolRegistry"]

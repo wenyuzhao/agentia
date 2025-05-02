@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 import tomllib
 from pathlib import Path
 import shelve
@@ -8,8 +8,10 @@ import importlib.util
 
 from agentia.agent import Agent
 from agentia.utils.session import get_global_cache_dir
-from agentia.plugins import ALL_PLUGINS, Plugin
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
+
+if TYPE_CHECKING:
+    from agentia.plugins import Plugin
 
 DEFAULT_AGENT_CONFIG_PATH = Path.cwd() / "agents"
 DEFAULT_AGENT_USER_PLUGIN_PATH = Path.cwd() / "plugins"
@@ -30,6 +32,8 @@ PluginConfigs = dict[str, dict[str, Any]]
 
 
 def check_plugins(configs: PluginConfigs) -> PluginConfigs:
+    from agentia.plugins import ALL_PLUGINS
+
     for name, config in configs.items():
         if config is False or config is None:
             continue
@@ -61,8 +65,10 @@ class AgentInfo(BaseModel):
     config: "Config"
 
 
-def __create_tools(config: Config) -> tuple[list[Plugin], dict[str, Any]]:
-    tools: list[Plugin] = []
+def __create_tools(config: Config) -> tuple[list["Plugin"], dict[str, Any]]:
+    from agentia.plugins import ALL_PLUGINS
+
+    tools: list["Plugin"] = []
     tool_configs = {}
     enabled_plugins = (
         config.agent.plugins

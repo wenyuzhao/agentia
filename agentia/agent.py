@@ -208,8 +208,7 @@ class Agent:
                 f" * ID={agent.id} NAME={agent.name} -- {agent.description}\n"
             )
 
-        from .tools import tool
-        from .tools import ToolResult
+        from .tools import ToolResult, tool
 
         @tool(name="_communiate", description=description)
         async def communiate(

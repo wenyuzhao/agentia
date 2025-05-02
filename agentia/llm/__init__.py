@@ -1,8 +1,10 @@
 import abc
 from dataclasses import dataclass
-from logging import Logger
+import inspect
 import os
 from typing import Any, AsyncGenerator, Literal, Optional, Sequence, overload
+from openai.lib._parsing._completions import type_to_response_format_param  # type: ignore
+from pydantic import BaseModel
 
 from ..tools import ToolRegistry
 from ..message import AssistantMessage, Message, Event
@@ -121,6 +123,8 @@ class LLMBackend:
         | Run[AssistantMessage | Event]
     ):
         a = self.tools._agent
+        if inspect.isclass(response_format) and issubclass(response_format, BaseModel):
+            response_format = type_to_response_format_param(response_format)  # type: ignore
         if stream and events:
             return Run(
                 a,

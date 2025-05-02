@@ -14,7 +14,7 @@ members = [
 
 [[package]]
 name = "agentia"
-version = "0.0.11"
+version = "0.0.13"
 source = { editable = "." }
 dependencies = [
     { name = "filelock" },
