@@ -1,7 +1,9 @@
-# Agentia: Ergonomic LLM Agent Augmented with Tools
+# Agentia: Ergonomic LLM Agents
 
 
 # Getting Started
+
+Run agents with tools.
 
 ```python
 from agentia import Agent
@@ -21,6 +23,31 @@ response = await agent.run("What is the weather like in boston?")
 print(response)
 
 # Output: The current temperature in Boston is 72°F.
+```
+
+# The Magic Decorator
+
+Create agent-powered magic functions.
+
+Support both plain types and pydantic models as input and output.
+
+```python
+from agentia import magic
+from pydantic import BaseModel
+
+class Forcast(BaseModel):
+    location: str
+    temperature_degree: int
+
+@magic
+async def get_weather(weather_forcast: str) -> Forcast:
+    """Create weather forcase object based on the input string"""
+    ...
+
+forcast = await get_weather("The current temperature in Boston is 72°F")
+
+print(forcast.location) # Output: Boston
+print(forcast.temperature_degree) # Output: 22
 ```
 
 # Agent Config File
