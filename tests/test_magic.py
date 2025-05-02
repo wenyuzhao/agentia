@@ -3,10 +3,11 @@ from pydantic import BaseModel
 from agentia import magic
 from agentia.plugins import CalculatorPlugin
 from enum import StrEnum
+import pytest
 
 
 @magic
-def get_content_type(extension: str) -> str:
+async def get_content_type(extension: str) -> str:
     """
     Get the http content type for a given file extension.
     """
@@ -20,7 +21,7 @@ class DayParts(StrEnum):
 
 
 @magic
-def get_day_parts(time: str) -> DayParts:
+async def get_day_parts(time: str) -> DayParts:
     """
     Get day part based on the time of day.
     """
@@ -34,25 +35,28 @@ class Weather(BaseModel):
 
 
 @magic(tools=[CalculatorPlugin()])
-def convert_to_fahrenheit(weather: Weather) -> Weather:
+async def convert_to_fahrenheit(weather: Weather) -> Weather:
     """
     Update the weather object: convert the temperature to Fahrenheit.
     """
     ...
 
 
-def test_magic1():
-    assert get_content_type("txt") == "text/plain"
+@pytest.mark.asyncio
+async def test_magic1():
+    assert await get_content_type("txt") == "text/plain"
 
 
-def test_magic2():
-    assert get_day_parts("10:00 AM") == DayParts.MORNING
-    assert get_day_parts("2:00 PM") == DayParts.AFTERNOON
-    assert get_day_parts("10:00 PM") == DayParts.EVENING
+@pytest.mark.asyncio
+async def test_magic2():
+    assert await get_day_parts("10:00 AM") == DayParts.MORNING
+    assert await get_day_parts("2:00 PM") == DayParts.AFTERNOON
+    assert await get_day_parts("10:00 PM") == DayParts.EVENING
 
 
-def test_magic3():
+@pytest.mark.asyncio
+async def test_magic3():
     weather = Weather(location="San Francisco, CA", temperature=20.0, unit="celsius")
-    assert convert_to_fahrenheit(weather) == Weather(
+    assert await convert_to_fahrenheit(weather) == Weather(
         location="San Francisco, CA", temperature=68.0, unit="fahrenheit"
     )

@@ -14,7 +14,7 @@ def init_logging(level: logging._Level = logging.INFO):
 
 import nest_asyncio
 
-nest_asyncio.apply()
+# nest_asyncio.apply()
 
 from . import message
 from . import plugins
