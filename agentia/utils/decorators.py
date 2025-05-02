@@ -1,5 +1,5 @@
 import asyncio
-from enum import Enum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 import inspect
 import json
 import logging
@@ -99,11 +99,36 @@ class ToolFuncParam:
                 return "boolean"
             # string enum
             case x if get_origin(x) == Annotated and get_args(x)[0] == str:
+                # Special form: Annotated[Annotated[str, ["variants", ...], "description..."]
                 return "string"
-            case x if get_origin(x) == Literal:
+            case x if get_origin(x) == Annotated and get_args(x)[0] == int:
+                return "integer"
+            case x if get_origin(x) == Annotated and get_args(x)[0] == float:
+                return "number"
+            case x if get_origin(x) == Literal and all(
+                isinstance(i, str) for i in get_args(x)
+            ):
                 return "string"
-            case x if issubclass(x, StrEnum) or issubclass(x, Enum):
+            case x if get_origin(x) == Literal and all(
+                isinstance(i, int) for i in get_args(x)
+            ):
+                return "integer"
+            case x if get_origin(x) == Literal and all(
+                isinstance(i, float) for i in get_args(x)
+            ):
+                return "number"
+            case x if issubclass(x, IntEnum):
+                return "integer"
+            case x if issubclass(x, StrEnum):
                 return "string"
+            case x if issubclass(x, Enum) and all(isinstance(i.value, str) for i in x):
+                return "string"
+            case x if issubclass(x, Enum) and all(isinstance(i.value, int) for i in x):
+                return "integer"
+            case x if issubclass(x, Enum) and all(
+                isinstance(i.value, float) for i in x
+            ):
+                return "number"
             case x if issubclass(x, BaseModel):
                 return "object"
             case _other:
@@ -114,19 +139,25 @@ class ToolFuncParam:
     def __get_enum(self, t: type, check: bool) -> list[str] | None:
         match t:
             # string enum
-            case x if get_origin(x) == Annotated and get_args(x)[0] == str:
+            case x if get_origin(x) == Annotated:
                 args = get_args(x)[1]
+                assert isinstance(args, list)
+                ty = get_args(x)[0]
             case x if get_origin(x) == Literal:
                 args = get_args(x)
-            case x if issubclass(x, StrEnum) or issubclass(x, Enum):
+                ty = type(args[0])
+            case x if (
+                issubclass(x, StrEnum) or issubclass(x, IntEnum) or issubclass(x, Enum)
+            ):
                 args = [item.value for item in x]
+                ty = type(args[0])
             case _:
                 return None
         if check:
             for arg in args:
-                if not isinstance(arg, str):
+                if not isinstance(arg, ty):
                     raise ValueError(
-                        f"{self.func_name}.{self.name}: Literal members must be strings only"
+                        f"{self.func_name}.{self.name}: Invald enum value {arg} for type {ty}"
                     )
         return [str(x) for x in args]
 
@@ -313,7 +344,6 @@ def magic(
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str
-            assert isinstance(return_type, type), "The return type must be a type"
             if issubclass(return_type, BaseModel):
                 response_format = return_type
             else:
