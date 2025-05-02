@@ -10,6 +10,7 @@ from typing import (
     Coroutine,
     Optional,
     Union,
+    cast,
     overload,
     get_args,
     get_origin,
@@ -18,14 +19,19 @@ from typing import (
 )
 from pydantic import BaseModel, Field, TypeAdapter, ConfigDict
 from openai.lib._pydantic import _ensure_strict_json_schema
+from PIL.Image import Image
+import base64
+from io import BytesIO
+
+from agentia.message import UserMessage, ContentPartText, ContentPartImage
 
 if TYPE_CHECKING:
     from agentia.tools import Tools
 
 
 class ToolFuncParam:
-    def __init__(self, param: inspect.Parameter, fname: str, enum_check=True) -> None:
-        assert isinstance(param, inspect.Parameter)
+    def __init__(self, param: inspect.Parameter, fname: str, is_magic=False) -> None:
+        self.is_magic = is_magic
         self.func_name = fname
         self.param = param
         self.name = param.name
@@ -37,7 +43,10 @@ class ToolFuncParam:
         self.is_self = self.name == "self"
         self.schema = self.__get_json_schema()
 
-    def __get_json_schema(self) -> dict[str, Any]:
+    def __get_json_schema(self) -> dict[str, Any] | None:
+        if self.is_magic and issubclass(self.type, Image):
+            return None
+
         if issubclass(self.type, BaseModel):
             schema = self.type.model_json_schema()
         else:
@@ -146,10 +155,12 @@ def tool(
     return __tool_impl
 
 
-R2 = TypeVar("R2")
+F = TypeVar("F", bound=Callable)
 
 
-def _gen_prompt(f: Callable[..., R2], args: list[Any], kwargs: dict[str, Any]) -> str:
+def _gen_prompt(
+    f: Callable, args: list[Any], kwargs: dict[str, Any]
+) -> tuple[str, list[tuple[ToolFuncParam, Image]]]:
     desc = "You need to do the following task and return the result in JSON:\n\n"
     desc += "TASK NAME: " + f.__name__ + "\n"
     if doc := f.__doc__:
@@ -159,9 +170,10 @@ def _gen_prompt(f: Callable[..., R2], args: list[Any], kwargs: dict[str, Any]) -
             f"WARNING: Function {f.__name__} has no docstring. It's recommended to use the docstring to provide the agent with a description of the task."
         )
     sig = inspect.signature(f)
+    images: list[tuple[ToolFuncParam, Image]] = []
     if len(sig.parameters) > 0:
         params = [
-            ToolFuncParam(p, f.__name__, enum_check=False)
+            ToolFuncParam(p, f.__name__, is_magic=True)
             for p in sig.parameters.values()
             if p.name != "self"
         ]
@@ -206,22 +218,28 @@ def _gen_prompt(f: Callable[..., R2], args: list[Any], kwargs: dict[str, Any]) -
             params_with_values[p.name] = (p, p.default)
         desc += "USER'S INPUTS:\n\n"
         for p, value in params_with_values.values():
+            if not p.schema:
+                continue
             pdesc = " * " + p.name + ": "
             if isinstance(value, BaseModel):
                 value_str = value.model_dump_json()
             else:
                 value_str = json.dumps(value)
-            if p.description or "enum" in p.schema:
+            if p.description or (p.schema and "enum" in p.schema):
                 pdesc += "\n"
                 if s := p.description:
                     pdesc += f"    * description: {s}\n"
-                if s := p.schema.get("enum"):
+                if s := (p.schema or {}).get("enum"):
                     pdesc += f"    * possible values: {', '.join(s)}\n"
                 pdesc += "    * value: " + value_str + "\n"
             else:
                 pdesc += value_str + "\n"
             desc += pdesc
-    return desc
+        for p, value in params_with_values.values():
+            if issubclass(p.type, Image):
+                value = cast(Image, value)
+                images.append((p, value))
+    return desc, images
 
 
 class Result[T](BaseModel):
@@ -229,7 +247,7 @@ class Result[T](BaseModel):
 
 
 @overload
-def magic(func: Callable[..., R2], /) -> Callable[..., R2]: ...
+def magic(func: F, /) -> F: ...
 
 
 @overload
@@ -238,26 +256,26 @@ def magic(
     model: str | None = None,
     api_key: str | None = None,
     tools: Optional["Tools"] = None,
-) -> Callable[[Callable[..., R2]], Callable[..., R2]]: ...
+) -> Callable[[F], F]: ...
 
 
 def magic(
-    func: Callable[..., R2] | None = None,
+    func: F | None = None,
     /,
     *,
     model: str | None = None,
     api_key: str | None = None,
     tools: Optional["Tools"] = None,
-) -> Callable[..., R2] | Callable[[Callable[..., R2]], Callable[..., R2]]:
+) -> F | Callable[[F], F]:
     """
     Decorator to mark a function as an agent for the agent.
     """
 
-    def __magic_impl(callable: Callable[..., R2]) -> Callable[..., R2]:
+    def __magic_impl(callable: F) -> F:
         async def __func_impl(*args: Any, **kwargs: Any):
             from agentia import Agent
 
-            prompt = _gen_prompt(callable, list(args), kwargs)
+            prompt, images = _gen_prompt(callable, list(args), kwargs)
 
             agent = Agent(model=model, api_key=api_key, tools=tools)
             return_type = inspect.signature(callable).return_annotation
@@ -270,7 +288,49 @@ def magic(
                 class _Result(Result[return_type]): ...
 
                 response_format = _Result
-            run = await agent.run(prompt, response_format=response_format)
+
+            messages = [
+                UserMessage(
+                    content=prompt,
+                    role="user",
+                )
+            ]
+            for i, (p, image) in enumerate(images):
+                buffered = BytesIO()
+                image.save(buffered, format=image.format)
+                img_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                match image.format:
+                    case "JPEG":
+                        content_type = "jpeg"
+                    case "PNG":
+                        content_type = "png"
+                    case "GIF":
+                        content_type = "gif"
+                    case "BMP":
+                        content_type = "bmp"
+                    case "WEBP":
+                        content_type = "webp"
+                    case "ICO":
+                        content_type = "ico"
+                    case _:
+                        raise ValueError(f"Unsupported image format: {image.format}")
+                print(f"Image format: {image.format}")
+                base64_url = f"data:image/{content_type};base64,{img_data}"
+                with open("test.png.txt", "w+") as f:
+                    f.write(base64_url)
+                s = f"Image Argument #{i}: {p.name}"
+                if p.description:
+                    s += f"\nDescription: {p.description})"
+                messages.append(
+                    UserMessage(
+                        content=[
+                            ContentPartText(s),
+                            ContentPartImage(base64_url),
+                        ],
+                        role="user",
+                    )
+                )
+            run = await agent.run(messages, response_format=response_format)
             assert run.content
             json_result = json.loads(run.content)
             if issubclass(return_type, BaseModel):
