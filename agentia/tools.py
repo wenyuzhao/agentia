@@ -81,7 +81,7 @@ class ToolInfo:
             self.metadata = getattr(f, METADATA_TAG, None)
             self.params = [
                 ToolFuncParam(p, self.func.__name__)
-                for p in inspect.signature(callable).parameters.values()
+                for p in inspect.signature(f).parameters.values()
                 if p.name != "self"
             ]
             self.schema = self.get_json_schema(self.params)

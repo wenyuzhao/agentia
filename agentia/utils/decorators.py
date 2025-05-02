@@ -6,7 +6,6 @@ import logging
 import types
 from typing import (
     Any,
-    Awaitable,
     Callable,
     Literal,
     TypeVar,
@@ -17,9 +16,13 @@ from typing import (
     get_args,
     get_origin,
     Annotated,
+    TYPE_CHECKING,
 )
 from pydantic import BaseModel, Field
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
+
+if TYPE_CHECKING:
+    from agentia.tools import Tools
 
 
 class ToolFuncParam:
@@ -276,33 +279,37 @@ class Result[T](BaseModel):
 
 
 @overload
-def agentify(func: Callable[..., R2], /) -> Callable[..., R2]: ...
+def magic(func: Callable[..., R2], /) -> Callable[..., R2]: ...
 
 
 @overload
-def agentify(
+def magic(
     *,
     model: str | None = None,
+    api_key: str | None = None,
+    tools: Optional["Tools"] = None,
 ) -> Callable[[Callable[..., R2]], Callable[..., R2]]: ...
 
 
-def agentify(
+def magic(
     func: Callable[..., R2] | None = None,
     /,
     *,
     model: str | None = None,
+    api_key: str | None = None,
+    tools: Optional["Tools"] = None,
 ) -> Callable[..., R2] | Callable[[Callable[..., R2]], Callable[..., R2]]:
     """
     Decorator to mark a function as an agent for the agent.
     """
 
-    def __agentify_impl(callable: Callable[..., R2]) -> Callable[..., R2]:
+    def __magic_impl(callable: Callable[..., R2]) -> Callable[..., R2]:
         async def __func_impl(*args: Any, **kwargs: Any):
             from agentia import Agent
 
             prompt = _gen_prompt(callable, list(args), kwargs)
 
-            agent = Agent(model=model)
+            agent = Agent(model=model, api_key=api_key, tools=tools)
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str
@@ -333,6 +340,6 @@ def agentify(
         return __func_impl  # type: ignore
 
     if func is not None:
-        return __agentify_impl(func)
+        return __magic_impl(func)
 
-    return __agentify_impl
+    return __magic_impl

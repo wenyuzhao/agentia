@@ -34,7 +34,7 @@ from .message import (
 from .run import Run, MessageStream, ReasoningMessageStream
 from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
 from .tools import tool
-from .utils.decorators import agentify
+from .utils.decorators import magic
 
 __all__ = [
     # submodules
@@ -64,5 +64,5 @@ __all__ = [
     "register_plugin",
     # utils
     "init_logging",
-    "agentify",
+    "magic",
 ]
