@@ -30,6 +30,6 @@ class DeepSeekBackend(OpenAIBackend):
             base_url=base_url,
         )
 
-    @override
-    def get_default_model(self) -> str:
-        return "deepseek-chat"
+    @classmethod
+    def get_default_model(cls) -> str:
+        return "[deepseek]deepseek-chat"

@@ -73,9 +73,9 @@ class OpenAIBackend(LLMBackend):
     def get_api_key(self) -> str:
         return self.client.api_key
 
-    @abc.abstractmethod
-    def get_default_model(self) -> str:
-        return "openai:gpt-4o-mini"
+    @classmethod
+    def get_default_model(cls) -> str:
+        return "[openai]gpt-4o-mini"
 
     @overload
     async def _chat_completion_request(

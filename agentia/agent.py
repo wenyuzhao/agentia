@@ -40,17 +40,6 @@ if TYPE_CHECKING:
     from .llm import ModelOptions
 
 
-def get_default_model() -> str:
-    if path := os.environ.get("AGENTIA_DEFAULT_MODEL"):
-        return path
-    DEFAULT_MODEL_OPENROUTER = "openai/gpt-4o-mini"
-    DEFAULT_MODEL_OPENAI = "gpt-4o-mini"
-    if "OPENAI_BASE_URL" in os.environ:
-        return "openai/gpt-4o-mini"
-    else:
-        return "gpt-4o-mini"
-
-
 PluginType = TypeVar("PluginType", bound="Plugin")
 
 
@@ -68,7 +57,7 @@ class Agent:
         # Cooperation
         subagents: list["Agent"] | None = None,
         # Model and tools
-        model: Annotated[str | None, f"Default to {get_default_model()}"] = None,
+        model: str | None = None,
         options: Optional["ModelOptions"] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
@@ -78,7 +67,7 @@ class Agent:
     ):
         from .tools import ToolRegistry
         from .utils.session import get_global_cache_dir
-        from agentia.llm import create_llm_backend
+        from agentia.llm import create_llm_backend, get_default_model
 
         # Init simple fields
         self.__is_initialized = False

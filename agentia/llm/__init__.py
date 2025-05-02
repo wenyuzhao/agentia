@@ -66,8 +66,9 @@ class LLMBackend:
     @abc.abstractmethod
     def get_api_key(self) -> str: ...
 
-    @abc.abstractmethod
-    def get_default_model(self) -> str: ...
+    @classmethod
+    def get_default_model(cls) -> str:
+        raise NotImplementedError()
 
     @overload
     def run(
@@ -276,6 +277,45 @@ class LLMBackend:
             self.log.debug(message)
 
 
+def get_default_provider() -> str:
+    if p := os.environ.get("AGENTIA_LLM_BACKEND"):
+        # The environment variable AGENTIA_LLM_BACKEND is set. use it.
+        provider = p.strip().lower()
+    elif "OPENROUTER_API_KEY" in os.environ:
+        provider = "openrouter"
+    elif "DEEPSEEK_API_KEY" in os.environ:
+        provider = "deepseek"
+    else:
+        provider = "openai"
+    if provider not in [
+        "openai",
+        "openrouter",
+        "deepseek",
+    ]:
+        raise ValueError(f"Unknown provider: {provider}")
+    return provider
+
+
+def get_default_model() -> str:
+    if model := os.environ.get("AGENTIA_MODEL"):
+        return model
+    match get_default_provider():
+        case "openai":
+            from .openai import OpenAIBackend
+
+            return OpenAIBackend.get_default_model()
+        case "openrouter":
+            from .openrouter import OpenRouterBackend
+
+            return OpenRouterBackend.get_default_model()
+        case "deepseek":
+            from .deepseek import DeepSeekBackend
+
+            return DeepSeekBackend.get_default_model()
+        case p:
+            raise ValueError(f"Unknown provider: {p}")
+
+
 def create_llm_backend(
     *,
     model: str,
@@ -294,15 +334,8 @@ def create_llm_backend(
         # The model string has a [provider] prefix. parse it.
         provider = model.split("]", 1)[0][1:].strip().lower()
         model = model.split("]", 1)[1].strip()
-    elif "AGENTIA_LLM_BACKEND" in os.environ:
-        # The environment variable AGENTIA_LLM_BACKEND is set. use it.
-        provider = os.environ["AGENTIA_LLM_BACKEND"].strip().lower()
-    elif "OPENAI_BASE_URL" in os.environ:
-        # The user overrides the OPENAI_BASE_URL. Just use openai backend for maximum compatibility.
-        provider = "openai"
     else:
-        # The user did not specify a provider. use openrouter backend by default.
-        provider = "openrouter"
+        provider = get_default_model()
     assert provider in [
         "openai",
         "openrouter",

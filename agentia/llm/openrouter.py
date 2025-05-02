@@ -53,7 +53,8 @@ class OpenRouterBackend(OpenAIBackend):
         self.has_reasoning = model_has_reasoning and include_reasoning
         self.extra_body["transforms"] = ["middle-out"]
 
-    def get_default_model(self) -> str:
+    @classmethod
+    def get_default_model(cls) -> str:
         return "[openrouter]openai/gpt-4o-mini"
 
     def __model_has_reasoning(self, model: str):
