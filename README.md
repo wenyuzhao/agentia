@@ -50,6 +50,14 @@ print(forcast.location) # Output: Boston
 print(forcast.temperature_degree) # Output: 22
 ```
 
+# Supported Parameter and Result Types
+
+* Any types that can be passed to `pydantic.TypeAdaptor`:
+    * Builtin types: `int`, `float`, `str`, `bool`, `tuple[_]`, `list[_]`, `dict[_, _]`
+    * Enums: `Literal['A', 'B', ...]`, `StrEnum`, `IntEnum`, and `Enum`
+    * dataclasses
+* `pydantic.BaseModel` subclasses
+
 # Agent Config File
 
 Agentia supports creating agents from config files:

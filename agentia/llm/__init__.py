@@ -4,7 +4,8 @@ import inspect
 import os
 from typing import Any, AsyncGenerator, Literal, Optional, Sequence, overload
 from openai.lib._parsing._completions import type_to_response_format_param  # type: ignore
-from pydantic import BaseModel
+from openai.lib._pydantic import _ensure_strict_json_schema
+from pydantic import BaseModel, TypeAdapter
 
 from ..tools import ToolRegistry
 from ..message import AssistantMessage, Message, Event
@@ -126,6 +127,10 @@ class LLMBackend:
         a = self.tools._agent
         if inspect.isclass(response_format) and issubclass(response_format, BaseModel):
             response_format = type_to_response_format_param(response_format)  # type: ignore
+        if response_format is not None and not isinstance(response_format, dict):
+            ta = TypeAdapter(response_format)
+            schema = ta.json_schema()
+            response_format = _ensure_strict_json_schema(schema, path=(), root=schema)
         if stream and events:
             return Run(
                 a,

@@ -92,7 +92,7 @@ class ToolInfo:
         for p in fparams:
             if p.required:
                 params["required"].append(p.name)
-            params["properties"][p.name] = p.get_json_schema()
+            params["properties"][p.name] = p.schema
         return {
             "name": self.name,
             "description": self.description or "",

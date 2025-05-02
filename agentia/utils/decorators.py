@@ -1,5 +1,4 @@
 import asyncio
-from enum import Enum, IntEnum, StrEnum
 import inspect
 import json
 import logging
@@ -7,7 +6,6 @@ import types
 from typing import (
     Any,
     Callable,
-    Literal,
     TypeVar,
     Coroutine,
     Optional,
@@ -18,8 +16,8 @@ from typing import (
     Annotated,
     TYPE_CHECKING,
 )
-from pydantic import BaseModel, Field
-from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
+from pydantic import BaseModel, Field, TypeAdapter, ConfigDict
+from openai.lib._pydantic import _ensure_strict_json_schema
 
 if TYPE_CHECKING:
     from agentia.tools import Tools
@@ -36,21 +34,17 @@ class ToolFuncParam:
         self.type = t
         self.required = r
         self.default = self.__get_default()
-        self.type_name = self.__get_type_name(t)
         self.is_self = self.name == "self"
-        self.enum = self.__get_enum(t, enum_check)
+        self.schema = self.__get_json_schema()
 
-    def get_json_schema(self) -> dict[str, Any]:
+    def __get_json_schema(self) -> dict[str, Any]:
         if issubclass(self.type, BaseModel):
-            prop = to_strict_json_schema(self.type)
+            schema = self.type.model_json_schema()
         else:
-            prop = {}
-            prop["type"] = self.type_name
-            if self.enum is not None:
-                prop["enum"] = self.enum
+            schema = TypeAdapter(self.type).json_schema()
             if self.description:
-                prop["description"] = self.description
-        return prop
+                schema["description"] = self.description
+        return _ensure_strict_json_schema(schema, path=(), root=schema)
 
     def __get_desc(self) -> str | None:
         meta = (
@@ -85,81 +79,6 @@ class ToolFuncParam:
         # Get parameter type
         assert not is_optional(t), "Optional types are not supported"
         return t, required
-
-    def __get_type_name(self, t: type) -> str:
-        match t:
-            # string type
-            case x if x == str:
-                return "string"
-            # integer type
-            case x if x == int:
-                return "integer"
-            # boolean type
-            case x if x == bool:
-                return "boolean"
-            # string enum
-            case x if get_origin(x) == Annotated and get_args(x)[0] == str:
-                # Special form: Annotated[Annotated[str, ["variants", ...], "description..."]
-                return "string"
-            case x if get_origin(x) == Annotated and get_args(x)[0] == int:
-                return "integer"
-            case x if get_origin(x) == Annotated and get_args(x)[0] == float:
-                return "number"
-            case x if get_origin(x) == Literal and all(
-                isinstance(i, str) for i in get_args(x)
-            ):
-                return "string"
-            case x if get_origin(x) == Literal and all(
-                isinstance(i, int) for i in get_args(x)
-            ):
-                return "integer"
-            case x if get_origin(x) == Literal and all(
-                isinstance(i, float) for i in get_args(x)
-            ):
-                return "number"
-            case x if issubclass(x, IntEnum):
-                return "integer"
-            case x if issubclass(x, StrEnum):
-                return "string"
-            case x if issubclass(x, Enum) and all(isinstance(i.value, str) for i in x):
-                return "string"
-            case x if issubclass(x, Enum) and all(isinstance(i.value, int) for i in x):
-                return "integer"
-            case x if issubclass(x, Enum) and all(
-                isinstance(i.value, float) for i in x
-            ):
-                return "number"
-            case x if issubclass(x, BaseModel):
-                return "object"
-            case _other:
-                assert (
-                    False
-                ), f"Invalid type annotation for parameter `{self.param.name}` in function {self.func_name}"
-
-    def __get_enum(self, t: type, check: bool) -> list[str] | None:
-        match t:
-            # string enum
-            case x if get_origin(x) == Annotated:
-                args = get_args(x)[1]
-                assert isinstance(args, list)
-                ty = get_args(x)[0]
-            case x if get_origin(x) == Literal:
-                args = get_args(x)
-                ty = type(args[0])
-            case x if (
-                issubclass(x, StrEnum) or issubclass(x, IntEnum) or issubclass(x, Enum)
-            ):
-                args = [item.value for item in x]
-                ty = type(args[0])
-            case _:
-                return None
-        if check:
-            for arg in args:
-                if not isinstance(arg, ty):
-                    raise ValueError(
-                        f"{self.func_name}.{self.name}: Invald enum value {arg} for type {ty}"
-                    )
-        return [str(x) for x in args]
 
 
 R = TypeVar("R", Coroutine[Any, Any, Optional[Any | str]], Optional[Any | str])
@@ -292,11 +211,11 @@ def _gen_prompt(f: Callable[..., R2], args: list[Any], kwargs: dict[str, Any]) -
                 value_str = value.model_dump_json()
             else:
                 value_str = json.dumps(value)
-            if p.description or p.enum:
+            if p.description or "enum" in p.schema:
                 pdesc += "\n"
                 if s := p.description:
                     pdesc += f"    * description: {s}\n"
-                if s := p.enum:
+                if s := p.schema.get("enum"):
                     pdesc += f"    * possible values: {', '.join(s)}\n"
                 pdesc += "    * value: " + value_str + "\n"
             else:
