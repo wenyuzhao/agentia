@@ -30,6 +30,9 @@ from .message import (
     UserConsentEvent,
     ToolCallEvent,
     CommunicationEvent,
+    ContentPartText,
+    ContentPartImage,
+    ContentPart,
 )
 from .run import Run, MessageStream, ReasoningMessageStream
 from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
@@ -52,6 +55,9 @@ __all__ = [
     "UserConsentEvent",
     "ToolCallEvent",
     "CommunicationEvent",
+    "ContentPartText",
+    "ContentPartImage",
+    "ContentPart",
     # run
     "Run",
     "MessageStream",

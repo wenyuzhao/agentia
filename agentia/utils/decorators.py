@@ -19,7 +19,7 @@ from typing import (
     TYPE_CHECKING,
 )
 from pydantic import BaseModel, Field, TypeAdapter, ConfigDict
-from openai.lib._pydantic import _ensure_strict_json_schema
+from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
 from io import BytesIO
@@ -40,7 +40,7 @@ class ImageUrl:
 
 
 def _is_image_type(t: type) -> bool:
-    return issubclass(t, Image) or issubclass(t, ImageUrl) or (t == (ImageUrl | Image))
+    return (t == (ImageUrl | Image)) or issubclass(t, Image) or issubclass(t, ImageUrl)
 
 
 class ToolFuncParam:
