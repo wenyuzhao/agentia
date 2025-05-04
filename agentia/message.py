@@ -4,6 +4,7 @@ from typing import (
     Literal,
     Required,
     TypeAlias,
+    TypeVar,
     TypedDict,
     Union,
     cast,
@@ -17,6 +18,8 @@ import json
 import abc
 from dataclasses import dataclass, field
 import uuid
+
+from pydantic import BaseModel
 
 
 if TYPE_CHECKING:
@@ -209,6 +212,9 @@ class SystemMessage(BaseMessage):
         return data
 
 
+T = TypeVar("T", bound=BaseModel)
+
+
 @dataclass
 class AssistantMessage(BaseMessage):
     content: str
@@ -235,6 +241,24 @@ class AssistantMessage(BaseMessage):
             "tool_calls": [tc.to_dict() for tc in self.tool_calls],
         }
         return data
+
+    def cast(self, t: type[T]) -> T:
+        if t == str:
+            try:
+                parsed = json.loads(self.content)
+                if isinstance(parsed, str):
+                    return parsed  # type: ignore
+            except json.JSONDecodeError:
+                return str(self.content)  # type: ignore
+        parsed = json.loads(self.content)
+        if issubclass(t, BaseModel):
+            return t(**parsed)
+        else:
+
+            class Value[V](BaseModel):
+                value: V
+
+            return Value[T](value=parsed).value
 
 
 @dataclass
