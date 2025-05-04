@@ -23,6 +23,7 @@ from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
 from io import BytesIO
+import inspect
 
 from agentia.message import UserMessage, ContentPartText, ContentPartImage
 
@@ -40,7 +41,11 @@ class ImageUrl:
 
 
 def _is_image_type(t: type) -> bool:
-    return (t == (ImageUrl | Image)) or issubclass(t, Image) or issubclass(t, ImageUrl)
+    if t == ImageUrl | Image:
+        return True
+    if not inspect.isclass(t):
+        return False
+    return issubclass(t, Image) or issubclass(t, ImageUrl)
 
 
 class ToolFuncParam:
@@ -324,9 +329,6 @@ def magic(
                 if isinstance(image, ImageUrl):
                     url = image.url
                 else:
-                    buffered = BytesIO()
-                    image.save(buffered, format=image.format)
-                    img_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     match image.format:
                         case "JPEG":
                             content_type = "jpeg"
@@ -344,6 +346,10 @@ def magic(
                             raise ValueError(
                                 f"Unsupported image format: {image.format}"
                             )
+                    buffered = BytesIO()
+                    buffered.name = f"image.{content_type}"
+                    image.save(buffered, format=image.format)
+                    img_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     url = f"data:image/{content_type};base64,{img_data}"
                 s = f"Image Argument #{i}: {p.name}"
                 if p.description:
