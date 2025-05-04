@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, is_dataclass
 import inspect
 import json
 import logging
@@ -49,10 +49,10 @@ class ToolFuncParam:
         self.func_name = fname
         self.param = param
         self.name = param.name
-        self.description = self.__get_desc()
         t, r = self.__get_type()
         self.type = t
         self.required = r
+        self.description = self.__get_desc()
         self.default = self.__get_default()
         self.is_self = self.name == "self"
         self.schema = self.__get_json_schema()
@@ -70,12 +70,23 @@ class ToolFuncParam:
         return _ensure_strict_json_schema(schema, path=(), root=schema)
 
     def __get_desc(self) -> str | None:
+        # if type has a docstring, add to description
+        type_desc = None
+        if is_dataclass(self.type) or isinstance(self.type, BaseModel):
+            if desc := self.type.__doc__:
+                type_desc = desc
         meta = (
             get_args(self.param.annotation)[1]
             if get_origin(self.param.annotation) == Annotated
             else None
         )
-        return meta if isinstance(meta, str) else None
+        if meta is not None and isinstance(meta, str):
+            if type_desc:
+                return type_desc + "\n\n" + meta
+            return meta
+        if type_desc:
+            return type_desc
+        return None
 
     def __get_default(self) -> Any | None:
         if self.param.default == inspect.Parameter.empty:
