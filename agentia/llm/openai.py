@@ -193,7 +193,7 @@ class OpenAIBackend(LLMBackend):
         reasoning = m.to_dict().get("reasoning")
         assert reasoning is None or isinstance(reasoning, str)
         return AssistantMessage(
-            content=m.content,
+            content=m.content or "",
             reasoning=reasoning,
             tool_calls=(
                 [
@@ -233,7 +233,7 @@ class ChatMessageStream(MessageStream):
         self, response: openai.AsyncStream[ChatCompletionChunk], has_reasoning: bool
     ):
         self.__aiter = response.__aiter__()
-        self.__message = AssistantMessage()
+        self.__message = AssistantMessage(content="")
         self.__tool_calls: list[ChoiceDeltaToolCall] = []
         self.__final_message: AssistantMessage | None = None
         self.__final_reasoning: str | None = None

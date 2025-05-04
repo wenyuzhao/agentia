@@ -142,7 +142,7 @@ class BaseMessage(abc.ABC):
                 return SystemMessage(content=data["content"])
             case "assistant":
                 return AssistantMessage(
-                    content=data["content"],
+                    content=data["content"] or "",
                     tool_calls=[
                         ToolCall.from_dict(tc) for tc in data.get("tool_calls", [])
                     ],
@@ -211,7 +211,7 @@ class SystemMessage(BaseMessage):
 
 @dataclass
 class AssistantMessage(BaseMessage):
-    content: str | None = None
+    content: str
     """
     The contents of the message.
 
