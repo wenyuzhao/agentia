@@ -37,7 +37,7 @@ from pydantic import BaseModel
 
 class Forcast(BaseModel):
     location: str
-    temperature_degree: int
+    temperature_celsius: int
 
 @magic
 async def get_weather(weather_forcast: str) -> Forcast:
@@ -47,7 +47,7 @@ async def get_weather(weather_forcast: str) -> Forcast:
 forcast = await get_weather("The current temperature in Boston is 72°F")
 
 print(forcast.location) # Output: Boston
-print(forcast.temperature_degree) # Output: 22
+print(forcast.temperature_celsius) # Output: 22
 ```
 
 # Supported Parameter and Result Types
