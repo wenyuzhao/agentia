@@ -1,7 +1,7 @@
 [project]
 name = "agentia"
-version = "0.0.18"
-description = "Ergonomic LLM Agent Augmented with Tools"
+version = "0.0.19"
+description = "Ergonomic LLM Agents"
 authors = [{ name = "Wenyu Zhao", email = "wenyuzhaox@gmail.com" }]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -20,6 +20,7 @@ dependencies = [
     "filelock>=3.18.0",
     "nest-asyncio>=1.6.0",
     "openai>=1.58.1,<2",
+    "pillow>=11.2.1",
     "pydantic>=2.10.4",
     "python-dotenv>=1.0.0,<2",
     "python-slugify>=8.0.4,<9",
