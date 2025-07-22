@@ -293,8 +293,8 @@ class ToolCallEvent:
     id: str
     agent: str
     name: str
-    display_name: str
-    description: str
+    display_name: str | None
+    description: str | None
     arguments: dict[str, Any]
     result: Any | None = None
     metadata: Any | None = None

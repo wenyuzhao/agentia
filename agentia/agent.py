@@ -1,4 +1,5 @@
 from datetime import datetime
+from json import tool
 import logging
 from pathlib import Path
 from typing import (
@@ -24,6 +25,7 @@ import os
 import shortuuid
 
 from agentia import LOGGER
+from agentia.mcp import MCPServer
 
 if TYPE_CHECKING:
     from agentia.utils.config import Config
@@ -247,7 +249,7 @@ class Agent:
                 }
             )
 
-        self.__tools.add_tool(communiate)
+        self.__tools.add(communiate)
 
     def __init_cooperation(self, subagents: list["Agent"]):
         if len(subagents) == 0:
@@ -260,9 +262,10 @@ class Agent:
         for agent in subagents:
             self.__add_subagent(agent)
 
-    def add_tool(self, f: Callable[..., Any]):
+    def add_tools(self, *tools: Callable[..., Any] | MCPServer | "Plugin") -> None:
         """Add a tool to the agent"""
-        self.__tools.add_tool(f)
+        for tool in tools:
+            self.__tools.add(tool)
 
     def __enter__(self):
         return self
