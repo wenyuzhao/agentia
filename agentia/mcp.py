@@ -1,10 +1,9 @@
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Callable
-import weakref
 from git import TYPE_CHECKING
 from mcp import ClientSession, StdioServerParameters, stdio_client
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import asyncio
 
 
