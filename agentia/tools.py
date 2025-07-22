@@ -12,11 +12,10 @@ from typing import (
 )
 
 import rich
-from sqlalchemy import func
 
 from agentia.agent import CommunicationEvent, ToolCallEvent, UserConsentEvent, Event
 
-from .message import JSON, ClientToolCallEvent, FunctionCall, ToolCall, ToolMessage
+from .message import FunctionCall, ToolCall, ToolMessage
 
 from .plugins import Plugin, ToolResult
 from pydantic import BaseModel
@@ -38,103 +37,6 @@ DISPLAY_NAME_TAG = "agentia_tool_display_name"
 IS_TOOL_TAG = "agentia_tool_is_tool"
 DESCRIPTION_TAG = "agentia_tool_description"
 METADATA_TAG = "agentia_tool_metadata"
-
-
-class ClientTool(BaseModel):
-    name: str
-    description: str
-    properties: dict[str, object]
-    metadata: Any | None = None
-
-
-class ToolInfo:
-    def __init__(
-        self,
-        f: Callable[..., Any],
-        plugin: Plugin | None = None,
-        client_tool: ClientTool | None = None,
-    ):
-        self.plugin = plugin
-        self.func = f
-        if client_tool:
-            self.name = client_tool.name
-            self.display_name = client_tool.name
-            self.description = client_tool.description
-            self.schema = {
-                "name": client_tool.name,
-                "description": client_tool.description or "",
-                "parameters": client_tool.properties,
-            }
-            self.metadata = client_tool.metadata
-            self.params = None
-            self.client_tool = client_tool
-        else:
-            if plugin:
-                self.name = (
-                    getattr(f, NAME_TAG, None) or f"{plugin.name()}__{f.__name__}"
-                )
-                self.display_name: str = (
-                    getattr(f, DISPLAY_NAME_TAG, None)
-                    or f"{plugin.name()}@{f.__name__}"
-                )
-            else:
-                self.name = getattr(f, NAME_TAG, f.__name__)
-                self.display_name: str = getattr(f, DISPLAY_NAME_TAG, self.name)
-            self.description: str = getattr(f, DESCRIPTION_TAG, f.__doc__) or ""
-            self.metadata = getattr(f, METADATA_TAG, None)
-            self.params = [
-                ToolFuncParam(p, self.func.__name__)
-                for p in inspect.signature(f).parameters.values()
-                if p.name != "self"
-            ]
-            self.schema = self.get_json_schema(self.params)
-            self.client_tool = None
-
-    def get_json_schema(self, fparams: list[ToolFuncParam]) -> Any:
-        params: Any = {"type": "object", "properties": {}, "required": []}
-        for p in fparams:
-            if p.required:
-                params["required"].append(p.name)
-            params["properties"][p.name] = p.schema
-        return {
-            "name": self.name,
-            "description": self.description or "",
-            "parameters": params,
-        }
-
-    def process_json_args(self, agent: "Agent", args: Any):
-        from .agent import Agent
-
-        p_args: list[Any] = []
-        kw_args: dict[str, Any] = {}
-
-        def get_value(name: str, default: Any, is_model: bool):
-            if name not in args:
-                return default
-            if is_model:
-                return p.type(**args[name])
-            else:
-                return args[name]
-
-        assert self.params is not None
-        for p in self.params:
-            is_model = issubclass(p.type, BaseModel)
-            match p.param.kind:
-                case Parameter.POSITIONAL_ONLY if p.param.annotation == Agent:
-                    p_args.append(agent)
-                case Parameter.POSITIONAL_ONLY:
-                    default = p.default if p.default != Parameter.empty else None
-                    p_args.append(get_value(p.name, default, is_model))
-                case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY if (
-                    p.param.annotation == Agent
-                ):
-                    kw_args[p.name] = agent
-                case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY:
-                    default = p.default if p.default != Parameter.empty else None
-                    kw_args[p.name] = get_value(p.name, default, is_model)
-                case other:
-                    raise ValueError(f"{other} is not supported")
-        return p_args, kw_args
 
 
 class _BaseTool:
@@ -454,4 +356,4 @@ class ToolRegistry:
             yield result_msg
 
 
-__all__ = ["Tool", "Tools", "ToolInfo", "ClientTool", "ToolRegistry"]
+__all__ = ["Tool", "Tools", "ToolRegistry"]
