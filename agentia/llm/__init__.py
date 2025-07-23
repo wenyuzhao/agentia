@@ -8,7 +8,7 @@ from openai.lib._pydantic import _ensure_strict_json_schema
 from pydantic import BaseModel, TypeAdapter
 
 from ..tools import ToolRegistry
-from ..message import AssistantMessage, Message, Event
+from ..message import AssistantMessage, Message, Event, is_event, is_message
 from ..run import Run, MessageStream
 from ..history import History
 
@@ -255,10 +255,11 @@ class LLMBackend:
             count = 0
             async for event in self.tools.call_tools(message.tool_calls):
                 self.log.debug(event)
-                if isinstance(event, Message):
+                if is_message(event):
                     self.history.add(event)
                     count += 1
                 else:
+                    assert is_event(event), "Event must be a Event object"
                     if events:
                         self.history.add(event)
                         yield event

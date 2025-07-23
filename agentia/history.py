@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Union
 import shelve
 
-from .message import Message, SystemMessage
+from .message import Message, SystemMessage, is_message
 
 if TYPE_CHECKING:
     from .agent import Event
@@ -35,7 +35,7 @@ class History:
     def reset(self):
         self.__messages = []
         if self._instructions is not None:
-            self.add(SystemMessage(self._instructions))
+            self.add(SystemMessage(content=self._instructions))
 
     def add(self, message: Union[Message, "Event"]):
         # TODO: auto trim history
@@ -54,7 +54,7 @@ class History:
         """
         Filter out non-message events
         """
-        return [m for m in msgs if isinstance(m, Message)]
+        return [m for m in msgs if is_message(m)]
 
     def _first_conversation_just_finished(self) -> bool:
         from .message import AssistantMessage, UserMessage

@@ -13,9 +13,9 @@ async def test_vision():
     run = agent.run(
         UserMessage(
             content=[
-                ContentPartText("What is this animal?"),
+                ContentPartText(content="What is this animal?"),
                 ContentPartImage(
-                    "https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png"
+                    url="https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png"
                 ),
             ],
         ),

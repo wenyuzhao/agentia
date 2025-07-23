@@ -4,8 +4,6 @@ import json
 import os
 from typing import AsyncIterator, Literal, Any, Sequence, overload, override
 
-from pydantic import BaseModel
-
 from agentia.run import MessageStream, ReasoningMessageStream
 from agentia.history import History
 
@@ -14,6 +12,9 @@ from ..tools import ToolRegistry
 
 from ..message import (
     AssistantMessage,
+    ContentPart,
+    ContentPartImage,
+    ContentPartText,
     Message,
     ToolCall,
     FunctionCall,
@@ -42,7 +43,15 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
 )
 import openai
-from openai.types.chat import ChatCompletionChunk
+from openai.types.chat import (
+    ChatCompletionChunk,
+    ChatCompletionContentPartTextParam,
+    ChatCompletionContentPartImageParam,
+)
+
+from openai.types.chat.chat_completion_message_tool_call_param import (
+    Function as OpenAIFunctionDict,
+)
 
 
 class OpenAIBackend(LLMBackend):
@@ -149,6 +158,16 @@ class OpenAIBackend(LLMBackend):
                 raise RuntimeError("response.choices is None")
             return self.__ccm_to_message(response.choices[0].message)
 
+    def __content_part_to_openai_content_part(
+        self, cp: ContentPart
+    ) -> ChatCompletionContentPartTextParam | ChatCompletionContentPartImageParam:
+        if isinstance(cp, ContentPartText):
+            return {"type": "text", "text": cp.content}
+        elif isinstance(cp, ContentPartImage):
+            return {"type": "image_url", "image_url": {"url": cp.url}}
+        else:
+            raise TypeError(f"Unsupported content part type: {type(cp)}")
+
     def __message_to_ccmp(self, m: Message) -> ChatCompletionMessageParam:
         content = m.content or ""
         if m.role == "system":
@@ -168,7 +187,7 @@ class OpenAIBackend(LLMBackend):
             _content = (
                 content
                 if isinstance(content, str)
-                else [c.to_openai_content_part() for c in content]
+                else [self.__content_part_to_openai_content_part(c) for c in content]
             )
             return ChatCompletionUserMessageParam(role="user", content=_content)
         if m.role == "assistant":
@@ -212,9 +231,14 @@ class OpenAIBackend(LLMBackend):
     def __tool_call_to_openai_tool_call(
         self, tool_call: ToolCall
     ) -> ChatCompletionMessageToolCallParam:
+        arguments_string = json.dumps(tool_call.function.arguments)
+        function: OpenAIFunctionDict = {
+            "name": tool_call.function.name,
+            "arguments": arguments_string,
+        }
         return {
             "id": tool_call.id,
-            "function": tool_call.function.to_dict(),
+            "function": function,
             "type": tool_call.type,
         }
 

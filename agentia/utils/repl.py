@@ -1,8 +1,7 @@
 import asyncio
 from agentia.agent import Agent
 from agentia.run import Run, MessageStream
-from agentia.message import Event, ToolCallEvent
-from agentia.message import Message
+from agentia.message import Event, ToolCallEvent, is_message
 from agentia.utils.config import load_agent_from_config
 import rich, rich.panel
 import dotenv
@@ -24,7 +23,7 @@ async def __dump(agent: Agent, run: Run[MessageStream | Event]):
         icon = None
 
     async for msg in run:
-        if isinstance(msg, Message):
+        if is_message(msg):
             print_name_and_icon(name, icon)
             print(msg.content)
         elif isinstance(msg, MessageStream):

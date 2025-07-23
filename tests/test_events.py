@@ -4,12 +4,14 @@ import pytest
 import dotenv
 import copy
 
+from agentia.message import is_event
+
 dotenv.load_dotenv()
 
 
 def calc(expression: Annotated[str, "The expression to calculate"]):
     """Calculate the result of a mathematical expression"""
-    if not (yield UserConsentEvent("Are you sure you want to calculate this?")):
+    if not (yield UserConsentEvent(message="Are you sure you want to calculate this?")):
         return "User did not consent to calculation."
     return eval(expression)
 
@@ -20,7 +22,7 @@ async def test_events():
     run = agent.run("Calculate 1 + 1", events=True)
     events: list[Event] = []
     async for e in run:
-        if isinstance(e, Event):
+        if is_event(e):
             events.append(copy.copy(e))
             if isinstance(e, UserConsentEvent):
                 e.response = True

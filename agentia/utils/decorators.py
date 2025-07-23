@@ -357,8 +357,8 @@ def magic(
                 messages.append(
                     UserMessage(
                         content=[
-                            ContentPartText(s),
-                            ContentPartImage(url),
+                            ContentPartText(content=s),
+                            ContentPartImage(url=url),
                         ],
                         role="user",
                     )

@@ -10,7 +10,7 @@ from typing import (
 )
 
 
-from agentia.message import AssistantMessage, Event, Message
+from agentia.message import AssistantMessage, Event, Message, is_message
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -86,11 +86,14 @@ class Run(Generic[M]):
     async def __await_impl(self) -> AssistantMessage:
         last_message: Message | None = None
         async for msg in self:
-            if isinstance(msg, Message):
+            if is_message(msg):
                 last_message = msg
             if isinstance(msg, MessageStream):
                 last_message = await msg
         assert last_message is not None
+        assert isinstance(
+            last_message, AssistantMessage
+        ), "Last message must be an AssistantMessage"
         return last_message
 
     def __await__(self):

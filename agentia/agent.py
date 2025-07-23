@@ -189,7 +189,7 @@ class Agent:
         "Run[AssistantMessage | Event]",
     ]:
         if isinstance(messages, str):
-            messages = [UserMessage(messages)]
+            messages = [UserMessage(content=messages)]
         elif isinstance(messages, UserMessage):
             messages = [messages]
         if stream and events:

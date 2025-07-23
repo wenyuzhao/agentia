@@ -3,6 +3,9 @@ from typing import Literal, Annotated
 import pytest
 import dotenv
 
+from agentia.message import is_event
+from agentia.run import MessageStream
+
 dotenv.load_dotenv()
 
 
@@ -44,9 +47,10 @@ async def test_stream_with_events():
     run = agent.run("What is the weather like in boston?", stream=True, events=True)
     all_assistant_content = ""
     async for stream in run:
-        if isinstance(stream, Event):
+        if is_event(stream):
             print(stream)
             continue
+        assert isinstance(stream, MessageStream)
         print("stream: ", stream)
         content = ""
         async for delta in stream:

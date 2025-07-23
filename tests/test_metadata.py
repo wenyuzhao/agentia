@@ -3,6 +3,8 @@ from typing import Annotated
 import pytest
 import dotenv
 
+from agentia.message import is_event
+
 dotenv.load_dotenv()
 
 tool_received_metadata: str | None = None
@@ -12,7 +14,7 @@ tool_received_metadata: str | None = None
 def calc(expression: Annotated[str, "The expression to calculate"]):
     """Calculate the result of a mathematical expression"""
     consent = UserConsentEvent(
-        "Are you sure you want to calculate this?", metadata={"bar": "BAR"}
+        message="Are you sure you want to calculate this?", metadata={"bar": "BAR"}
     )
     confirmed = yield consent
 
@@ -30,7 +32,7 @@ async def test_metadata():
     agent = Agent(model="openai/gpt-4.1-nano", tools=[calc])
     run = agent.run("Calculate 1 + 1", events=True)
     async for e in run:
-        if isinstance(e, Event):
+        if is_event(e):
             print(e)
             if isinstance(e, ToolCallEvent):
                 assert (e.metadata or {}).get("foo") == "FOO"

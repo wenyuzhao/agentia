@@ -11,7 +11,7 @@ user_consent_should_pass = True
 
 def calc(expression: Annotated[str, "The expression to calculate"]):
     """Calculate the result of a mathematical expression"""
-    if not (yield UserConsentEvent("Are you sure you want to calculate this?")):
+    if not (yield UserConsentEvent(message="Are you sure you want to calculate this?")):
         assert not user_consent_should_pass
         return "User did not consent to calculation."
     assert user_consent_should_pass
@@ -20,7 +20,7 @@ def calc(expression: Annotated[str, "The expression to calculate"]):
 
 async def calc2(expression: Annotated[str, "The expression to calculate"]):
     """Calculate the result of a mathematical expression"""
-    if not (yield UserConsentEvent("Are you sure you want to calculate this?")):
+    if not (yield UserConsentEvent(message="Are you sure you want to calculate this?")):
         assert not user_consent_should_pass
         raise ToolResult("User did not consent to calculation.")
     assert user_consent_should_pass

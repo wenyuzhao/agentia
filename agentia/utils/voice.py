@@ -30,6 +30,6 @@ async def stt(
     client = openai.AsyncOpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
     with open(path, "rb") as audio_file:
         transcript = await client.audio.transcriptions.create(
-            model="whisper-1", file=audio_file
+            model=model, file=audio_file
         )
         return transcript.text
