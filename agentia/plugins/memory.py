@@ -1,3 +1,4 @@
+from pathlib import Path
 from . import Plugin
 from ..tools import tool
 from typing import Annotated
@@ -6,8 +7,11 @@ from filelock import FileLock
 
 
 class MemoryPlugin(Plugin):
+    def __init__(self, file: str | Path):
+        super().__init__()
+        self.__momery_cache = Path(file)
+
     async def init(self):
-        self.__momery_cache = self.agent.agent_data_folder / "memory"
         if self.__momery_cache.exists():
             content = self.__momery_cache.read_text().strip()
             self.agent.history.add_instructions(f"YOUR PREVIOUS MEMORY: \n{content}")

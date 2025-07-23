@@ -11,7 +11,6 @@ from typing import (
 
 
 from agentia.message import AssistantMessage, Event, Message
-from agentia.utils.session import SessionLock
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -72,32 +71,14 @@ class Run(Generic[M]):
         super().__init__()
         self.__agen = agen
         self.__agent = agent
-        self.__lock: SessionLock = SessionLock(agent)
 
     @property
     def agent(self) -> "Agent":
         return self.__agent
 
-    async def __save_history(self):
-        if not self.__agent.persist:
-            return
-        await self.__agent.save()
-
-    async def __end_of_stream(self, error: bool):
-        if not error:
-            await self.__save_history()
-        self.__lock.unlock()
-
     async def __anext__(self) -> M:
         await self.__agent.init()
-        try:
-            return await self.__agen.__anext__()
-        except StopAsyncIteration as e:
-            await self.__end_of_stream(False)
-            raise e
-        except Exception as e:
-            await self.__end_of_stream(True)
-            raise e
+        return await self.__agen.__anext__()
 
     def __aiter__(self):
         return self

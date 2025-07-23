@@ -301,16 +301,6 @@ class ToolCallEvent:
 
 
 @dataclass
-class CommunicationEvent:
-    id: str
-    parent: str
-    child: str
-    message: str
-    response: str | None = None
-    role: Literal["event.communication"] = "event.communication"
-
-
-@dataclass
 class UserConsentEvent:
     message: str
     response: bool | None = None
@@ -321,7 +311,7 @@ class UserConsentEvent:
     role: Literal["event.user_consent"] = "event.user_consent"
 
 
-Event: TypeAlias = ToolCallEvent | CommunicationEvent | UserConsentEvent
+Event: TypeAlias = ToolCallEvent | UserConsentEvent
 
 __all__ = [
     "ToolCall",
@@ -339,7 +329,6 @@ __all__ = [
     "ToolMessage",
     # Event types
     "Event",
-    "CommunicationEvent",
     "UserConsentEvent",
     "ToolCallEvent",
 ]

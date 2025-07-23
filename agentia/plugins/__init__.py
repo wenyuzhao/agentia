@@ -1,8 +1,6 @@
 import abc
 import os
-import tomlkit.container
 from typing import TYPE_CHECKING, Any, Callable, Self, Type
-import tomlkit
 from ..utils.decorators import tool
 
 if TYPE_CHECKING:
@@ -47,15 +45,6 @@ class Plugin(abc.ABC):
             return cls._BUILTIN_ID
         return cls.name().lower()
 
-    @classmethod
-    def cache_key(cls, k: str | None = None) -> str:
-        key = f"plugins.{cls.id()}".lower()
-        if k:
-            while k.startswith("."):
-                k = k[1:]
-            key += f".{k}"
-        return key
-
     def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
         self.agent: "Agent"
@@ -82,17 +71,6 @@ class Plugin(abc.ABC):
         For OAuth:
             Login steps here can only access to CLI inputs.
             You may also want to override `__options__` so that user can login on the dashboard site.
-        """
-        pass
-
-    @classmethod
-    def __options__(cls, agent: str, config: tomlkit.container.Container):
-        """
-        Web UI for logging on the user and configuring the plugin.
-        Any modifications to the `configs` parameter will be saved to the config file.
-
-        For OAuth:
-            Please call `self.agent.open_configs_file()` and save your oauth tokens there. Same for other secrets.
         """
         pass
 

@@ -1,4 +1,4 @@
-from agentia import Agent, UserMessage
+from agentia import Agent
 from typing import Literal, Annotated
 import pytest
 import dotenv

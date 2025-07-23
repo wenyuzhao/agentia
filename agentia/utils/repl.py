@@ -1,9 +1,8 @@
 import asyncio
-from pathlib import Path
 from agentia.agent import Agent
 from agentia.run import Run, MessageStream
-from agentia.message import Event, ToolCallEvent, CommunicationEvent
-from agentia.message import Message, UserMessage
+from agentia.message import Event, ToolCallEvent
+from agentia.message import Message
 from agentia.utils.config import load_agent_from_config
 import rich, rich.panel
 import dotenv
@@ -17,9 +16,16 @@ async def __dump(agent: Agent, run: Run[MessageStream | Event]):
         name_and_icon = f"[{icon} {name}]" if icon else f"[{name}]"
         rich.print(f"[bold blue]{name_and_icon}[/bold blue]", end=end, flush=True)
 
+    if config := agent.context.get("config"):
+        name = config.agent.name or agent.id
+        icon = config.agent.icon
+    else:
+        name = agent.id
+        icon = None
+
     async for msg in run:
         if isinstance(msg, Message):
-            print_name_and_icon(agent.name, agent.icon)
+            print_name_and_icon(name, icon)
             print(msg.content)
         elif isinstance(msg, MessageStream):
             name_printed = False
@@ -28,13 +34,13 @@ async def __dump(agent: Agent, run: Run[MessageStream | Event]):
                 if delta == "":
                     continue
                 if not name_printed:
-                    print_name_and_icon(agent.name, agent.icon)
+                    print_name_and_icon(name, icon)
                     name_printed = True
                 outputed = True
                 print(delta, end="", flush=True)
             if outputed:
                 print()
-        elif isinstance(msg, ToolCallEvent | CommunicationEvent):
+        elif isinstance(msg, ToolCallEvent):
             if (
                 isinstance(msg, ToolCallEvent)
                 and msg.result is None
@@ -43,19 +49,11 @@ async def __dump(agent: Agent, run: Run[MessageStream | Event]):
                 rich.print(
                     f"[magenta][[bold]✨ TOOL:[/bold] {msg.display_name}][/magenta]"
                 )
-            elif isinstance(msg, CommunicationEvent):
-                c = agent.subagents[msg.child].name
-                direction = "->" if msg.response is None else "<-"
-                rich.print(
-                    f"[magenta][[bold]✨ COMMUNICATE:[/bold] {agent.name} {direction} {c}][/magenta] [dim]{msg.message}[/dim]"
-                )
 
 
 async def __run_async(agent: Agent):
     await agent.init()
-    assert agent.config_path
-    config_path = agent.config_path.relative_to(Path.cwd())
-    header = f"[bold blue]RUNNING:[/bold blue] [blue]{agent.id}[/blue] [dim italic]{config_path}[/dim italic]"
+    header = f"[bold blue]RUNNING:[/bold blue] [blue]{agent.id}[/blue]"
     rich.print(rich.panel.Panel.fit(header))
     while True:
         try:
@@ -71,6 +69,6 @@ async def __run_async(agent: Agent):
 
 def run(agent: Agent | str):
     if isinstance(agent, str):
-        agent = load_agent_from_config(agent, persist=False, session_id=None)
+        agent = load_agent_from_config(agent)
 
     asyncio.run(__run_async(agent))

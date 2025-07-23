@@ -13,7 +13,7 @@ from typing import (
 
 import rich
 
-from agentia.agent import CommunicationEvent, ToolCallEvent, UserConsentEvent, Event
+from agentia.agent import ToolCallEvent, UserConsentEvent, Event
 
 from .message import FunctionCall, ToolCall, ToolMessage
 
@@ -68,7 +68,7 @@ class _PythonFunctionTool(_BaseTool):
         description: str = getattr(f, DESCRIPTION_TAG, f.__doc__) or ""
         metadata = getattr(f, METADATA_TAG, None)
         params = [
-            ToolFuncParam(p, self.func.__name__)
+            ToolFuncParam(p, f.__name__)
             for p in inspect.signature(f).parameters.values()
             if p.name != "self"
         ]
@@ -267,9 +267,6 @@ class ToolRegistry:
                         yield yielded
                         self._agent.log.info(f"TOOL#{tool_id} {yielded}")
                         next_value = yielded.response
-                    elif isinstance(yielded, CommunicationEvent):
-                        self._agent.log.info(f"TOOL#{tool_id} {yielded}")
-                        yield yielded
                     elif isinstance(yielded, ToolResult):
                         result = yielded.result
                         break

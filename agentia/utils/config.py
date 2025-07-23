@@ -1,13 +1,11 @@
 from typing import TYPE_CHECKING, Annotated, Any
 import tomllib
 from pathlib import Path
-import shelve
 import tomlkit
 import os
 import importlib.util
 
 from agentia.agent import Agent
-from agentia.utils.session import get_global_cache_dir
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 if TYPE_CHECKING:
@@ -23,7 +21,6 @@ class AgentConfig(BaseModel):
     description: str | None = None
     instructions: str | None = None
     model: str | None = None
-    subagents: list[str] = Field(default_factory=list)
     user: str | None = None
     plugins: list[str] | None = None
 
@@ -88,15 +85,8 @@ def __create_tools(config: Config) -> tuple[list["Plugin"], dict[str, Any]]:
     return tools, tool_configs
 
 
-def __load_agent_from_config(
-    file: Path,
-    pending: set[Path],
-    agents: dict[Path, Agent],
-    persist: bool,
-    session_id: str | None,
-):
+def __load_agent_from_config(file: Path) -> Agent:
     """Load a bot from a configuration file"""
-    import agentia.utils.session as sess
 
     # Load the configuration file
     assert file.exists()
@@ -105,57 +95,17 @@ def __load_agent_from_config(
         config = Config(**tomllib.loads(file.read_text()))
     except ValidationError as e:
         raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
-    # Already loaded?
-    if file in pending:
-        raise ValueError(f"Circular dependency detected: {file.stem}")
-    pending.add(file)
-    if file in agents:
-        return agents[file]
     # Create tools
     tools, tool_configs = __create_tools(config)
-    # Load subagents
-    subagents: list[Agent] = []
-    subagent_session_ids: dict[str, str] = {}
-    if persist and session_id:
-        history = get_global_cache_dir() / "sessions" / session_id / "history"
-        history.parent.mkdir(parents=True, exist_ok=True)
-        with shelve.open(history) as db:
-            subagent_session_ids: dict[str, str] = db.get("subagents", {})
-    for child_id in config.agent.subagents:
-        child_path = get_config_dir() / f"{child_id}.toml"
-        if not child_path.is_file():
-            raise FileNotFoundError(f"Agent config not found: {child_path}")
-        subagent = __load_agent_from_config(
-            child_path,
-            pending,
-            agents,
-            persist,
-            subagent_session_ids.get(child_id) if persist else None,
-        )
-        subagents.append(subagent)
     # Create agent
-
     agent_id = file.stem
     agent = Agent(
         id=agent_id,
-        name=config.agent.name,
-        icon=config.agent.icon,
-        description=config.agent.description,
         model=config.agent.model,
         tools=tools,
         instructions=config.agent.instructions,
-        subagents=subagents,
-        user=config.agent.user,
-        persist=persist,
-        session_id=session_id,
     )
-    agent.config = config
-    agent.config_path = file.resolve()
-    # Load history
-    if persist and session_id:
-        sess.load_history(agent)
-    pending.remove(file)
-    agents[file] = agent
+    agent.context["config"] = config
     return agent
 
 
@@ -206,78 +156,12 @@ def prepare_user_plugins():
         spec.loader.exec_module(module)
 
 
-def get_agent_config_file(name: str) -> Path:
-    """Get the agent configuration file"""
-    return get_config_dir() / f"{name}.toml"
-
-
-def load_agent_from_config(
-    name: str | Path, persist: bool, session_id: str | None
-) -> Agent:
-    config_dir = get_config_dir()
+def load_agent_from_config(config_path: str | Path) -> Agent:
     """Load a bot from a configuration file"""
-    if isinstance(name, Path):
-        if not name.exists():
-            raise FileNotFoundError(f"Agent config file not found: {name}")
-        config_path = name.resolve()
-    elif name.endswith(".toml"):
-        # name is also a path
-        config_path = Path(name)
-        if not config_path.exists() or not config_path.is_file():
-            raise FileNotFoundError(f"Agent config file not found: {name}")
-        config_path = config_path.resolve()
-    elif (s := Path(name).suffix) and s != ".toml":
-        raise ValueError(f"Invalid agent path: {name}")
-    else:
-        # If the name is a string, we need to find the configuration file from a list of search paths
-        if (file := config_dir / f"{name}.toml").exists():
-            config_path = file
-        else:
-            raise FileNotFoundError(f"Agent config not found: {name}")
-    if config_path.stem.startswith(("_", ".", "-")):
-        raise ValueError(f"Invalid agent file name: {config_path.stem}")
-    return __load_agent_from_config(config_path, set(), {}, persist, session_id)
-
-
-def get_all_agents() -> list[AgentInfo]:
-    """Find all agents in the search paths"""
-    agents: dict[str, AgentInfo] = {}
-    config_dir = get_config_dir()
-    for file in config_dir.glob("*.toml"):
-        if file.stem in agents:
-            continue
-        if file.stem.startswith(("_", ".", "-")):
-            continue
-        doc = tomllib.loads(file.read_text())
-        if not isinstance(doc, dict) or "agent" not in doc:
-            continue
-        try:
-            config = Config(**doc)
-        except ValidationError as e:
-            raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
-        agent_info = AgentInfo(
-            id=file.stem,
-            config=config,
-            config_path=file.resolve().relative_to(Path.cwd()),
-        )
-        agents[file.stem] = agent_info
-    agents_list = list(agents.values())
-    agents_list.sort(key=lambda x: x.config.agent.name)
-    return agents_list
-
-
-def save(path: Path, doc: tomlkit.TOMLDocument):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w+") as f:
-        tomlkit.dump(doc, f)
-
-
-def load(path: Path) -> tomlkit.TOMLDocument:
-    if not path.exists():
-        raise FileNotFoundError(f"Agent config file not found: {path}")
-    with path.open("r") as f:
-        doc = tomlkit.load(f)
-    return doc
+    config_path = Path(config_path) if isinstance(config_path, str) else config_path
+    assert config_path.suffix == ".toml", "Agent config file must be a .toml file"
+    config_path = config_path.resolve()
+    return __load_agent_from_config(config_path)
 
 
 ALL_RECOMMENDED_MODELS = [
