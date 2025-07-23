@@ -76,23 +76,6 @@ class SearchPlugin(Plugin):
         if api_key := os.environ.get("TAVILY_API_KEY"):
             self.__tavily = TavilyClient(api_key=api_key)
 
-    @classmethod
-    @override
-    def __options__(cls, agent: str, config: Container):
-        import streamlit as st
-
-        v = config.get("country", "Australia")
-        index = _ALL_COUNTRIES.index(v) if v in _ALL_COUNTRIES else None
-
-        config["country"] = st.selectbox(
-            "Select the country for the search",
-            options=_ALL_COUNTRIES,
-            index=index,
-        )
-
-        if "Australia" == config["country"]:
-            del config["country"]
-
     def __process_result(
         self,
         res: Union[

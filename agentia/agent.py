@@ -209,6 +209,13 @@ class Agent:
                 messages, stream=False, events=False, response_format=response_format
             )
 
+    def anonymized(self, instructions: str | None = None) -> "Agent":
+        agent = Agent(
+            instructions=instructions,
+            model=self.__backend.get_default_model(),
+        )
+        return agent
+
     async def summarise(self) -> str:
         """Summarise the history as a short title"""
         agent = Agent(
