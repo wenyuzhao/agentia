@@ -1,14 +1,16 @@
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 import tomllib
 from pathlib import Path
-import tomlkit
 import os
 import importlib.util
 
 from agentia.agent import Agent
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
+from agentia.mcp import MCPServer
+
 if TYPE_CHECKING:
+    from agentia.tools import Tool
     from agentia.plugins import Plugin
 
 DEFAULT_AGENT_CONFIG_PATH = Path.cwd() / "agents"
@@ -23,6 +25,21 @@ class AgentConfig(BaseModel):
     model: str | None = None
     user: str | None = None
     plugins: list[str] | None = None
+    mcp: list[str] | None = None
+
+    def build_instructions(self) -> str | None:
+        if self.name and not self.description:
+            return f"YOUR ARE {self.name}\n\n{self.instructions or ''}"
+        elif self.description and not self.name:
+            return f"YOUR DESCRIPTION: {self.description}\n\n{self.instructions or ''}"
+        elif self.description and self.name:
+            return (
+                f"YOUR ARE {self.name}, {self.description}\n\n{self.instructions or ''}"
+            )
+        if self.user:
+            return f"{self.instructions or ''}\n\nYOU ARE TALKING TO THE USER.\nMY INFO (THE USER): {self.user}"
+        else:
+            return self.instructions
 
 
 PluginConfigs = dict[str, dict[str, Any]]
@@ -43,17 +60,56 @@ def check_plugins(configs: PluginConfigs) -> PluginConfigs:
     return configs
 
 
+class MCPLocalConfig(BaseModel):
+    command: str
+    args: list[str]
+    env: dict[str, str] | None = None
+    cwd: str | None = None
+    type: Literal["local"] = "local"
+
+
+class MCPHTTPConfig(BaseModel):
+    url: str
+    headers: dict[str, str] | None = None
+    type: Literal["http"] = "http"
+
+
+class MCPSSEConfig(BaseModel):
+    url: str
+    headers: dict[str, str] | None = None
+    type: Literal["sse"] = "sse"
+
+
+class MCPWebSocketConfig(BaseModel):
+    name: str
+    url: str
+    type: Literal["websocket"] = "websocket"
+
+
+MCPConfig = Annotated[
+    MCPLocalConfig | MCPHTTPConfig | MCPSSEConfig | MCPWebSocketConfig,
+    Field(discriminator="type"),
+]
+
+
 class Config(BaseModel):
     agent: AgentConfig
     plugins: Annotated[PluginConfigs, AfterValidator(check_plugins)] = Field(
         default_factory=dict
     )
+    mcp: dict[str, MCPConfig] = Field(default_factory=dict)
 
     def get_enabled_plugins(self) -> list[str]:
         if self.agent.plugins is not None:
             return sorted(self.agent.plugins)
         else:
             return sorted(self.plugins.keys())
+
+    def get_enabled_mcp_servers(self) -> dict[str, MCPConfig]:
+        if self.agent.mcp is not None:
+            return {name: self.mcp[name] for name in self.agent.mcp if name in self.mcp}
+        else:
+            return self.mcp
 
 
 class AgentInfo(BaseModel):
@@ -62,27 +118,62 @@ class AgentInfo(BaseModel):
     config: "Config"
 
 
-def __create_tools(config: Config) -> tuple[list["Plugin"], dict[str, Any]]:
+def __create_plugins(config: Config) -> tuple[list["Plugin"], dict[str, Any]]:
     from agentia.plugins import ALL_PLUGINS
 
-    tools: list["Plugin"] = []
-    tool_configs = {}
-    enabled_plugins = (
-        config.agent.plugins
-        if config.agent.plugins is not None
-        else list(config.plugins.keys())
-    )
+    plugins: list["Plugin"] = []
+    plugin_configs = {}
+    enabled_plugins = config.get_enabled_plugins()
     for name in enabled_plugins:
         c = config.plugins.get(name, {})
         if name not in ALL_PLUGINS:
-            raise ValueError(f"Unknown tool: {name}")
+            raise ValueError(f"Unknown plugin: {name}")
         PluginCls = ALL_PLUGINS[name]
         if not (c is None or isinstance(c, dict)):
-            raise ValueError(f"Invalid config for tool {name}: must be a dict or null")
+            raise ValueError(
+                f"Invalid config for plugin {name}: must be a dict or null"
+            )
         c = c if isinstance(c, dict) else {}
-        tool_configs[name] = c
-        tools.append(PluginCls.instantiate(config=c))
-    return tools, tool_configs
+        plugin_configs[name] = c
+        plugins.append(PluginCls.instantiate(config=c))
+    return plugins, plugin_configs
+
+
+def __create_mcp_servers(config: Config) -> dict[str, "MCPServer"]:
+    mcps: dict[str, MCPServer] = {}
+    for name, cfg in config.mcp.items():
+        match cfg.type:
+            case "local":
+                mcps[name] = MCPServer(
+                    name=name,
+                    command=cfg.command,
+                    args=cfg.args,
+                    env=cfg.env,
+                    cwd=cfg.cwd,
+                )
+            case "http":
+                mcps[name] = MCPServer(
+                    name=name,
+                    type="http",
+                    url=cfg.url,
+                    headers=cfg.headers,
+                )
+            case "sse":
+                mcps[name] = MCPServer(
+                    name=name,
+                    type="sse",
+                    url=cfg.url,
+                    headers=cfg.headers,
+                )
+            case "websocket":
+                mcps[name] = MCPServer(
+                    name=name,
+                    type="websocket",
+                    url=cfg.url,
+                )
+            case _:
+                raise ValueError(f"Unknown MCP server type: {cfg.type}")
+    return mcps
 
 
 def __load_agent_from_config(file: Path) -> Agent:
@@ -96,27 +187,19 @@ def __load_agent_from_config(file: Path) -> Agent:
     except ValidationError as e:
         raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
     # Create tools
-    tools, tool_configs = __create_tools(config)
+    plugins, _ = __create_plugins(config)
+    mcp_servers = __create_mcp_servers(config)
+    tools: list["Tool"] = [*plugins, *mcp_servers.values()]
     # Create agent
     agent_id = file.stem
     agent = Agent(
         id=agent_id,
         model=config.agent.model,
         tools=tools,
-        instructions=config.agent.instructions,
+        instructions=config.agent.build_instructions(),
     )
     agent.context["config"] = config
     return agent
-
-
-def get_config_dir() -> Path:
-    if path := os.environ.get("AGENTIA_CONFIG_DIR"):
-        config_dir = Path(path)
-    else:
-        config_dir = DEFAULT_AGENT_CONFIG_PATH
-    config_dir = config_dir.absolute()
-    config_dir.mkdir(parents=True, exist_ok=True)
-    return config_dir
 
 
 __user_plugins_loaded = False

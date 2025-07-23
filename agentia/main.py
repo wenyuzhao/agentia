@@ -19,13 +19,12 @@ app = typer.Typer(
 
 @app.command(help="Start the command line REPL")
 def repl(
-    agent: str,
-    config_dir: Annotated[
-        Path | None,
-        typer.Option(
-            help=f"Path to the agent configuration directory. DEFAULT: {DEFAULT_AGENT_CONFIG_PATH}",
+    agent: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the agent configuration file.",
         ),
-    ] = None,
+    ],
     user_plugin_dir: Annotated[
         Path | None,
         typer.Option(
@@ -35,8 +34,6 @@ def repl(
 ):
     dotenv.load_dotenv()
     os.environ["AGENTIA_CLI"] = "1"
-    if config_dir is not None:
-        os.environ["AGENTIA_CONFIG_DIR"] = str(config_dir)
     if user_plugin_dir is not None:
         os.environ["AGENTIA_USER_PLUGIN_DIR"] = str(user_plugin_dir)
     config.prepare_user_plugins()

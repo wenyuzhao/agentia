@@ -1,7 +1,7 @@
 from agentia import Agent
 import pytest
 import dotenv
-from agentia.mcp import LocalMCPServer, MCPContext
+from agentia.mcp import MCPServer, MCPContext
 
 
 dotenv.load_dotenv()
@@ -13,9 +13,8 @@ async def test_mcp():
         agent = Agent(
             model="openai/gpt-4.1-nano",
             tools=[
-                LocalMCPServer(
-                    name="calculator",
-                    cmd=["uvx", "mcp-server-calculator"],
+                MCPServer(
+                    name="calculator", command="uvx", args=["mcp-server-calculator"]
                 )
             ],
         )

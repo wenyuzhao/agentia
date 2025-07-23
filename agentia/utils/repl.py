@@ -1,5 +1,7 @@
 import asyncio
+from pathlib import Path
 from agentia.agent import Agent
+from agentia.mcp import mcp_context
 from agentia.run import Run, MessageStream
 from agentia.message import Event, ToolCallEvent, is_message
 from agentia.utils.config import load_agent_from_config
@@ -50,6 +52,7 @@ async def __dump(agent: Agent, run: Run[MessageStream | Event]):
                 )
 
 
+@mcp_context
 async def __run_async(agent: Agent):
     await agent.init()
     header = f"[bold blue]RUNNING:[/bold blue] [blue]{agent.id}[/blue]"
@@ -66,8 +69,8 @@ async def __run_async(agent: Agent):
         await __dump(agent, run)
 
 
-def run(agent: Agent | str):
-    if isinstance(agent, str):
+def run(agent: Agent | Path):
+    if isinstance(agent, Path):
         agent = load_agent_from_config(agent)
 
     asyncio.run(__run_async(agent))

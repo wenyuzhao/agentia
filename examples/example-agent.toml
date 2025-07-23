@@ -1,8 +1,8 @@
 [agent]
 # (REQUIRED) The name of the agent
-name = "Alice"
+name = "Robo"
 # (OPTIONAL) The avatar of the agent
-icon = "🤵🏻‍♀️"
+icon = "🤖"
 # (OPTIONAL) A short description of the agent. This is also visible to the agent.
 description = "A helpful assistant"
 # (OPTIONAL) Detailed instructions for the agent.
@@ -20,3 +20,7 @@ plugins = ["calc", "clock"]
 # Plugin options
 [plugins]
 search = { country = "Australia" }
+
+# MCP servers
+[mcp]
+deepwiki = { type = "sse", url = "https://mcp.deepwiki.com/sse" }
