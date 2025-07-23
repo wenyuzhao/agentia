@@ -3,10 +3,11 @@
 
 # Getting Started
 
-Run agents with tools.
+Run agents with tools and MCP.
 
 ```python
 from agentia import Agent
+from agentia.mcp import MCPServer, MCPContext
 from typing import Annotated
 
 # Define a tool as a python function
@@ -14,11 +15,15 @@ def get_weather(location: Annotated[str, "The city name"]):
     """Get the current weather in a given location"""
     return { "temperature": 72 }
 
+# Declare a MCP server:
+calc = MCPServer(name="calculator", command="uvx", args=["mcp-server-calculator"])
+
 # Create an agent
-agent = Agent(tools=[get_weather])
+agent = Agent(tools=[get_weather, calc])
 
 # Run the agent with the tool
-response = await agent.run("What is the weather like in boston?")
+async with MCPContext(): # This line can be omitted if not using MCP
+    response = await agent.run("What is the weather like in boston?")
 
 print(response)
 
@@ -58,90 +63,24 @@ print(forcast.temperature_celsius) # Output: 22
     * dataclasses
 * `pydantic.BaseModel` subclasses
 
-# Agent Config File
+# Run agent as a REPL app
 
-Agentia supports creating agents from config files:
-
-1. Create a config file at `./alice.toml`
+1. Create a config file at `./robo.toml`
 
 ```toml
 [agent]
-name = "Alice" # This is the only required field
-icon = "👩"
+name = "Robo" # This is the only required field
+icon = "🤖"
 instructions = "You are a helpful assistant"
 model = "openai/o3-mini"
-plugins = ["calc", "clock", "web"]
+plugins = ["clock"]
+
+[mcp]
+calc={ command = "uvx", args = ["mcp-server-calculator"] }
 ```
 
-2. In your python code:
-
-```python
-agent = Agent.load_from_config("./alice.toml")
-```
-
-3. Alternatively, start a REPL:
+2. Start a REPL session:
 
 ```bash
-uvx agentia alice
-```
-
-# Multi-Agent Orchestration (Experimental)
-
-Multi-agent orchestration is achieved by making leader/parent agents dispatching sub-tasks to their sub-agents.
-
-```python
-from agentia import Agent, CommunicationEvent, AssistantMessage
-
-coder = Agent(
-    model="openai/gpt-4.1-nano",
-    name="Coder",
-    description="programmar",
-)
-reviewer = Agent(
-    model="openai/gpt-4.1-nano",
-    name="Code Reviewer",
-    description="code reviewer",
-)
-leader = Agent(
-    model="openai/gpt-4.1-nano",
-    name="Leader",
-    description="Leader agent",
-    subagents=[
-        coder,
-        reviewer,
-    ],
-)
-
-run = leader.run(
-    "Ask your subagents to write a quicksort algorithm in python, review and improve it until it is perfect."
-    events=True,
-)
-
-async for e in run:
-    if isinstance(e, CommunicationEvent):
-        subagent_name = coder.name if e.child == coder.id else reviewer.name
-        if e.response is None:
-            print(f"[DISPATCH -> {subagent_name}]")
-            print(e.message)
-            print("[DISPATCH END]")
-            print()
-        else:
-            print(f"[RESPONSE <- {subagent_name}]")
-            print(e.response)
-            print("[RESPONSE END]")
-            print()
-
-    if isinstance(e, AssistantMessage):
-        print(e.content)
-        print()
-```
-
-Multi-agent orchestration in agent config files:
-
-```toml
-[agent]
-name = "Leader"
-# ... other fields
-# Create two subagent config files in the same directory: coder.toml and reviewer.toml
-subagents = ["coder", "reviewer"]
+agentia ./robo.toml
 ```
