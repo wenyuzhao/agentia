@@ -9,7 +9,7 @@ import pytest
 @magic
 async def get_content_type(extension: str) -> str:
     """
-    Get the http content type for a given file extension.
+    Get the http content type for a given file extension. Just return the content type, nothing else.
     """
     ...
 
