@@ -162,13 +162,3 @@ def load_agent_from_config(config_path: str | Path) -> Agent:
     assert config_path.suffix == ".toml", "Agent config file must be a .toml file"
     config_path = config_path.resolve()
     return __load_agent_from_config(config_path)
-
-
-ALL_RECOMMENDED_MODELS = [
-    "deepseek/deepseek-chat-v3-0324",
-    "openai/gpt-4o-mini",
-    "openai/gpt-4o",
-    "openai/o1",
-    "openai/o3-mini",
-    "openai/o3-mini-high",
-]

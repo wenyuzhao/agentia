@@ -41,7 +41,7 @@ class FakeWeatherPlugin2(Plugin):
 
 @pytest.mark.asyncio
 async def test_plugin():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[FakeWeatherPlugin()])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[FakeWeatherPlugin()])
     run = agent.run("What is the weather like in boston?")
     all_assistant_content: str = ""
     async for msg in run:
@@ -54,7 +54,7 @@ async def test_plugin():
 
 @pytest.mark.asyncio
 async def test_plugin_async():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[FakeWeatherPlugin2()])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[FakeWeatherPlugin2()])
     run = agent.run("What is the weather like in boston?")
     all_assistant_content: str = ""
     async for msg in run:

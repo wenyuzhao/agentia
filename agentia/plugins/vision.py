@@ -21,7 +21,7 @@ class VisionPlugin(Plugin):
     ):
         """Use gpt-4-vision-preview to analyze an image. Returning the analysis result."""
         response = await self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4.1",
             messages=[
                 {
                     "role": "system",

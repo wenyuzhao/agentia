@@ -27,7 +27,7 @@ def calc(expression: Annotated[str, "The expression to calculate"]):
 
 @pytest.mark.asyncio
 async def test_metadata():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[calc])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[calc])
     run = agent.run("Calculate 1 + 1", events=True)
     async for e in run:
         if isinstance(e, Event):

@@ -10,7 +10,7 @@ instructions = """
 You are a helpful assistant.
 """
 # (OPTIONAL) OpenRouter model name
-model = "openai/gpt-4o-mini"
+model = "openai/gpt-4.1-nano"
 # (OPTIONAL) A short description of yourself to the agent.
 user = "Bob, your boss"
 # (OPTIONAL) The list of plugins to load.

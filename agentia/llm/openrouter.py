@@ -55,7 +55,7 @@ class OpenRouterBackend(OpenAIBackend):
 
     @classmethod
     def get_default_model(cls) -> str:
-        return "[openrouter]openai/gpt-4o-mini"
+        return "[openrouter]openai/gpt-4.1-nano"
 
     def __model_has_reasoning(self, model: str):
         if v := os.environ.get("OPENROUTER_HAS_REASONING"):

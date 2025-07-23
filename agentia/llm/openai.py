@@ -75,7 +75,7 @@ class OpenAIBackend(LLMBackend):
 
     @classmethod
     def get_default_model(cls) -> str:
-        return "[openai]gpt-4o-mini"
+        return "[openai]gpt-4.1-nano"
 
     @overload
     async def _chat_completion_request(

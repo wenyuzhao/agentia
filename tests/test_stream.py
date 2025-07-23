@@ -21,7 +21,7 @@ def get_current_weather(
 
 @pytest.mark.asyncio
 async def test_stream():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[get_current_weather])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[get_current_weather])
     run = agent.run("What is the weather like in boston?", stream=True)
     all_assistant_content = ""
     async for stream in run:
@@ -40,7 +40,7 @@ async def test_stream():
 
 @pytest.mark.asyncio
 async def test_stream_with_events():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[get_current_weather])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[get_current_weather])
     run = agent.run("What is the weather like in boston?", stream=True, events=True)
     all_assistant_content = ""
     async for stream in run:

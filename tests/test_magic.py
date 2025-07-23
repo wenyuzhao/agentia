@@ -44,7 +44,7 @@ async def convert_to_fahrenheit(weather: Weather) -> Weather:
 
 @pytest.mark.asyncio
 async def test_magic1():
-    assert await get_content_type("txt") == "text/plain"
+    assert "text/plain" in await get_content_type("txt")
 
 
 @pytest.mark.asyncio

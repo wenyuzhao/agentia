@@ -93,17 +93,17 @@ Multi-agent orchestration is achieved by making leader/parent agents dispatching
 from agentia import Agent, CommunicationEvent, AssistantMessage
 
 coder = Agent(
-    model="openai/gpt-4o-mini",
+    model="openai/gpt-4.1-nano",
     name="Coder",
     description="programmar",
 )
 reviewer = Agent(
-    model="openai/gpt-4o-mini",
+    model="openai/gpt-4.1-nano",
     name="Code Reviewer",
     description="code reviewer",
 )
 leader = Agent(
-    model="openai/gpt-4o-mini",
+    model="openai/gpt-4.1-nano",
     name="Leader",
     description="Leader agent",
     subagents=[

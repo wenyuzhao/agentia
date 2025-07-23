@@ -29,7 +29,7 @@ async def calc2(expression: Annotated[str, "The expression to calculate"]):
 
 @pytest.mark.asyncio
 async def test_user_consent_pass():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[calc])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[calc])
     run = agent.run("Calculate 1 + 1", events=True)
     async for msg in run:
         if isinstance(msg, UserConsentEvent):
@@ -41,7 +41,7 @@ async def test_user_consent_pass():
 
 @pytest.mark.asyncio
 async def test_user_consent_fail():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[calc])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[calc])
     run = agent.run("Calculate 1 + 1", events=True)
     async for msg in run:
         if isinstance(msg, UserConsentEvent):
@@ -53,7 +53,7 @@ async def test_user_consent_fail():
 
 @pytest.mark.asyncio
 async def test_user_consent_pass_async():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[calc2])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[calc2])
     run = agent.run("Calculate 1 + 1", events=True)
     async for msg in run:
         if isinstance(msg, UserConsentEvent):
@@ -65,7 +65,7 @@ async def test_user_consent_pass_async():
 
 @pytest.mark.asyncio
 async def test_user_consent_fail_async():
-    agent = Agent(model="openai/gpt-4o-mini", tools=[calc2])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[calc2])
     run = agent.run("Calculate 1 + 1", events=True)
     async for msg in run:
         if isinstance(msg, UserConsentEvent):
