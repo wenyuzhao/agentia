@@ -138,7 +138,6 @@ class _PythonFunctionTool(_BaseTool):
 
 class _MCPTool(_BaseTool):
     def __init__(self, name: str, schema: Any, server: MCPServer):
-        print(f"Creating MCP Tool: {name}", schema)
         super().__init__(name=name, schema=schema)
         self.server = server
 
