@@ -1,13 +1,13 @@
 import asyncio
 from contextlib import AsyncExitStack
-from typing import AsyncGenerator
+from typing import AsyncGenerator, override
+import pyautogui
 from typing_extensions import Literal
 from agentia.agent import Agent
 from agentia.llm import LLMBackend
 from agentia.llm.google import GoogleBackend
 from google.genai.types import (
     Modality,
-    ActivityEnd,
     FunctionDeclaration,
     Tool,
     LiveConnectConfig,
@@ -15,7 +15,9 @@ from google.genai.types import (
     FunctionResponseScheduling,
     ContentDict,
     Content,
+    Blob,
 )
+import pyaudio
 
 from agentia.message import (
     AssistantMessage,
@@ -24,9 +26,73 @@ from agentia.message import (
     UserMessage,
     is_message,
 )
+from PIL.Image import Image
+import abc
+
+
+class InputStream(abc.ABC):
+    def __init__(self) -> None:
+        self._task: asyncio.Task | None = None
+        self.session: "RealtimeSession"
+
+    @abc.abstractmethod
+    async def start(self): ...
+
+    async def stop(self):
+        assert self._task
+        self._task.cancel()
+
+
+class ScreenRecording(InputStream):
+    @override
+    async def start(self):
+        print("Capturing screen...")
+        try:
+            while True:
+                img = pyautogui.screenshot()
+                await self.session.send(img)
+                await asyncio.sleep(0.3)
+        except asyncio.CancelledError:
+            return
+
+
+class Microphone(InputStream):
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.CHUNK = 4200
+        self.FORMAT = pyaudio.paInt16
+        self.CHANNELS = 1
+        self.INPUT_RATE = 16000
+
+        self.p = pyaudio.PyAudio()
+        self.stream = self.p.open(
+            format=self.FORMAT,
+            channels=self.CHANNELS,
+            rate=self.INPUT_RATE,
+            input=True,
+            frames_per_buffer=self.CHUNK,
+        )
+
+    @override
+    async def start(self):
+        print("Capturing microphone...")
+        try:
+            while True:
+                frame = self.stream.read(self.CHUNK)
+                await self.session.send(Blob(data=frame, mime_type="audio/pcm"))
+                await asyncio.sleep(10**-12)
+        except asyncio.CancelledError:
+            return
+        finally:
+            self.stream.close()
 
 
 class RealtimeSession:
+    """
+    The recommended model is `gemini-2.5-flash-live-preview`
+    """
+
     def __init__(self, agent: Agent, backend: LLMBackend):
         self.agent = agent
         assert isinstance(
@@ -78,14 +144,26 @@ class RealtimeSession:
     async def __aexit__(self, exc_type, exc_value, traceback):
         await self.exit_stack.aclose()
 
-    async def send(self, input: str, end: bool | None = None):
+    def stream(self, input: InputStream) -> None:
+        """
+        Send a stream of input data to the session.
+        This is used to send user input in real-time.
+        """
+        input.session = self
+        task = asyncio.create_task(input.start())
+        input._task = task
+
+    async def send(self, input: str | Image | Blob):
         """
         Send a message to the session.
         This is used to send commands or messages to the agent in real-time.
         """
-        await self.session.send_realtime_input(
-            text=input, activity_end=ActivityEnd() if end else None
-        )
+        if isinstance(input, Image):
+            await self.session.send_realtime_input(media=input)
+        elif isinstance(input, Blob):
+            await self.session.send_realtime_input(media=input)
+        else:
+            await self.session.send_realtime_input(text=input)
 
     async def __process_tool_calls(self, tool_calls: list[ToolCall]):
         if tool_calls:
