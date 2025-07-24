@@ -95,6 +95,7 @@ class Microphone(InputStream):
 
 class RealtimeSession:
     """
+    Only support Gimini models for now.
     The recommended model is `gemini-2.5-flash-live-preview`
     """
 
