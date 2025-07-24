@@ -102,7 +102,12 @@ class GoogleBackend(LLMBackend):
                     ]
                 ),
             ],
-            response_schema=response_format,
+            response_mime_type=(
+                "text/plain" if not response_format else "application/json"
+            ),
+            response_json_schema=(
+                response_format["json_schema"]["schema"] if response_format else None
+            ),
             thinking_config=(
                 ThinkingConfig(thinking_budget=0)
                 if not self.reasoning_enabled
