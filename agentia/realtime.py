@@ -13,6 +13,8 @@ from google.genai.types import (
     LiveConnectConfig,
     Behavior,
     FunctionResponseScheduling,
+    ContentDict,
+    Content,
 )
 
 from agentia.message import (
@@ -20,6 +22,7 @@ from agentia.message import (
     ToolCall,
     ToolMessage,
     UserMessage,
+    is_message,
 )
 
 
@@ -63,6 +66,13 @@ class RealtimeSession:
                 ),
             )
         )
+        contents: list[Content | ContentDict] = [
+            self.llm.message_to_genai_content(m)
+            for m in self.llm.history.messages
+            if is_message(m)
+        ]
+        if contents:
+            await self.session.send_client_content(turns=contents, turn_complete=False)
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
