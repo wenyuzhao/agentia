@@ -29,6 +29,12 @@ from agentia.message import (
 from PIL.Image import Image
 import abc
 
+CHUNK = 4200
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+INPUT_RATE = 16000
+OUTPUT_RATE = 24000
+
 
 class InputStream(abc.ABC):
     def __init__(self) -> None:
@@ -64,26 +70,21 @@ class Microphone(InputStream):
     def __init__(self) -> None:
         super().__init__()
 
-        self.CHUNK = 4200
-        self.FORMAT = pyaudio.paInt16
-        self.CHANNELS = 1
-        self.INPUT_RATE = 16000
-
         self.p = pyaudio.PyAudio()
-        self.stream = self.p.open(
-            format=self.FORMAT,
-            channels=self.CHANNELS,
-            rate=self.INPUT_RATE,
-            input=True,
-            frames_per_buffer=self.CHUNK,
-        )
 
     @override
     async def start(self):
         print("Capturing microphone...")
+        self.stream = self.p.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=INPUT_RATE,
+            input=True,
+            frames_per_buffer=CHUNK,
+        )
         try:
             while True:
-                frame = self.stream.read(self.CHUNK)
+                frame = self.stream.read(CHUNK)
                 await self.session.send(Blob(data=frame, mime_type="audio/pcm"))
                 await asyncio.sleep(10**-12)
         except asyncio.CancelledError:
@@ -97,7 +98,12 @@ class RealtimeSession:
     The recommended model is `gemini-2.5-flash-live-preview`
     """
 
-    def __init__(self, agent: Agent, backend: LLMBackend):
+    def __init__(
+        self,
+        agent: Agent,
+        backend: LLMBackend,
+        response_modality: Literal["text", "audio"],
+    ):
         self.agent = agent
         assert isinstance(
             backend, GoogleBackend
@@ -108,6 +114,9 @@ class RealtimeSession:
         self._tool_scheduling: Literal["blocking", "idle", "silent", "interrupt"] = (
             "idle"
         )
+        self.response_modality = response_modality
+        if self.response_modality == "audio":
+            self.p: pyaudio.PyAudio | None = pyaudio.PyAudio()
 
     async def __aenter__(self):
         await self.agent.init()
@@ -115,7 +124,13 @@ class RealtimeSession:
             self.llm.client.aio.live.connect(
                 model=self.llm.model,
                 config=LiveConnectConfig(
-                    response_modalities=[Modality.TEXT],
+                    response_modalities=[
+                        (
+                            Modality.TEXT
+                            if self.response_modality == "text"
+                            else Modality.AUDIO
+                        )
+                    ],
                     system_instruction=self.llm.history.instructions,
                     tools=[
                         Tool(
@@ -132,7 +147,9 @@ class RealtimeSession:
                             ]
                         ),
                     ],
-                    # enable_affective_dialog=True,
+                    # enable_affective_dialog=(
+                    #     True if self.response_modality == "audio" else None
+                    # ),
                 ),
             )
         )
@@ -209,6 +226,16 @@ class RealtimeSession:
         Receive messages from the session.
         This is a generator that yields messages as they are received.
         """
+        output_stream: pyaudio.Stream | None = None
+        if self.response_modality == "audio":
+            assert self.p is not None, "PyAudio is not initialized"
+            output_stream = self.p.open(
+                format=FORMAT,
+                channels=CHANNELS,
+                rate=OUTPUT_RATE,
+                output=True,
+                frames_per_buffer=CHUNK,
+            )
         while True:
             input_transcript = ""
             output_msg = AssistantMessage(content="")
@@ -248,6 +275,13 @@ class RealtimeSession:
                 if m.text:
                     output_msg.content += m.text
                     yield m.text
+                if m.server_content and m.server_content.model_turn:
+                    for part in m.server_content.model_turn.parts or []:
+                        if part.inline_data and part.inline_data.data:
+                            audio_data = part.inline_data.data
+                            assert output_stream is not None
+                            output_stream.write(audio_data)
+                            await asyncio.sleep(10**-12)
             if output_msg.content or output_msg.tool_calls:
                 self.llm.history.add(output_msg)
             # A turn is finished

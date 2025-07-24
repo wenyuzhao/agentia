@@ -241,7 +241,9 @@ class Agent:
         """
         self.__user_consent = True
 
-    def realtime(self) -> "RealtimeSession":
+    def realtime(
+        self, response_modality: Literal["text", "audio"] = "audio"
+    ) -> "RealtimeSession":
         """
         Create a realtime session for this agent with the given backend.
         This is useful for handling real-time interactions.
@@ -249,7 +251,9 @@ class Agent:
 
         from agentia.realtime import RealtimeSession
 
-        return RealtimeSession(agent=self, backend=self.__backend)
+        return RealtimeSession(
+            agent=self, backend=self.__backend, response_modality=response_modality
+        )
 
 
 __all__ = ["Agent"]
