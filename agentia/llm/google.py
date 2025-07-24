@@ -29,6 +29,7 @@ from google.genai.types import (
     Tool,
     GenerateContentResponse,
     ThinkingConfig,
+    FunctionResponseScheduling,
 )
 import logging
 
@@ -208,11 +209,15 @@ class GoogleBackend(LLMBackend):
         return p
 
     @staticmethod
-    def tool_message_to_genai_tool_response(m: ToolMessage) -> FunctionResponse:
+    def tool_message_to_genai_tool_response(
+        m: ToolMessage,
+        scheduling: FunctionResponseScheduling | None = None,
+    ) -> FunctionResponse:
         return FunctionResponse(
             id=m.id,
             name=m.name,
             response={"output": m.content or ""},
+            scheduling=scheduling,
         )
 
     @staticmethod

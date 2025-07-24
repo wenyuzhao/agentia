@@ -1,7 +1,8 @@
 import asyncio
 from contextlib import AsyncExitStack
 from typing import AsyncGenerator
-from agentia.agent import Agent, Event
+from typing_extensions import Literal
+from agentia.agent import Agent
 from agentia.llm import LLMBackend
 from agentia.llm.google import GoogleBackend
 from google.genai.types import (
@@ -10,6 +11,8 @@ from google.genai.types import (
     FunctionDeclaration,
     Tool,
     LiveConnectConfig,
+    Behavior,
+    FunctionResponseScheduling,
 )
 
 from agentia.message import (
@@ -29,6 +32,9 @@ class RealtimeSession:
         assert not backend.model.endswith(":think"), "Reasoning is not allowed"
         self.llm: GoogleBackend = backend
         self.exit_stack = AsyncExitStack()
+        self._tool_scheduling: Literal["blocking", "idle", "silent", "interrupt"] = (
+            "idle"
+        )
 
     async def __aenter__(self):
         await self.agent.init()
@@ -41,11 +47,19 @@ class RealtimeSession:
                     tools=[
                         Tool(
                             function_declarations=[
-                                FunctionDeclaration(**s["function"])
+                                FunctionDeclaration(
+                                    behavior=(
+                                        Behavior.BLOCKING
+                                        if self._tool_scheduling == "blocking"
+                                        else Behavior.NON_BLOCKING
+                                    ),
+                                    **s["function"],
+                                )
                                 for s in self.llm.tools.get_schema()
                             ]
                         ),
                     ],
+                    # enable_affective_dialog=True,
                 ),
             )
         )
@@ -77,9 +91,21 @@ class RealtimeSession:
                     #     yield event
                     ...
             print(responses)
+            sched: FunctionResponseScheduling | None = None
+            match self._tool_scheduling:
+                case "blocking":
+                    sched = None
+                case "idle":
+                    sched = FunctionResponseScheduling.WHEN_IDLE
+                case "silent":
+                    sched = FunctionResponseScheduling.SILENT
+                case "interrupt":
+                    sched = FunctionResponseScheduling.INTERRUPT
             await self.session.send_tool_response(
                 function_responses=[
-                    GoogleBackend.tool_message_to_genai_tool_response(m)
+                    GoogleBackend.tool_message_to_genai_tool_response(
+                        m, scheduling=sched
+                    )
                     for m in responses
                 ]
             )
@@ -123,9 +149,9 @@ class RealtimeSession:
                     output_msg.tool_calls = tool_calls
                     self.llm.history.add(output_msg)
                     output_msg = AssistantMessage(content="")
-                    msgs = await self.__process_tool_calls(tool_calls=tool_calls)
-                    for x in msgs or []:
-                        self.llm.history.add(x)
+                    asyncio.create_task(
+                        self.__process_tool_calls(tool_calls=tool_calls)
+                    )
 
                 if m.text:
                     output_msg.content += m.text
