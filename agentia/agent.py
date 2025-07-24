@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .tools import ToolRegistry, Tools
     from .plugins import Plugin
-    from .llm import ModelOptions
+    from .llm import ModelOptions, ModelOptionsDict
 
 
 PluginType = TypeVar("PluginType", bound="Plugin")
@@ -49,12 +49,13 @@ class Agent:
         instructions: str | None = None,
         # Model and tools
         model: str | None = None,
-        options: Optional["ModelOptions"] = None,
+        options: Optional[Union["ModelOptions", "ModelOptionsDict"]] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
     ):
         from .tools import ToolRegistry
         from agentia.llm import create_llm_backend, get_default_model
+        from agentia.llm import ModelOptions
 
         # Init simple fields
         self.__is_initialized = False
@@ -73,7 +74,11 @@ class Agent:
         self.__history = History(instructions=self.__instructions)
         self.__backend = create_llm_backend(
             model=model,
-            options=options,
+            options=(
+                ModelOptions.from_dict(options)
+                if isinstance(options, dict)
+                else options
+            ),
             api_key=api_key,
             tools=self.__tools,
             history=self.__history,

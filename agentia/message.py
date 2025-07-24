@@ -81,18 +81,6 @@ class UserMessage(BaseModel):
     role: Literal["user"] = "user"
 
 
-class SystemMessage(BaseModel):
-    content: str
-    """
-    The contents of the message.
-
-    `content` is required for all messages, and may be null for assistant messages
-    with function calls.
-    """
-
-    role: Literal["system"] = "system"
-
-
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -142,14 +130,16 @@ class ToolMessage:
     with function calls.
     """
 
-    tool_call_id: str | None = None
+    name: str | None = None
+
+    id: str | None = None
     """Tool call that this message is responding to."""
 
     role: Literal["tool"] = "tool"
 
 
 Message: TypeAlias = Annotated[
-    UserMessage | SystemMessage | AssistantMessage | ToolMessage,
+    UserMessage | AssistantMessage | ToolMessage,
     Field(discriminator="role"),
 ]
 
@@ -157,7 +147,7 @@ Message: TypeAlias = Annotated[
 def is_message(obj: Any) -> TypeGuard[Message]:
     return isinstance(
         obj,
-        (UserMessage, SystemMessage, AssistantMessage, ToolMessage),
+        (UserMessage, AssistantMessage, ToolMessage),
     )
 
 
@@ -203,7 +193,6 @@ __all__ = [
     # Message types
     "Message",
     "UserMessage",
-    "SystemMessage",
     "AssistantMessage",
     "ToolMessage",
     # Event types

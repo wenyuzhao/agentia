@@ -34,14 +34,10 @@ class OpenRouterBackend(OpenAIBackend):
             self.extra_body["provider"] = {
                 "order": [x.strip() for x in providers.strip().split(",")]
             }
-        if v := os.environ.get("OPENROUTER_INCLUDE_REASONING"):
-            include_reasoning = v.lower() in ["true", "1", "yes", "y"]
-            model_has_reasoning = self.__model_has_reasoning(model)
-            if not model_has_reasoning:
-                include_reasoning = False
-        else:
-            model_has_reasoning = self.__model_has_reasoning(model)
-            include_reasoning = model_has_reasoning
+        include_reasoning = options.reasoning_tokens
+        model_has_reasoning = self.__model_has_reasoning(model)
+        if not model_has_reasoning:
+            include_reasoning = False
         if model_has_reasoning:
             reasoning: dict[str, Any] = {
                 "exclude": not include_reasoning,
