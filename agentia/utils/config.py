@@ -88,7 +88,7 @@ class MCPWebSocketConfig(BaseModel):
 
 MCPConfig = Annotated[
     MCPLocalConfig | MCPHTTPConfig | MCPSSEConfig | MCPWebSocketConfig,
-    Field(discriminator="type"),
+    Field(union_mode="left_to_right"),
 ]
 
 

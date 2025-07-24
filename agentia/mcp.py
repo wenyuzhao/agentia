@@ -64,7 +64,7 @@ def _convert_tool_format(tool: MCPTool) -> Any:
         "parameters": {
             "type": "object",
             "properties": tool.inputSchema["properties"],
-            "required": tool.inputSchema["required"],
+            "required": tool.inputSchema.get("required", []),
         },
     }
     return converted_tool
