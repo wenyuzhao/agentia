@@ -44,6 +44,10 @@ class InputStream(abc.ABC):
 
 
 class ScreenRecording(InputStream):
+    def __init__(self, frame_rate: int = 4) -> None:
+        super().__init__()
+        self.frame_rate = frame_rate
+
     @override
     async def start(self):
         print("Capturing screen...")
@@ -51,7 +55,7 @@ class ScreenRecording(InputStream):
             while True:
                 img = pyautogui.screenshot()
                 await self.session.send(img)
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(1.0 / float(self.frame_rate))
         except asyncio.CancelledError:
             return
 
