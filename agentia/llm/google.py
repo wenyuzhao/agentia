@@ -13,6 +13,7 @@ from ..message import (
     Message,
     ToolCall,
     FunctionCall,
+    ToolMessage,
 )
 from google import genai
 from google.genai.types import (
@@ -32,7 +33,7 @@ from google.genai.types import (
 import logging
 
 
-class GoogleGeminiBackend(LLMBackend):
+class GoogleBackend(LLMBackend):
     def __init__(
         self,
         *,
@@ -53,7 +54,7 @@ class GoogleGeminiBackend(LLMBackend):
         self.client = genai.Client(api_key=api_key)
         self.extra_headers: dict[str, str] = {}
         self.extra_body: dict[str, Any] = {}
-        self.reasoning_enabled = model.endswith(":think") or model.endswith(":thinking")
+        self.reasoning_enabled = model.endswith(":think")
         self.has_reasoning = self.reasoning_enabled and options.reasoning_tokens
         # supress 'google_genai.types' warnings
         logging.getLogger("google_genai.types").setLevel(logging.ERROR)
@@ -101,13 +102,14 @@ class GoogleGeminiBackend(LLMBackend):
                     ]
                 ),
             ],
+            response_schema=response_format,
             thinking_config=(
                 ThinkingConfig(thinking_budget=0)
                 if not self.reasoning_enabled
                 else ThinkingConfig(include_thoughts=self.options.reasoning_tokens)
             ),
         )
-        model = self.model.split(":")[0]  # remove :think or :thinking suffix
+        model = self.model.removesuffix(":think")
         if stream:
             response = await self.client.aio.models.generate_content_stream(
                 model=model,
@@ -147,10 +149,8 @@ class GoogleGeminiBackend(LLMBackend):
             return Content(
                 parts=[
                     Part(
-                        function_response=FunctionResponse(
-                            id=m.id,
-                            name=m.name,
-                            response={"output": content},
+                        function_response=GoogleBackend.tool_message_to_genai_tool_response(
+                            m
                         )
                     )
                 ],
@@ -189,14 +189,7 @@ class GoogleGeminiBackend(LLMBackend):
                     content += part.text
             if part.function_call is not None:
                 tool_calls.append(
-                    ToolCall(
-                        id=part.function_call.id or "",
-                        function=FunctionCall(
-                            name=part.function_call.name or "",
-                            arguments=part.function_call.args or {},
-                        ),
-                        type="function",
-                    )
+                    GoogleBackend.genai_tool_call_to_tool_call(part.function_call)
                 )
         return AssistantMessage(
             content=content,
@@ -214,6 +207,25 @@ class GoogleGeminiBackend(LLMBackend):
         )
         return p
 
+    @staticmethod
+    def tool_message_to_genai_tool_response(m: ToolMessage) -> FunctionResponse:
+        return FunctionResponse(
+            id=m.id,
+            name=m.name,
+            response={"output": m.content or ""},
+        )
+
+    @staticmethod
+    def genai_tool_call_to_tool_call(call: GenAIFunctionCall) -> ToolCall:
+        return ToolCall(
+            id=call.id or "",
+            function=FunctionCall(
+                name=call.name or "",
+                arguments=call.args or {},
+            ),
+            type="function",
+        )
+
 
 class ChatMessageStream(MessageStream):
     def __init__(
@@ -227,7 +239,6 @@ class ChatMessageStream(MessageStream):
         if has_reasoning:
             self.reasoning = ReasoningMessageStreamImpl(response, self)
         self.__leftover: GenerateContentResponse | None = None
-        self.__leftover_in_final_content: bool = False
 
     @override
     async def _ensure_non_empty(self) -> bool:
@@ -254,12 +265,7 @@ class ChatMessageStream(MessageStream):
 
     def __get_final_tool_calls(self) -> list[ToolCall]:
         return [
-            ToolCall(
-                id=t.id or "",
-                function=FunctionCall(name=t.name or "", arguments=t.args or {}),
-                type="function",
-            )
-            for t in self.__tool_calls
+            GoogleBackend.genai_tool_call_to_tool_call(t) for t in self.__tool_calls
         ]
 
     def __process_chunk(self, chunk: GenerateContentResponse) -> str:

@@ -1,6 +1,4 @@
-from datetime import datetime
 import logging
-from pathlib import Path
 from typing import (
     Callable,
     Literal,
@@ -25,6 +23,7 @@ from agentia.mcp import MCPServer
 if TYPE_CHECKING:
     from agentia.utils.config import Config
     from agentia.run import Run, MessageStream
+    from agentia.realtime import RealtimeSession
 
 from .message import *
 from .history import History
@@ -241,6 +240,16 @@ class Agent:
         Plugins may either ignore this or ask for user consent even if this is not set.
         """
         self.__user_consent = True
+
+    def realtime(self) -> "RealtimeSession":
+        """
+        Create a realtime session for this agent with the given backend.
+        This is useful for handling real-time interactions.
+        """
+
+        from agentia.realtime import RealtimeSession
+
+        return RealtimeSession(agent=self, backend=self.__backend)
 
 
 __all__ = ["Agent"]

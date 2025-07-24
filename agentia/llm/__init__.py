@@ -250,12 +250,10 @@ class LLMBackend:
         # Run tools and submit results until convergence
         while len(message.tool_calls) > 0:
             # Run tools
-            count = 0
             async for event in self.tools.call_tools(message.tool_calls):
                 self.log.debug(event)
                 if is_message(event):
                     self.history.add(event)
-                    count += 1
                 else:
                     assert is_event(event), "Event must be a Event object"
                     if events:
@@ -370,9 +368,9 @@ def create_llm_backend(
             api_key=api_key,
         )
     elif provider == "google":
-        from .google import GoogleGeminiBackend
+        from .google import GoogleBackend
 
-        return GoogleGeminiBackend(
+        return GoogleBackend(
             model=model,
             tools=tools,
             options=options or ModelOptions(),
