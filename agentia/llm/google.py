@@ -1,4 +1,3 @@
-import json
 import os
 from typing import AsyncIterator, Literal, Any, Sequence, overload, override
 from agentia.run import MessageStream, ReasoningMessageStream
@@ -91,7 +90,7 @@ class GoogleBackend(LLMBackend):
         response_format: Any | None,
     ) -> AssistantMessage | MessageStream:
         contents: list[ContentUnion] = [
-            self.__message_to_genai_content(m) for m in messages
+            self.message_to_genai_content(m) for m in messages
         ]
         config: GenerateContentConfig = GenerateContentConfig(
             system_instruction=self.history.instructions,
@@ -142,7 +141,7 @@ class GoogleBackend(LLMBackend):
         else:
             raise TypeError(f"Unsupported content part type: {type(cp)}")
 
-    def __message_to_genai_content(self, m: Message) -> Content:
+    def message_to_genai_content(self, m: Message) -> Content:
         content = m.content or ""
         if m.role == "tool":
             assert isinstance(content, str)
