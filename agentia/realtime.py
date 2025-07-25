@@ -16,6 +16,8 @@ from google.genai.types import (
     ContentDict,
     Content,
     Blob,
+    ContextWindowCompressionConfig,
+    SlidingWindow,
 )
 import pyaudio
 
@@ -133,6 +135,9 @@ class RealtimeSession:
                         )
                     ],
                     system_instruction=self.llm.history.instructions,
+                    context_window_compression=(
+                        ContextWindowCompressionConfig(sliding_window=SlidingWindow())
+                    ),
                     tools=[
                         Tool(
                             function_declarations=[
