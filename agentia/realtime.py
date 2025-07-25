@@ -98,7 +98,7 @@ class Microphone(InputStream):
 class RealtimeSession:
     """
     Only support Gimini models for now.
-    The recommended model is `gemini-2.5-flash-live-preview`
+    The recommended model is `[google]gemini-2.5-flash-preview-native-audio-dialog`
     """
 
     def __init__(
@@ -287,7 +287,7 @@ class RealtimeSession:
                             audio_data = part.inline_data.data
                             assert output_stream is not None
                             output_stream.write(audio_data)
-                            await asyncio.sleep(10**-12)
+                            # await asyncio.sleep(10**-12)
             if output_msg.content or output_msg.tool_calls:
                 self.llm.history.add(output_msg)
             # A turn is finished
