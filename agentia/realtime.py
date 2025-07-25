@@ -1,7 +1,6 @@
 import asyncio
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, ExitStack
 from typing import AsyncGenerator, override
-import pyautogui
 from typing_extensions import Literal
 from agentia.agent import Agent
 from agentia.llm import LLMBackend
@@ -28,8 +27,10 @@ from agentia.message import (
     UserMessage,
     is_message,
 )
+import PIL.Image
 from PIL.Image import Image
 import abc
+from mss import mss
 
 CHUNK = 4200
 FORMAT = pyaudio.paInt16
@@ -52,20 +53,31 @@ class InputStream(abc.ABC):
 
 
 class ScreenRecording(InputStream):
-    def __init__(self, frame_rate: int = 4) -> None:
+    def __init__(self, monitor: int = 1, frame_rate: int = 4) -> None:
         super().__init__()
         self.frame_rate = frame_rate
+        self.exit_stack = ExitStack()
+        self.sct = self.exit_stack.enter_context(mss())
+        self.monitor = monitor
 
     @override
     async def start(self):
         print("Capturing screen...")
         try:
             while True:
-                img = pyautogui.screenshot()
+                sct_img = self.sct.grab(self.sct.monitors[self.monitor])
+                img = PIL.Image.frombytes(
+                    "RGB", sct_img.size, sct_img.bgra, "raw", "BGRX"
+                )
                 await self.session.send(img)
                 await asyncio.sleep(1.0 / float(self.frame_rate))
         except asyncio.CancelledError:
             return
+
+    @override
+    async def stop(self):
+        await super().stop()
+        self.exit_stack.close()
 
 
 class Microphone(InputStream):
