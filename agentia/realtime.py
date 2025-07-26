@@ -17,6 +17,7 @@ from google.genai.types import (
     Blob,
     ContextWindowCompressionConfig,
     SlidingWindow,
+    AudioTranscriptionConfig,
 )
 import pyaudio
 
@@ -53,7 +54,7 @@ class InputStream(abc.ABC):
 
 
 class ScreenRecording(InputStream):
-    def __init__(self, monitor: int = 1, frame_rate: int = 4) -> None:
+    def __init__(self, monitor: int = 1, frame_rate: int = 1) -> None:
         super().__init__()
         self.frame_rate = frame_rate
         self.exit_stack = ExitStack()
@@ -84,25 +85,34 @@ class Microphone(InputStream):
     def __init__(self) -> None:
         super().__init__()
 
-        self.p = pyaudio.PyAudio()
-
     @override
     async def start(self):
         print("Capturing microphone...")
-        self.stream = self.p.open(
+        if self.session.p is None:
+            self.session.p = pyaudio.PyAudio()
+        default_input_index = self.session.p.get_default_input_device_info()["index"]
+        self.stream = self.session.p.open(
             format=FORMAT,
             channels=CHANNELS,
             rate=INPUT_RATE,
             input=True,
+            output=False,
+            input_device_index=default_input_index,  # type: ignore
             frames_per_buffer=CHUNK,
         )
         try:
             while True:
-                frame = self.stream.read(CHUNK)
+                assert self.stream
+                frame = await asyncio.to_thread(
+                    self.stream.read, CHUNK, exception_on_overflow=False
+                )
                 await self.session.send(Blob(data=frame, mime_type="audio/pcm"))
                 await asyncio.sleep(10**-12)
         except asyncio.CancelledError:
             return
+        except BaseException as e:
+            print(f"Error in microphone stream: {e}")
+            raise
         finally:
             self.stream.close()
 
@@ -130,8 +140,10 @@ class RealtimeSession:
             "idle"
         )
         self.response_modality = response_modality
+        self.p: pyaudio.PyAudio | None = None
         if self.response_modality == "audio":
-            self.p: pyaudio.PyAudio | None = pyaudio.PyAudio()
+            self.p = pyaudio.PyAudio()
+        self.audio_queue = asyncio.Queue()
 
     async def __aenter__(self):
         await self.agent.init()
@@ -165,9 +177,10 @@ class RealtimeSession:
                             ]
                         ),
                     ],
-                    # enable_affective_dialog=(
-                    #     True if self.response_modality == "audio" else None
-                    # ),
+                    # proactivity=ProactivityConfig(proactive_audio=True),
+                    input_audio_transcription=AudioTranscriptionConfig(),
+                    output_audio_transcription=AudioTranscriptionConfig(),
+                    # enable_affective_dialog=True,
                 ),
             )
         )
@@ -247,11 +260,14 @@ class RealtimeSession:
         output_stream: pyaudio.Stream | None = None
         if self.response_modality == "audio":
             assert self.p is not None, "PyAudio is not initialized"
+            default_output_index = self.p.get_default_output_device_info()["index"]
             output_stream = self.p.open(
                 format=FORMAT,
                 channels=CHANNELS,
                 rate=OUTPUT_RATE,
+                input=False,
                 output=True,
+                output_device_index=default_output_index,  # type: ignore
                 frames_per_buffer=CHUNK,
             )
         while True:
@@ -298,8 +314,17 @@ class RealtimeSession:
                         if part.inline_data and part.inline_data.data:
                             audio_data = part.inline_data.data
                             assert output_stream is not None
-                            output_stream.write(audio_data)
+                            # output_stream.write(audio_data)
+                            self.audio_queue.put_nowait(audio_data)
+                            try:
+                                await asyncio.to_thread(output_stream.write, audio_data)
+                            except BaseException as e:
+                                print(f"Error writing audio data: {e}")
+                                raise
                             # await asyncio.sleep(10**-12)
+            if input_transcript:
+                self.llm.history.messages.append(UserMessage(content=input_transcript))
+                input_transcript = ""
             if output_msg.content or output_msg.tool_calls:
                 self.llm.history.add(output_msg)
             # A turn is finished

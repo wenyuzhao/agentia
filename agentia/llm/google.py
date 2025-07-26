@@ -51,7 +51,9 @@ class GoogleBackend(LLMBackend):
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is not set")
         self.api_key = api_key
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key, http_options={"api_version": "v1alpha"}
+        )
         self.extra_headers: dict[str, str] = {}
         self.extra_body: dict[str, Any] = {}
         self.reasoning_enabled = model.endswith(":think")
