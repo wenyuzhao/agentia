@@ -19,7 +19,7 @@ from google.genai.types import (
     SlidingWindow,
     AudioTranscriptionConfig,
 )
-import pyaudio
+import pyaudio  # type: ignore
 
 from agentia.message import (
     AssistantMessage,
@@ -31,7 +31,7 @@ from agentia.message import (
 import PIL.Image
 from PIL.Image import Image
 import abc
-from mss import mss
+from mss import mss  # type: ignore
 
 CHUNK = 4200
 FORMAT = pyaudio.paInt16
