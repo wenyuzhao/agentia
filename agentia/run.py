@@ -71,6 +71,7 @@ class Run(Generic[M]):
         super().__init__()
         self.__agen = agen
         self.__agent = agent
+        self.__last_message_or_stream: Optional[M] = None
 
     @property
     def agent(self) -> "Agent":
@@ -78,18 +79,22 @@ class Run(Generic[M]):
 
     async def __anext__(self) -> M:
         await self.__agent.init()
-        return await self.__agen.__anext__()
+        item = await self.__agen.__anext__()
+        self.__last_message_or_stream = item
+        return item
 
     def __aiter__(self):
         return self
 
     async def __await_impl(self) -> AssistantMessage:
-        last_message: Message | None = None
         async for msg in self:
-            if is_message(msg):
-                last_message = msg
-            if isinstance(msg, MessageStream):
-                last_message = await msg
+            ...
+        last_message: Message | None = None
+        assert self.__last_message_or_stream is not None
+        if is_message(self.__last_message_or_stream):
+            last_message = self.__last_message_or_stream
+        elif isinstance(self.__last_message_or_stream, MessageStream):
+            last_message = await self.__last_message_or_stream._wait_for_completion()
         assert last_message is not None
         assert isinstance(
             last_message, AssistantMessage
