@@ -2,7 +2,7 @@ import abc
 from dataclasses import dataclass
 import inspect
 import os
-from typing import Any, AsyncGenerator, Literal, Optional, Sequence, overload
+from typing import Any, AsyncGenerator, Literal, Optional, Sequence, TypedDict, overload
 from openai.lib._parsing._completions import type_to_response_format_param  # type: ignore
 from openai.lib._pydantic import _ensure_strict_json_schema
 from pydantic import BaseModel, TypeAdapter
@@ -18,30 +18,28 @@ from dataclasses import dataclass
 @dataclass
 class ModelOptions:
     frequency_penalty: float | None = None
-    # logit_bias: Optional[dict[str, int]] = None
-    # max_tokens: Optional[int] = None
-    # n: Optional[int] = None
     presence_penalty: float | None = None
-    # stop: Optional[str] | List[str] = None
     temperature: float | None = None
-    # repetition_penalty: Optional[float] = None
-    # top_p: Optional[float] = None
-    # timeout: Optional[float] = None
+    reasoning_tokens: bool = True
 
-    def as_kwargs(self) -> dict[str, Any]:
-        args = {
-            "frequency_penalty": self.frequency_penalty,
-            # "logit_bias": self.logit_bias,
-            # "max_tokens": self.max_tokens,
-            # "n": self.n,
-            "presence_penalty": self.presence_penalty,
-            # "stop": self.stop,
-            "temperature": self.temperature,
-            # "repetition_penalty": self.repetition_penalty,
-            # "top_p": self.top_p,
-            # "timeout": self.timeout,
-        }
-        return {k: v for k, v in args.items() if v is not None}
+    @staticmethod
+    def from_dict(d: "ModelOptionsDict") -> "ModelOptions":
+        reasoning_tokens = d.get("reasoning_tokens", True)
+        return ModelOptions(
+            frequency_penalty=d.get("frequency_penalty"),
+            presence_penalty=d.get("presence_penalty"),
+            temperature=d.get("temperature"),
+            reasoning_tokens=(
+                reasoning_tokens if isinstance(reasoning_tokens, bool) else True
+            ),
+        )
+
+
+class ModelOptionsDict(TypedDict, total=False):
+    frequency_penalty: float | None
+    presence_penalty: float | None
+    temperature: float | None
+    reasoning_tokens: bool | None
 
 
 class LLMBackend:
@@ -252,12 +250,10 @@ class LLMBackend:
         # Run tools and submit results until convergence
         while len(message.tool_calls) > 0:
             # Run tools
-            count = 0
             async for event in self.tools.call_tools(message.tool_calls):
                 self.log.debug(event)
                 if is_message(event):
                     self.history.add(event)
-                    count += 1
                 else:
                     assert is_event(event), "Event must be a Event object"
                     if events:
@@ -291,12 +287,15 @@ def get_default_provider() -> str:
         provider = "openrouter"
     elif "DEEPSEEK_API_KEY" in os.environ:
         provider = "deepseek"
+    elif "GEMINI_API_KEY" in os.environ:
+        provider = "google"
     else:
         provider = "openai"
     if provider not in [
         "openai",
         "openrouter",
         "deepseek",
+        "google",
     ]:
         raise ValueError(f"Unknown provider: {provider}")
     return provider
@@ -346,6 +345,7 @@ def create_llm_backend(
         "openai",
         "openrouter",
         "deepseek",
+        "google",
     ], f"Unknown provider: {provider}"
     if provider == "openai":
         from .openai import OpenAIBackend
@@ -361,6 +361,16 @@ def create_llm_backend(
         from .deepseek import DeepSeekBackend
 
         return DeepSeekBackend(
+            model=model,
+            tools=tools,
+            options=options or ModelOptions(),
+            history=history,
+            api_key=api_key,
+        )
+    elif provider == "google":
+        from .google import GoogleBackend
+
+        return GoogleBackend(
             model=model,
             tools=tools,
             options=options or ModelOptions(),

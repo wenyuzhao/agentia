@@ -1,7 +1,7 @@
 from typing import Annotated, Union
 from pydantic import BaseModel, Field
 
-from .message import Message, SystemMessage, is_message, Event
+from .message import Message, is_message, Event
 
 
 class History(BaseModel):
@@ -37,8 +37,6 @@ class History(BaseModel):
 
     def reset(self):
         self.messages = []
-        if self.instructions is not None:
-            self.add(SystemMessage(content=self.instructions))
 
     def add(self, message: Union[Message, "Event"]):
         # TODO: auto trim history

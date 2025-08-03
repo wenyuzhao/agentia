@@ -1,6 +1,4 @@
-from datetime import datetime
 import logging
-from pathlib import Path
 from typing import (
     Callable,
     Literal,
@@ -25,6 +23,7 @@ from agentia.mcp import MCPServer
 if TYPE_CHECKING:
     from agentia.utils.config import Config
     from agentia.run import Run, MessageStream
+    from agentia.realtime import RealtimeSession
 
 from .message import *
 from .history import History
@@ -34,7 +33,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .tools import ToolRegistry, Tools
     from .plugins import Plugin
-    from .llm import ModelOptions
+    from .llm import ModelOptions, ModelOptionsDict
 
 
 PluginType = TypeVar("PluginType", bound="Plugin")
@@ -49,12 +48,13 @@ class Agent:
         instructions: str | None = None,
         # Model and tools
         model: str | None = None,
-        options: Optional["ModelOptions"] = None,
+        options: Optional[Union["ModelOptions", "ModelOptionsDict"]] = None,
         tools: Optional["Tools"] = None,
         api_key: str | None = None,
     ):
         from .tools import ToolRegistry
         from agentia.llm import create_llm_backend, get_default_model
+        from agentia.llm import ModelOptions
 
         # Init simple fields
         self.__is_initialized = False
@@ -73,7 +73,11 @@ class Agent:
         self.__history = History(instructions=self.__instructions)
         self.__backend = create_llm_backend(
             model=model,
-            options=options,
+            options=(
+                ModelOptions.from_dict(options)
+                if isinstance(options, dict)
+                else options
+            ),
             api_key=api_key,
             tools=self.__tools,
             history=self.__history,
@@ -236,6 +240,20 @@ class Agent:
         Plugins may either ignore this or ask for user consent even if this is not set.
         """
         self.__user_consent = True
+
+    def realtime(
+        self, response_modality: Literal["text", "audio"] = "audio"
+    ) -> "RealtimeSession":
+        """
+        Create a realtime session for this agent with the given backend.
+        This is useful for handling real-time interactions.
+        """
+
+        from agentia.realtime import RealtimeSession
+
+        return RealtimeSession(
+            agent=self, backend=self.__backend, response_modality=response_modality
+        )
 
 
 __all__ = ["Agent"]

@@ -1,6 +1,6 @@
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Callable, Literal, cast, overload
+from typing import Any, Callable, Literal, overload
 from typing import TYPE_CHECKING, Sequence
 from mcp import ClientSession, StdioServerParameters, stdio_client, Tool as MCPTool
 from mcp.client.websocket import websocket_client
@@ -8,7 +8,6 @@ from mcp.client.streamable_http import streamablehttp_client
 from mcp.client.sse import sse_client
 from pydantic import BaseModel
 import asyncio
-import abc
 from httpx import Auth
 
 
@@ -64,7 +63,7 @@ def _convert_tool_format(tool: MCPTool) -> Any:
         "parameters": {
             "type": "object",
             "properties": tool.inputSchema["properties"],
-            "required": tool.inputSchema["required"],
+            "required": tool.inputSchema.get("required", []),
         },
     }
     return converted_tool

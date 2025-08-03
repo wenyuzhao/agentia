@@ -345,10 +345,7 @@ class ToolRegistry:
                 result = json.dumps(raw_result)
             else:
                 result = raw_result
-            if t.id is not None:
-                result_msg = ToolMessage(tool_call_id=t.id, content=result)
-            else:
-                raise NotImplementedError("legacy functions not supported")
+            result_msg = ToolMessage(id=t.id, name=name, content=result)
             yield result_msg
 
 

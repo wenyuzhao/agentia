@@ -1,5 +1,3 @@
-import abc
-import inspect
 import json
 import os
 from typing import AsyncIterator, Literal, Any, Sequence, overload, override
@@ -112,10 +110,23 @@ class OpenAIBackend(LLMBackend):
         msgs: list[ChatCompletionMessageParam] = [
             self.__message_to_ccmp(m) for m in messages
         ]
+        if self.history.instructions:
+            msgs.insert(
+                0,
+                ChatCompletionSystemMessageParam(
+                    role="system", content=self.history.instructions
+                ),
+            )
+        options = {
+            "frequency_penalty": self.options.frequency_penalty,
+            "presence_penalty": self.options.presence_penalty,
+            "temperature": self.options.temperature,
+        }
+        options = {k: v for k, v in options.items() if v is not None}
         args: Any = {
             "model": self.model,
             "messages": msgs,
-            **self.options.as_kwargs(),
+            **options,
         }
         if response_format is not None:
             self.extra_body["response_format"] = response_format
@@ -177,10 +188,10 @@ class OpenAIBackend(LLMBackend):
         #     raise NotImplementedError("Function is not supported")
         if m.role == "tool":
             assert isinstance(content, str)
-            assert m.tool_call_id is not None
+            assert m.id is not None
             return ChatCompletionToolMessageParam(
                 role="tool",
-                tool_call_id=m.tool_call_id,
+                tool_call_id=m.id,
                 content=content,
             )
         if m.role == "user":
@@ -270,7 +281,7 @@ class ChatMessageStream(MessageStream):
     async def _ensure_non_empty(self) -> bool:
         """
         The stream can be empty (e.g. for tool calls).
-        Before returning the stream to the user, we will call this method to fetch the first chunk, ahd skip empty ones.
+        Before returning the stream to the user, we will call this method to fetch the first chunk, and skip empty ones.
         """
         try:
             if self.reasoning:
