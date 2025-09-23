@@ -27,7 +27,6 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tomlkit" },
     { name = "typer" },
-    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -72,7 +71,6 @@ requires-dist = [
     { name = "tiktoken", specifier = ">=0.8.0,<0.9" },
     { name = "tomlkit", specifier = ">=0.13.2" },
     { name = "typer", specifier = ">=0.12.5,<0.13" },
-    { name = "websockets", specifier = ">=15.0.1" },
 ]
 
 [package.metadata.requires-dev]

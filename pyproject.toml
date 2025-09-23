@@ -33,7 +33,6 @@ dependencies = [
     "tiktoken>=0.8.0,<0.9",
     "tomlkit>=0.13.2",
     "typer>=0.12.5,<0.13",
-    "websockets>=15.0.1",
 ]
 
 [project.urls]
