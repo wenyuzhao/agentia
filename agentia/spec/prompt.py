@@ -178,6 +178,30 @@ class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
     content: Sequence[AssistantMessagePart]
 
+    @staticmethod
+    def from_contents(contents: Sequence[Content]) -> "AssistantMessage":
+        parts = []
+        for c in contents:
+            if c.type == "text":
+                parts.append(MessagePartText(text=c.text))
+            elif c.type == "reasoning":
+                parts.append(MessagePartReasoning(text=c.text))
+            elif c.type == "file":
+                parts.append(MessagePartFile(data=c.data, media_type=c.media_type))
+            elif c.type == "tool-call":
+                parts.append(
+                    MessagePartToolCall(
+                        tool_call_id=c.tool_call_id,
+                        tool_name=c.tool_name,
+                        input=c.input,
+                        provider_executed=c.provider_executed,
+                    )
+                )
+            else:
+                raise Exception(f"Unknown content type: {c.type}")
+        assert len(parts) > 0
+        return AssistantMessage(content=parts)
+
 
 class ToolMessage(MessageBase):
     role: Literal["tool"] = "tool"

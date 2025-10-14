@@ -9,7 +9,8 @@ import agentia.spec as spec
 
 @dataclass
 class ProviderGenerationResult:
-    content: Sequence[spec.Content]
+    message: spec.AssistantMessage
+    tool_calls: list[spec.ToolCall]
     finish_reason: spec.FinishReason
     usage: spec.Usage
     warnings: Sequence[spec.Warning]

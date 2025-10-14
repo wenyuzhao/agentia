@@ -39,17 +39,9 @@ class OpenAI(Provider):
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
-        print("api_key", api_key)
-        print("base_url", base_url)
         self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.extra_headers: dict[str, str] = {}
         self.extra_body: dict[str, Any] = {}
-
-    def _is_reasoning_model(self) -> bool:
-        mid = self.model.lower()
-        return (mid.startswith("o") or mid.startswith("gpt-5")) and not mid.startswith(
-            "gpt-5-chat"
-        )
 
     def _to_oai_content_part(
         self, p: MessagePart, index: int
@@ -347,6 +339,7 @@ class OpenAI(Provider):
         )
         choice = response.choices[0]
         content: Sequence[Content] = []
+        tool_calls: list[ToolCall] = []
 
         text = choice.message.content
         if text:
@@ -354,14 +347,15 @@ class OpenAI(Provider):
 
         for tc in choice.message.tool_calls or []:
             assert tc.type == "function"
-            content.append(
-                ToolCall(
-                    type="tool-call",
-                    tool_call_id=tc.id or _gen_id(),
-                    tool_name=tc.function.name,
-                    input=json.loads(tc.function.arguments),
-                )
+            t = ToolCall(
+                type="tool-call",
+                tool_call_id=tc.id or _gen_id(),
+                tool_name=tc.function.name,
+                input=json.loads(tc.function.arguments),
             )
+            content.append(t)
+            tool_calls.append(t)
+
         for a in choice.message.annotations or []:
             content.append(
                 SourceURL(
@@ -374,7 +368,8 @@ class OpenAI(Provider):
             )
 
         return ProviderGenerationResult(
-            content=content,
+            message=AssistantMessage.from_contents(content),
+            tool_calls=tool_calls,
             warnings=warnings,
             finish_reason=self._get_finish_reason(choice.finish_reason),
             usage=self._get_usage(response.usage),
