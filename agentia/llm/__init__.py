@@ -1,18 +1,36 @@
 import abc
 from dataclasses import dataclass
 import inspect
+import json
 import os
-from typing import Any, AsyncGenerator, Literal, Optional, Sequence, TypedDict, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
+    AsyncIterator,
+    Callable,
+    Literal,
+    Optional,
+    Sequence,
+    TypedDict,
+    overload,
+)
 from openai.lib._parsing._completions import type_to_response_format_param  # type: ignore
 from openai.lib._pydantic import _ensure_strict_json_schema
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, Field, JsonValue, TypeAdapter
+
 
 from ..tools import ToolRegistry
 from ..message import AssistantMessage, Message, Event, is_event, is_message
 from ..run import Run, MessageStream
 from ..history import History
+import re
+import agentia.spec as spec
 
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from agentia.llm.providers import Provider
 
 
 @dataclass
@@ -387,3 +405,218 @@ def create_llm_backend(
             history=history,
             api_key=api_key,
         )
+
+
+class LLMTool:
+    def __init__(self, tool: spec.Tool, func: Callable[..., Any] | None) -> None:
+        self.tool = tool
+        self.func = func
+
+
+type ToolSet = dict[str, LLMTool]
+
+
+class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
+    max_output_tokens: int | None = None
+    temperature: float | None = None
+    stop_sequences: Sequence[str] | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    response_format: spec.ResponseFormat | None = None
+    seed: int | None = None
+    tools: ToolSet | None = None
+    tool_choice: spec.ToolChoice | None = None
+    provider_options: spec.ProviderOptions | None = None
+
+
+@dataclass
+class TextGenerationResult:
+    messages: Sequence[spec.Message]
+    finish_reason: spec.FinishReason
+    usage: spec.Usage
+    warnings: Sequence[spec.Warning]
+
+
+class ChatCompletionStream:
+    def __init__(self) -> None:
+        self.result = TextGenerationResult(
+            messages=[], finish_reason="unknown", usage=spec.Usage(), warnings=[]
+        )
+
+    def __aiter__(self) -> AsyncIterator[spec.StreamPart]:
+        raise NotImplementedError()
+
+
+class UnsupportedFunctionalityError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class LLM:
+    def __init__(self, provider: "Provider") -> None:
+        self._provider = provider
+
+    def __prepare_messages(
+        self, prompt: str | spec.Message | Sequence[spec.Message]
+    ) -> list[spec.Message]:
+        messages: list[spec.Message] = []
+        if isinstance(prompt, str):
+            messages.append(
+                spec.UserMessage(content=[spec.MessagePartText(text=prompt)])
+            )
+        elif isinstance(prompt, (list, Sequence)):
+            messages.extend(prompt)
+        else:
+            messages.append(prompt)
+        return messages
+
+    async def __process_tool_calls(
+        self, tool_calls: list[spec.ToolCall], options: GenerationOptions
+    ) -> spec.ToolMessage:
+        tool_results: list[spec.MessagePartToolResult] = []
+        for c in tool_calls:
+            f = options.tools.get(c.tool_name) if options.tools else None
+            if not f:
+                raise ValueError(f"Tool {c.tool_name} not found")
+            if not f.func:
+                raise ValueError(f"Tool {c.tool_name} has no function")
+            try:
+                args = json.loads(c.input)
+                output = f.func(**args)  # type: ignore
+                if inspect.isawaitable(output):
+                    output = await output
+                tool_results.append(
+                    spec.MessagePartToolResult(
+                        tool_call_id=c.tool_call_id,
+                        tool_name=c.tool_name,
+                        output=spec.ToolResultOutputJson(value=output),
+                    )
+                )
+            except Exception as e:
+                output: JsonValue = {"error": str(e)}
+                tool_results.append(
+                    spec.MessagePartToolResult(
+                        tool_call_id=c.tool_call_id,
+                        tool_name=c.tool_name,
+                        output=spec.ToolResultOutputErrorJson(value=output),
+                    )
+                )
+        return spec.ToolMessage(content=tool_results)
+
+    async def generate_text(
+        self,
+        prompt: str | spec.Message | Sequence[spec.Message],
+        options: GenerationOptions | None = None,
+    ) -> TextGenerationResult:
+        options = options or GenerationOptions()
+        messages = self.__prepare_messages(prompt)
+        usage = spec.Usage()
+        while True:
+            tool_calls: list[spec.ToolCall] = []
+            result = await self._provider.do_generate(prompt=messages, options=options)
+            usage += result.usage
+            # Add new messages
+            parts = []
+            for c in result.content:
+                if c.type == "text":
+                    parts.append(spec.MessagePartText(text=c.text))
+                elif c.type == "reasoning":
+                    parts.append(spec.MessagePartReasoning(text=c.text))
+                elif c.type == "file":
+                    parts.append(
+                        spec.MessagePartFile(data=c.data, media_type=c.media_type)
+                    )
+                elif c.type == "tool-call":
+                    parts.append(
+                        spec.MessagePartToolCall(
+                            tool_call_id=c.tool_call_id,
+                            tool_name=c.tool_name,
+                            input=c.input,
+                            provider_executed=c.provider_executed,
+                        )
+                    )
+                    if not c.provider_executed:
+                        tool_calls.append(c)
+                else:
+                    raise UnsupportedFunctionalityError(
+                        f"Unsupported content type: {c.type}"
+                    )
+            if len(parts) > 0:
+                messages.append(spec.AssistantMessage(content=parts))
+            if result.finish_reason != "tool-calls":
+                break
+            # Call tools and continue
+            messages.append(
+                await self.__process_tool_calls(tool_calls, options=options)
+            )
+
+        return TextGenerationResult(
+            messages=messages,
+            finish_reason=result.finish_reason,
+            usage=result.usage,
+            warnings=result.warnings,
+        )
+
+    async def stream_text(
+        self,
+        prompt: str | spec.Message | Sequence[spec.Message],
+        options: GenerationOptions | None = None,
+    ) -> AsyncGenerator[spec.StreamPart, None]:
+        options = options or GenerationOptions()
+        messages = self.__prepare_messages(prompt)
+        usage = spec.Usage()
+        last_finish_reason: spec.FinishReason = "unknown"
+
+        while True:
+            tool_calls: list[spec.ToolCall] = []
+            parts: list[spec.MessagePart] = []
+            last_msg = ""
+            last_reasoning = ""
+            async for part in self._provider.do_stream(messages, options):
+
+                match part.type:
+                    case "text-start":
+                        last_msg = ""
+                    case "text-delta":
+                        last_msg += part.delta
+                    case "text-end":
+                        parts.append(spec.MessagePartText(text=last_msg))
+                    case "reasoning-start":
+                        last_reasoning = ""
+                    case "reasoning-delta":
+                        last_reasoning += part.delta
+                    case "reasoning-end":
+                        parts.append(spec.MessagePartReasoning(text=last_reasoning))
+                    case "file":
+                        parts.append(
+                            spec.MessagePartFile(
+                                data=part.data, media_type=part.media_type
+                            )
+                        )
+                    case "tool-call":
+                        parts.append(
+                            spec.MessagePartToolCall(
+                                tool_call_id=part.tool_call_id,
+                                tool_name=part.tool_name,
+                                input=part.input,
+                                provider_executed=part.provider_executed,
+                            )
+                        )
+                        if not part.provider_executed:
+                            tool_calls.append(part)
+
+                if part.type == "finish":
+                    usage += part.usage
+                    last_finish_reason = part.finish_reason
+                else:
+                    yield part
+            messages.append(spec.AssistantMessage(content=parts))
+            if not tool_calls:
+                break
+            # Call tools and continue
+            messages.append(
+                await self.__process_tool_calls(tool_calls, options=options)
+            )
+        yield spec.StreamPartFinish(usage=usage, finish_reason=last_finish_reason)

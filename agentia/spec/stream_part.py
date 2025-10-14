@@ -1,0 +1,115 @@
+from datetime import datetime
+from typing import Annotated, Literal, Sequence
+from pydantic import AliasChoices, BaseModel, Field, JsonValue
+from .base import *
+
+
+class StreamPartBase(BaseModel):
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
+    id: str
+
+
+class StreamPartTextStart(StreamPartBase):
+    type: Literal["text-start"] = "text-start"
+
+
+class StreamPartTextDelta(StreamPartBase):
+    type: Literal["text-delta"] = "text-delta"
+    delta: str
+
+
+class StreamPartTextEnd(StreamPartBase):
+    type: Literal["text-end"] = "text-end"
+
+
+class StreamPartReasoningStart(StreamPartBase):
+    type: Literal["reasoning-start"] = "reasoning-start"
+
+
+class StreamPartReasoningDelta(StreamPartBase):
+    type: Literal["reasoning-delta"] = "reasoning-delta"
+    delta: str
+
+
+class StreamPartReasoningEnd(StreamPartBase):
+    type: Literal["reasoning-end"] = "reasoning-end"
+
+
+class StreamPartToolInputStart(StreamPartBase):
+    type: Literal["tool-input-start"] = "tool-input-start"
+    tool_name: str = Field(
+        validation_alias=AliasChoices("toolName", "tool_name"),
+        serialization_alias="toolName",
+    )
+    provider_executed: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerExecuted", "provider_executed"),
+        serialization_alias="providerExecuted",
+    )
+
+
+class StreamPartToolInputDelta(StreamPartBase):
+    type: Literal["tool-input-delta"] = "tool-input-delta"
+    delta: str
+
+
+class StreamPartToolInputEnd(StreamPartBase):
+    type: Literal["tool-input-end"] = "tool-input-end"
+
+
+class StreamPartStreamStart(BaseModel):
+    type: Literal["stream-start"] = "stream-start"
+    warnings: Sequence[Warning]
+
+
+class StreamPartResponseMetadata(ResponseMetadata):
+    type: Literal["response-metadata"] = "response-metadata"
+
+
+class StreamPartFinish(BaseModel):
+    type: Literal["finish"] = "finish"
+    usage: Usage
+    finish_reason: FinishReason = Field(
+        validation_alias=AliasChoices("finishReason", "finish_reason"),
+        serialization_alias="finishReason",
+    )
+
+
+class StreamPartRaw(BaseModel):
+    type: Literal["raw"] = "raw"
+    raw_value: JsonValue = Field(
+        validation_alias=AliasChoices("rawValue", "raw_value"),
+        serialization_alias="rawValue",
+    )
+
+
+class StreamPartError(BaseModel):
+    type: Literal["error"] = "error"
+    error: JsonValue
+
+
+type StreamPart = Annotated[
+    StreamPartTextStart
+    | StreamPartTextDelta
+    | StreamPartTextEnd
+    | StreamPartReasoningStart
+    | StreamPartReasoningDelta
+    | StreamPartReasoningEnd
+    | StreamPartToolInputStart
+    | StreamPartToolInputDelta
+    | StreamPartToolInputEnd
+    | ToolCall
+    | ToolResult
+    | File
+    | Source
+    | StreamPartStreamStart
+    | StreamPartResponseMetadata
+    | StreamPartFinish
+    | StreamPartRaw
+    | StreamPartError,
+    Field(discriminator="type"),
+]
