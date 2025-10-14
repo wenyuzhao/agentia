@@ -17,7 +17,7 @@ from typing import (
 )
 from openai.lib._parsing._completions import type_to_response_format_param  # type: ignore
 from openai.lib._pydantic import _ensure_strict_json_schema
-from pydantic import BaseModel, Field, JsonValue, TypeAdapter
+from pydantic import AnyUrl, BaseModel, Field, JsonValue, TypeAdapter
 
 
 from ..tools import ToolRegistry
@@ -454,9 +454,55 @@ class UnsupportedFunctionalityError(Exception):
         super().__init__(message)
 
 
+def get_provider(selector: str) -> "Provider":
+    # if has no scheme, assume gateway
+    if re.match(r"^\w+:", selector) is None:
+        provider = "gateway"
+        model = selector
+    else:
+        uri = AnyUrl(selector)
+        print(uri.scheme, uri.host, uri.path)
+        provider = uri.scheme
+        model = (uri.host or "") + (uri.path or "")
+    model = model.strip("/")
+    print(f"Using provider: {provider}, model: {model}")
+    match provider:
+        case "openai":
+            from .providers.openai import OpenAI
+
+            return OpenAI(model=model)
+
+        case "gateway":
+            from .providers.openai import OpenAI
+
+            if "AI_GATEWAY_API_KEY" not in os.environ:
+                raise ValueError("AI_GATEWAY_API_KEY environment variable not set")
+
+            return OpenAI(
+                model=model,
+                api_key=os.environ.get("AI_GATEWAY_API_KEY"),
+                base_url="https://ai-gateway.vercel.sh/v1",
+            )
+
+        case "openrouter":
+            from .providers.openai import OpenAI
+
+            if "OPENROUTER_API_KEY" not in os.environ:
+                raise ValueError("OPENROUTER_API_KEY environment variable not set")
+
+            return OpenAI(
+                model=model,
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                base_url="https://openrouter.ai/api/v1",
+            )
+
+        case _:
+            raise ValueError(f"Unknown provider: {provider}")
+
+
 class LLM:
-    def __init__(self, provider: "Provider") -> None:
-        self._provider = provider
+    def __init__(self, selector: str) -> None:
+        self._provider = get_provider(selector)
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]

@@ -10,15 +10,12 @@ from . import GenerationOptions, ProviderGenerationResult, Provider
 
 from ...spec import *
 from openai.types.chat import (
-    ChatCompletionChunk,
     ChatCompletionMessageParam,
     ChatCompletionToolMessageParam,
     ChatCompletionUserMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionAssistantMessageParam,
     ChatCompletionMessageToolCallParam,
-    ChatCompletionMessage,
-    ChatCompletionChunk,
     ChatCompletionContentPartParam,
     ChatCompletionContentPartTextParam,
     ChatCompletionContentPartImageParam,
@@ -35,12 +32,16 @@ def _gen_id() -> str:
 
 
 class OpenAI(Provider):
-    def __init__(self, model: str) -> None:
+    def __init__(
+        self, model: str, api_key: str | None = None, base_url: str | None = None
+    ):
         super().__init__(provider="openai", model=model)
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
-        self.client = openai.AsyncOpenAI(api_key=api_key)
+        print("api_key", api_key)
+        print("base_url", base_url)
+        self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.extra_headers: dict[str, str] = {}
         self.extra_body: dict[str, Any] = {}
 
@@ -239,14 +240,18 @@ class OpenAI(Provider):
         for t in tools:
             match t.type:
                 case "function":
+                    f = {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema,  # type: ignore
+                    }
+                    for k in list(f.keys()):
+                        if f[k] is None:
+                            del f[k]
                     oai_tools.append(
                         {
                             "type": "function",
-                            "function": {
-                                "name": t.name,
-                                "description": t.description,
-                                "parameters": t.input_schema,  # type: ignore
-                            },
+                            "function": f,  # type: ignore
                         }
                     )
                 case _:
