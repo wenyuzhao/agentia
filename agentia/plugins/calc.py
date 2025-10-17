@@ -1,5 +1,5 @@
 from . import Plugin
-from ..tools import tool
+from .. import tool
 from typing import Annotated
 
 

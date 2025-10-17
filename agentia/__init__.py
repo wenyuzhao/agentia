@@ -31,12 +31,14 @@ from .spec import (
 )
 from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
 from .utils.decorators import magic, ImageUrl
+from .utils.decorators import tool
+from . import llm
 
 __all__ = [
     # submodules
-    "message",
     "plugins",
     "utils",
+    "llm",
     # agent
     "Agent",
     # message
@@ -53,12 +55,12 @@ __all__ = [
     "StreamPart",
     # plugins
     "Plugin",
-    "tool",
     "PluginInitError",
     "ToolResult",
     "register_plugin",
     # utils
     "init_logging",
     "magic",
+    "tool",
     "ImageUrl",
 ]

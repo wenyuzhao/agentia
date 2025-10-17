@@ -2,7 +2,7 @@ import os
 
 from agentia.plugins.knowledge_base import KnowledgeBasePlugin
 from . import Plugin
-from ..tools import tool
+from .. import tool
 from typing import Annotated
 import requests
 from markdownify import markdownify

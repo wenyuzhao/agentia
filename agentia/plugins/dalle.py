@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from . import Plugin
-from ..tools import tool
+from .. import tool
 from openai import AsyncOpenAI
 
 

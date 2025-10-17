@@ -1,6 +1,6 @@
 from pathlib import Path
 from . import Plugin
-from ..tools import tool
+from .. import tool
 from typing import Annotated
 from datetime import datetime
 from filelock import FileLock

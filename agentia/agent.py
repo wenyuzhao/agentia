@@ -3,6 +3,7 @@ from agentia.llm import LLM
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream
 from agentia.spec import Message, UserMessage, MessagePartText
+import logging
 
 
 class Agent:
@@ -10,8 +11,7 @@ class Agent:
         self.llm = LLM(model)
         self.llm._agent = self
         self.history: list[Message] = []
-
-    async def init(self): ...
+        self.log = logging.getLogger(f"agentia.agent")
 
     @overload
     def run(

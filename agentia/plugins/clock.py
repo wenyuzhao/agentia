@@ -1,6 +1,6 @@
 import datetime
 from . import Plugin
-from ..tools import tool
+from .. import tool
 
 
 class ClockPlugin(Plugin):

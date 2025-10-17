@@ -4,7 +4,7 @@ from typing import Annotated, Union
 
 from agentia.plugins.knowledge_base.knowledge_base import KnowledgeBase
 from .. import Plugin
-from agentia.tools import tool
+from agentia import tool
 
 
 TOP_K = 4
