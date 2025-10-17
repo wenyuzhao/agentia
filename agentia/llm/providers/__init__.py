@@ -24,7 +24,6 @@ class Provider(abc.ABC):
     provider: str
     model: str
     supported_urls: dict[str, Sequence[re.Pattern | str]]
-    llm: "LLM"
     """
     Supported URL patterns by media type for the provider.
 
@@ -35,6 +34,7 @@ class Provider(abc.ABC):
 
     Matched URLs are supported natively by the model and are not downloaded.
     """
+    llm: "LLM"
 
     def __init__(self, provider: str, model: str):
         self.provider = provider
