@@ -2,7 +2,7 @@ import base64
 from collections.abc import AsyncGenerator
 import json
 import os
-from typing import Any, Coroutine, override
+from typing import Any, override
 from uuid import uuid4
 
 from agentia.llm import UnsupportedFunctionalityError
@@ -352,7 +352,7 @@ class OpenAI(Provider):
                 type="tool-call",
                 tool_call_id=tc.id or _gen_id(),
                 tool_name=tc.function.name,
-                input=json.loads(tc.function.arguments),
+                input=tc.function.arguments,
             )
             content.append(t)
             tool_calls.append(t)

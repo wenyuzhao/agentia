@@ -272,10 +272,6 @@ def _gen_prompt(
     return desc, images
 
 
-class Result[T](BaseModel):
-    result: T = Field(..., description="The result of the task", title="Task Result")
-
-
 @overload
 def magic(func: F, /) -> F: ...
 
@@ -309,13 +305,20 @@ def magic(
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str
-            if issubclass(return_type, BaseModel):
-                response_format = return_type
-            else:
-
-                class _Result(Result[return_type]): ...
-
-                response_format = _Result
+            if return_type not in (
+                int,
+                float,
+                str,
+                bool,
+                type(None),
+                int | None,
+                float | None,
+                str | None,
+                bool | None,
+            ) and not issubclass(return_type, BaseModel):
+                raise ValueError(
+                    f"Unsupported return type: {return_type} in magic function {callable.__name__}."
+                )
 
             messages = [
                 UserMessage(
@@ -362,14 +365,8 @@ def magic(
                         role="user",
                     )
                 )
-            run = await llm.generate_object(messages, return_type=response_format)
-            assert run.content
-            json_result = json.loads(run.content)
-            if issubclass(return_type, BaseModel):
-                return return_type(**json_result)
-            else:
-                result = Result[return_type](**json_result)
-                return result.result
+            result = await llm.generate_object(messages, return_type=return_type)
+            return result
 
         if not inspect.iscoroutinefunction(callable):
 

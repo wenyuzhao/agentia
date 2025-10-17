@@ -7,7 +7,8 @@ from typing import (
     Sequence,
     overload,
 )
-from pydantic import AnyUrl, BaseModel
+from pydantic import AnyUrl, BaseModel, Field
+from rich import inspect
 
 from agentia import spec
 from agentia.llm.completion import ChatCompletion
@@ -119,13 +120,38 @@ class LLM:
         tool_msg = await tools.run(self, tool_calls)
         return tool_msg
 
-    async def generate_object[T: type[BaseModel]](
+    async def generate_object[T: BaseModel | str | int | float | bool | None](
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
-        return_type: T,
+        return_type: type[T],
         options: GenerationOptions | None = None,
     ) -> T:
-        raise NotImplementedError("Synchronous generate_object not implemented")
+        class Result[X](BaseModel):
+            result: X = Field(..., description="The result", title="Result")
+
+        class _Result(Result[return_type]): ...
+
+        if issubclass(return_type, BaseModel):
+            response_format = return_type
+        else:
+            response_format = _Result
+
+        json_string = ""
+        options = options or GenerationOptions()
+        options.response_format = spec.ResponseFormatJson(
+            json_schema=response_format.model_json_schema(),
+            name=return_type.__name__,
+            description=f"JSON object matching the schema of {return_type.__name__}",
+        )
+        msg = await self.generate(prompt, options)
+        for part in msg.content:
+            if isinstance(part, spec.MessagePartText):
+                json_string += part.text
+        result = response_format.model_validate_json(json_string)
+        if isinstance(result, _Result):
+            return result.result
+        else:
+            return result
 
     def generate(
         self,
