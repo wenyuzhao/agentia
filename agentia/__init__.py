@@ -12,29 +12,24 @@ def init_logging(level: logging._Level = logging.INFO):
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-import nest_asyncio
-
-# nest_asyncio.apply()
-
-from . import message
 from . import plugins
 from . import utils
 
 from .agent import Agent
-from .message import (
+from .spec import (
     Message,
-    Event,
     UserMessage,
     AssistantMessage,
-    UserConsentEvent,
-    ToolCallEvent,
-    ContentPartText,
-    ContentPartImage,
-    ContentPart,
+    SystemMessage,
+    MessagePart,
+    MessagePartText,
+    MessagePartFile,
+    MessagePartReasoning,
+    MessagePartToolCall,
+    MessagePartToolResult,
+    StreamPart,
 )
-from .run import Run, MessageStream, ReasoningMessageStream
 from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
-from .tools import tool
 from .utils.decorators import magic, ImageUrl
 
 __all__ = [
@@ -46,18 +41,16 @@ __all__ = [
     "Agent",
     # message
     "Message",
-    "Event",
+    "SystemMessage",
     "UserMessage",
     "AssistantMessage",
-    "UserConsentEvent",
-    "ToolCallEvent",
-    "ContentPartText",
-    "ContentPartImage",
-    "ContentPart",
-    # run
-    "Run",
-    "MessageStream",
-    "ReasoningMessageStream",
+    "MessagePart",
+    "MessagePartText",
+    "MessagePartFile",
+    "MessagePartReasoning",
+    "MessagePartToolCall",
+    "MessagePartToolResult",
+    "StreamPart",
     # plugins
     "Plugin",
     "tool",

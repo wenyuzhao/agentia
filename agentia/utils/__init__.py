@@ -2,9 +2,9 @@ from pathlib import Path
 import tomllib
 import logging.config
 
-from . import config, voice, repl
+from . import config, voice
 
-__all__ = ["voice", "config", "repl"]
+__all__ = ["voice", "config"]
 
 
 def _setup_logging():

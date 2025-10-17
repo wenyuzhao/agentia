@@ -16,7 +16,7 @@ METADATA_TAG = "agentia_tool_metadata"
 
 if TYPE_CHECKING:
     from . import LLM
-    from agentia.x.agent import Agent
+    from agentia.agent import Agent
 
 
 class PluginInitError(RuntimeError):
@@ -99,7 +99,7 @@ class _PythonFunctionTool(_BaseTool):
         }
 
     def process_json_args(self, llm: "LLM", args: Any):
-        from agentia.x.agent import Agent
+        from agentia.agent import Agent
         from . import LLM
 
         p_args: list[Any] = []
@@ -150,10 +150,11 @@ class ProviderTool(BaseModel):
 
 
 type Tool = Plugin | Callable[..., Any] | ProviderTool | MCPServer
+type Tools = Sequence[Tool]
 
 
 class ToolSet:
-    def __init__(self, tools: Sequence[Tool]):
+    def __init__(self, tools: Tools):
         self.all_tools = tools
         self.plugins: dict[str, Plugin] = {}
         self.mcp_servers: dict[str, MCPServer] = {}

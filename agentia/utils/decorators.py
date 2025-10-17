@@ -25,10 +25,10 @@ import base64
 from io import BytesIO
 import inspect
 
-from agentia.message import UserMessage, ContentPartText, ContentPartImage
+from agentia.spec import UserMessage, MessagePartText, MessagePartFile
 
 if TYPE_CHECKING:
-    from agentia.tools import Tools
+    from agentia.llm.tools import Tools
 
 
 @dataclass
@@ -159,7 +159,7 @@ def tool(
     """
 
     def __tool_impl(callable: Callable[..., R]) -> Callable[..., R]:
-        from agentia.tools import (
+        from agentia.llm.tools import (
             NAME_TAG,
             DISPLAY_NAME_TAG,
             DESCRIPTION_TAG,
@@ -284,7 +284,6 @@ def magic(func: F, /) -> F: ...
 def magic(
     *,
     model: str | None = None,
-    api_key: str | None = None,
     tools: Optional["Tools"] = None,
 ) -> Callable[[F], F]: ...
 
@@ -294,7 +293,6 @@ def magic(
     /,
     *,
     model: str | None = None,
-    api_key: str | None = None,
     tools: Optional["Tools"] = None,
 ) -> F | Callable[[F], F]:
     """
@@ -303,11 +301,11 @@ def magic(
 
     def __magic_impl(callable: F) -> F:
         async def __func_impl(*args: Any, **kwargs: Any):
-            from agentia import Agent
+            from agentia.llm import LLM
 
             prompt, images = _gen_prompt(callable, list(args), kwargs)
 
-            agent = Agent(model=model, api_key=api_key, tools=tools)
+            llm = LLM(model=model or "openai/gpt-5-mini", tools=tools)
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str
@@ -321,11 +319,12 @@ def magic(
 
             messages = [
                 UserMessage(
-                    content=prompt,
+                    content=[MessagePartText(text=prompt)],
                     role="user",
                 )
             ]
             for i, (p, image) in enumerate(images):
+                content_type = "png"
                 if isinstance(image, ImageUrl):
                     url = image.url
                 else:
@@ -357,13 +356,13 @@ def magic(
                 messages.append(
                     UserMessage(
                         content=[
-                            ContentPartText(content=s),
-                            ContentPartImage(url=url),
+                            MessagePartText(text=s),
+                            MessagePartFile(data=url, media_type=content_type),
                         ],
                         role="user",
                     )
                 )
-            run = await agent.run(messages, response_format=response_format)
+            run = await llm.generate_object(messages, return_type=response_format)
             assert run.content
             json_result = json.loads(run.content)
             if issubclass(return_type, BaseModel):
