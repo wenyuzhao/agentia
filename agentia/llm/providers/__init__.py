@@ -1,10 +1,13 @@
 import abc
 import re
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Awaitable, Coroutine, Sequence
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Coroutine, Sequence
 from pydantic import BaseModel
 from agentia.llm import GenerationOptions
 import agentia.spec as spec
+
+if TYPE_CHECKING:
+    from .. import LLM
 
 
 @dataclass
@@ -21,6 +24,7 @@ class Provider(abc.ABC):
     provider: str
     model: str
     supported_urls: dict[str, Sequence[re.Pattern | str]]
+    llm: "LLM"
     """
     Supported URL patterns by media type for the provider.
 

@@ -8,6 +8,7 @@ from agentia.spec import Message, UserMessage, MessagePartText
 class Agent:
     def __init__(self, model: str) -> None:
         self.llm = LLM(model)
+        self.llm._agent = self
         self.history: list[Message] = []
 
     async def init(self): ...

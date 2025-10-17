@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Literal, Sequence
+from typing import Annotated, Any, Literal, Sequence
 from pydantic import AliasChoices, BaseModel, Field, JsonValue, HttpUrl
 
 type ProviderOptions = dict[str, dict[str, JsonValue]]
@@ -104,12 +104,24 @@ class FunctionTool(BaseModel):
         serialization_alias="providerOptions",
     )
 
+    def to_openai_schema(self) -> Any:
+        return {
+            "type": self.type,
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.input_schema,
+            "strict": True,
+        }
+
 
 class ProviderDefinedTool(BaseModel):
     type: Literal["provider-defined"] = "provider-defined"
     id: str
     name: str
     args: dict[str, JsonValue]
+
+    def to_openai_schema(self) -> Any:
+        return {"type": self.id, **self.args}
 
 
 type Tool = Annotated[FunctionTool | ProviderDefinedTool, Field(discriminator="type")]

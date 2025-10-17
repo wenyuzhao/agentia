@@ -22,8 +22,12 @@ from pydantic import AnyUrl, BaseModel, Field, JsonValue, TypeAdapter
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
 
+if TYPE_CHECKING:
+    from agentia.x.agent import Agent
+
 
 from ..tools import ToolRegistry
+from .tools import ToolSet, Tool
 from ..message import AssistantMessage, Message, Event, is_event, is_message
 from ..run import Run, MessageStream
 from ..history import History
@@ -410,15 +414,6 @@ def create_llm_backend(
         )
 
 
-class LLMTool:
-    def __init__(self, tool: spec.Tool, func: Callable[..., Any] | None) -> None:
-        self.tool = tool
-        self.func = func
-
-
-type ToolSet = dict[str, LLMTool]
-
-
 class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
     max_output_tokens: int | None = None
     temperature: float | None = None
@@ -429,7 +424,6 @@ class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
     frequency_penalty: float | None = None
     response_format: spec.ResponseFormat | None = None
     seed: int | None = None
-    tools: ToolSet | None = None
     tool_choice: spec.ToolChoice | None = None
     provider_options: spec.ProviderOptions | None = None
 
@@ -486,8 +480,18 @@ def get_provider(selector: str) -> "Provider":
 
 
 class LLM:
-    def __init__(self, selector: str) -> None:
+    def __init__(self, selector: str, tools: Sequence[Tool] | None = None) -> None:
         self._provider = get_provider(selector)
+        self._provider.llm = self
+        self._agent: Optional["Agent"] = None
+        self._tools = ToolSet(tools or [])
+        self.__initialized = False
+
+    async def init(self) -> None:
+        if self.__initialized:
+            return
+        self.__initialized = True
+        await self._tools.init()
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]
@@ -504,37 +508,11 @@ class LLM:
         return messages
 
     async def __process_tool_calls(
-        self, tool_calls: list[spec.ToolCall], options: GenerationOptions
+        self, tool_calls: list[spec.ToolCall], tools: ToolSet | None = None
     ) -> spec.ToolMessage:
-        tool_results: list[spec.MessagePartToolResult] = []
-        for c in tool_calls:
-            f = options.tools.get(c.tool_name) if options.tools else None
-            if not f:
-                raise ValueError(f"Tool {c.tool_name} not found")
-            if not f.func:
-                raise ValueError(f"Tool {c.tool_name} has no function")
-            try:
-                args = json.loads(c.input)
-                output = f.func(**args)  # type: ignore
-                if inspect.isawaitable(output):
-                    output = await output
-                tool_results.append(
-                    spec.MessagePartToolResult(
-                        tool_call_id=c.tool_call_id,
-                        tool_name=c.tool_name,
-                        output=spec.ToolResultOutputJson(value=output),
-                    )
-                )
-            except Exception as e:
-                output: JsonValue = {"error": str(e)}
-                tool_results.append(
-                    spec.MessagePartToolResult(
-                        tool_call_id=c.tool_call_id,
-                        tool_name=c.tool_name,
-                        output=spec.ToolResultOutputErrorJson(value=output),
-                    )
-                )
-        return spec.ToolMessage(content=tool_results)
+        assert tools is not None, "No tools provided"
+        tool_msg = await tools.run(self, tool_calls)
+        return tool_msg
 
     def generate(
         self,
@@ -560,7 +538,7 @@ class LLM:
                     break
                 # Call tools and continue
                 messages.append(
-                    await self.__process_tool_calls(tool_calls, options=options)
+                    await self.__process_tool_calls(tool_calls, tools=self._tools)
                 )
                 c.messages.append(messages[-1])
 
@@ -649,7 +627,7 @@ class LLM:
                     break
                 # Call tools and continue
                 messages.append(
-                    await self.__process_tool_calls(tool_calls, options=options)
+                    await self.__process_tool_calls(tool_calls, tools=self._tools)
                 )
                 s.messages.append(messages[-1])
             s.finish_reason = last_finish_reason

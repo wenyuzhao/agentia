@@ -302,9 +302,9 @@ class OpenAI(Provider):
                 },
             }
         warnings: list[Warning] = []
-        tool_spec = [t.tool for t in (options.tools or {}).values()]
+        schema = self.llm._tools.get_schema()
         tools, tool_choice, tool_warnings = self._prepare_tools(
-            tool_spec, options.tool_choice
+            schema, options.tool_choice
         )
         warnings.extend(tool_warnings)
         args: dict[str, Any] = {
@@ -330,6 +330,7 @@ class OpenAI(Provider):
     async def do_generate(
         self, prompt: Prompt, options: GenerationOptions
     ) -> ProviderGenerationResult:
+        await self.llm.init()
         args, warnings = self._prepare_args(prompt, options)
         response = await self.client.chat.completions.create(
             **args,
@@ -380,7 +381,7 @@ class OpenAI(Provider):
     async def do_stream(
         self, prompt: Prompt, options: GenerationOptions
     ) -> AsyncGenerator[StreamPart, None]:
-
+        await self.llm.init()
         args, warnings = self._prepare_args(prompt, options)
         response = await self.client.chat.completions.create(
             **args,
