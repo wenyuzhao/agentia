@@ -11,7 +11,7 @@ class MemoryPlugin(Plugin):
         super().__init__()
         self.__momery_cache = Path(file)
 
-    async def init(self):
+    async def init(self, llm: "Agent"):
         if self.__momery_cache.exists():
             content = self.__momery_cache.read_text().strip()
             self.agent.history.add_instructions(f"YOUR PREVIOUS MEMORY: \n{content}")

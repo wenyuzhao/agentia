@@ -6,6 +6,7 @@ from typing import Any, override
 from uuid import uuid4
 
 from agentia.llm import UnsupportedFunctionalityError
+from agentia.llm.tools import ToolSet
 from . import GenerationOptions, ProviderGenerationResult, Provider
 
 from ...spec import *
@@ -302,7 +303,7 @@ class OpenAI(Provider):
                 },
             }
         warnings: list[Warning] = []
-        schema = self.llm._tools.get_schema()
+        schema = options._tools.get_schema()
         tools, tool_choice, tool_warnings = self._prepare_tools(
             schema, options.tool_choice
         )
@@ -330,7 +331,6 @@ class OpenAI(Provider):
     async def do_generate(
         self, prompt: Prompt, options: GenerationOptions
     ) -> ProviderGenerationResult:
-        await self.llm.init()
         args, warnings = self._prepare_args(prompt, options)
         response = await self.client.chat.completions.create(
             **args,
@@ -381,7 +381,6 @@ class OpenAI(Provider):
     async def do_stream(
         self, prompt: Prompt, options: GenerationOptions
     ) -> AsyncGenerator[StreamPart, None]:
-        await self.llm.init()
         args, warnings = self._prepare_args(prompt, options)
         response = await self.client.chat.completions.create(
             **args,

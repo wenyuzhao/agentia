@@ -2,6 +2,8 @@ import os
 import re
 from typing import (
     TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
     Literal,
     Optional,
     Sequence,
@@ -32,6 +34,12 @@ class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
     seed: int | None = None
     tool_choice: spec.ToolChoice | None = None
     provider_options: spec.ProviderOptions | None = None
+    tools: Sequence[Tool] | None = None
+
+    async def init_tools(self) -> None:
+        if not hasattr(self, "_tools") or self._tools.all_tools != self.tools:
+            self._tools = ToolSet(self.tools or [])
+        await self._tools.init()
 
 
 class UnsupportedFunctionalityError(Exception):
@@ -86,18 +94,10 @@ def get_provider(selector: str) -> "Provider":
 
 
 class LLM:
-    def __init__(self, model: str, tools: Sequence[Tool] | None = None) -> None:
+    def __init__(self, model: str) -> None:
         self._provider = get_provider(model)
         self._provider.llm = self
         self._agent: Optional["Agent"] = None
-        self._tools = ToolSet(tools or [])
-        self.__initialized = False
-
-    async def init(self) -> None:
-        if self.__initialized:
-            return
-        self.__initialized = True
-        await self._tools.init()
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]
@@ -119,6 +119,10 @@ class LLM:
         assert tools is not None, "No tools provided"
         tool_msg = await tools.run(self, tool_calls)
         return tool_msg
+
+    async def __init_tools(self, options: GenerationOptions) -> ToolSet:
+        await options.init_tools()
+        return options._tools
 
     async def generate_object[T: BaseModel | str | int | float | bool | None](
         self,
@@ -161,6 +165,7 @@ class LLM:
         options = options or GenerationOptions()
 
         async def gen():
+            tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
             while True:
                 result = await self._provider.do_generate(
@@ -177,7 +182,7 @@ class LLM:
                     break
                 # Call tools and continue
                 messages.append(
-                    await self.__process_tool_calls(tool_calls, tools=self._tools)
+                    await self.__process_tool_calls(tool_calls, tools=tools)
                 )
                 c.messages.append(messages[-1])
 
@@ -211,7 +216,8 @@ class LLM:
     ) -> ChatCompletionStream | ChatCompletionEvents:
         options = options or GenerationOptions()
 
-        async def gen():
+        async def gen() -> AsyncGenerator[spec.StreamPart, None]:
+            tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
             last_finish_reason: spec.FinishReason = "unknown"
 
@@ -266,7 +272,7 @@ class LLM:
                     break
                 # Call tools and continue
                 messages.append(
-                    await self.__process_tool_calls(tool_calls, tools=self._tools)
+                    await self.__process_tool_calls(tool_calls, tools=tools)
                 )
                 s.messages.append(messages[-1])
             s.finish_reason = last_finish_reason

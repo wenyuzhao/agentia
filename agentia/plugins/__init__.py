@@ -47,7 +47,6 @@ class Plugin(abc.ABC):
 
     def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
-        self.agent: "Agent"
 
     @classmethod
     def instantiate(cls, config: dict[str, Any]) -> Self:
@@ -58,10 +57,6 @@ class Plugin(abc.ABC):
             return obj
         except Exception as e:
             raise PluginInitError(cls.id(), e) from e
-
-    def _register(self, agent: "Agent"):
-        self.agent = agent
-        self.log = self.agent.log.getChild(self.id())
 
     async def init(self):
         """

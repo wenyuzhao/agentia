@@ -172,8 +172,12 @@ class ToolSet:
                     t
                 ), "Expected a function, MCPServer, Plugin, or ProviderTool"
                 self.__add_function(t)
+        self.__initialized = False
 
     async def init(self):
+        if self.__initialized:
+            return
+        self.__initialized = True
         for plugin in self.plugins.values():
             try:
                 await plugin.init()

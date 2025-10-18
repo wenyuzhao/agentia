@@ -38,14 +38,10 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/wenyuzhao/agentia"
 
-[project.scripts]
-agentia = "agentia.main:main"
-
 [dependency-groups]
 # Development tools
 dev = [
     "pyright>=1.1.361,<2",
-    "ipykernel>=6.23.2,<7",
     "pytest>=7.3.2,<8",
     "pytest-asyncio>=0.21.1,<0.22",
 ]
@@ -59,8 +55,6 @@ plugins = [
     "pymstodo>=0.2.0",
     "tavily-python>=0.5.4",
 ]
-# Gemini realtime API
-experimental_realtime = ["pyaudio>=0.2.14", "mss>=10.0.0"]
 # Include all plugins, the web app, and the API server
 all = ["agentia[plugins]", "agentia[dev]"]
 

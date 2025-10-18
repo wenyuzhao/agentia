@@ -1,17 +1,19 @@
 from typing import Literal, Sequence, overload
-from agentia.llm import LLM
+from agentia.llm import LLM, GenerationOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream
+from agentia.llm.tools import Tool, ToolSet
 from agentia.spec import Message, UserMessage, MessagePartText
 import logging
 
 
 class Agent:
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, tools: Sequence[Tool]) -> None:
         self.llm = LLM(model)
         self.llm._agent = self
         self.history: list[Message] = []
         self.log = logging.getLogger(f"agentia.agent")
+        self.__tools = ToolSet(tools)
 
     @overload
     def run(
@@ -36,10 +38,12 @@ class Agent:
         else:
             self.history.extend(prompt)
 
+        options = GenerationOptions(tools=self.__tools)
+
         if stream:
-            x = self.llm.stream(self.history)
+            x = self.llm.stream(self.history, options=options)
         else:
-            x = self.llm.generate(self.history)
+            x = self.llm.generate(self.history, options=options)
 
         def on_finish():
             self.history.append(x.messages[-1])
