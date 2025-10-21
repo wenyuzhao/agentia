@@ -34,7 +34,7 @@ from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError, register_plugin, ALL_PLUGINS
 from . import llm, plugins
-from .tools.tools import ProviderTool, Tool, Tools, MCPServer
+from .tools import ProviderTool, Tool, Tools, MCPServer, MCPContext, mcp_context
 from .history import History
 
 __all__ = [
@@ -73,4 +73,6 @@ __all__ = [
     "Tool",
     "Tools",
     "MCPServer",
+    "MCPContext",
+    "mcp_context",
 ]
