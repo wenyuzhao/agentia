@@ -10,7 +10,7 @@ from typing import (
     overload,
 )
 from pydantic import AnyUrl, BaseModel, Field
-from rich import inspect
+import inspect
 
 from agentia import spec
 from agentia.llm.completion import ChatCompletion
@@ -34,12 +34,6 @@ class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
     seed: int | None = None
     tool_choice: spec.ToolChoice | None = None
     provider_options: spec.ProviderOptions | None = None
-    tools: Sequence[Tool] | None = None
-
-    async def init_tools(self) -> None:
-        if not hasattr(self, "_tools") or self._tools.all_tools != self.tools:
-            self._tools = ToolSet(self.tools or [])
-        await self._tools.init()
 
 
 class UnsupportedFunctionalityError(Exception):
@@ -54,11 +48,9 @@ def get_provider(selector: str) -> "Provider":
         model = selector
     else:
         uri = AnyUrl(selector)
-        print(uri.scheme, uri.host, uri.path)
         provider = uri.scheme
         model = (uri.host or "") + (uri.path or "")
     model = model.strip("/")
-    print(f"Using provider: {provider}, model: {model}")
     match provider:
         case "openai":
             from .providers.openai import OpenAI
@@ -94,10 +86,11 @@ def get_provider(selector: str) -> "Provider":
 
 
 class LLM:
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, tools: Sequence[Tool] | None = None) -> None:
         self._provider = get_provider(model)
         self._provider.llm = self
         self._agent: Optional["Agent"] = None
+        self._tools = ToolSet(tools or [])
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]
@@ -115,14 +108,14 @@ class LLM:
 
     async def __process_tool_calls(
         self, tool_calls: list[spec.ToolCall], tools: ToolSet | None = None
-    ) -> spec.ToolMessage:
+    ) -> tuple[spec.ToolMessage, list[spec.ToolResult]]:
         assert tools is not None, "No tools provided"
-        tool_msg = await tools.run(self, tool_calls)
-        return tool_msg
+        tm, trs = await tools.run(self, tool_calls)
+        return tm, trs
 
     async def __init_tools(self, options: GenerationOptions) -> ToolSet:
-        await options.init_tools()
-        return options._tools
+        await self._tools.init()
+        return self._tools
 
     async def generate_object[T: BaseModel | str | int | float | bool | None](
         self,
@@ -135,7 +128,7 @@ class LLM:
 
         class _Result(Result[return_type]): ...
 
-        if issubclass(return_type, BaseModel):
+        if inspect.isclass(return_type) and issubclass(return_type, BaseModel):
             response_format = return_type
         else:
             response_format = _Result
@@ -169,7 +162,7 @@ class LLM:
             messages = self.__prepare_messages(prompt)
             while True:
                 result = await self._provider.do_generate(
-                    prompt=messages, options=options
+                    prompt=messages, tool_set=tools, options=options
                 )
                 c.warnings.extend(result.warnings)
                 c.usage += result.usage
@@ -182,7 +175,7 @@ class LLM:
                     break
                 # Call tools and continue
                 messages.append(
-                    await self.__process_tool_calls(tool_calls, tools=tools)
+                    (await self.__process_tool_calls(tool_calls, tools=tools))[0]
                 )
                 c.messages.append(messages[-1])
 
@@ -194,7 +187,7 @@ class LLM:
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
-        raw: Literal[False] = False,
+        events: Literal[False] = False,
         options: GenerationOptions | None = None,
     ) -> ChatCompletionStream: ...
 
@@ -203,7 +196,7 @@ class LLM:
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
-        raw: Literal[True],
+        events: Literal[True],
         options: GenerationOptions | None = None,
     ) -> ChatCompletionEvents: ...
 
@@ -211,7 +204,7 @@ class LLM:
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
-        raw: bool = False,
+        events: bool = False,
         options: GenerationOptions | None = None,
     ) -> ChatCompletionStream | ChatCompletionEvents:
         options = options or GenerationOptions()
@@ -226,7 +219,7 @@ class LLM:
                 parts: list[spec.MessagePart] = []
                 last_msg = ""
                 last_reasoning = ""
-                async for part in self._provider.do_stream(messages, options):
+                async for part in self._provider.do_stream(messages, tools, options):
 
                     match part.type:
                         case "stream-start":
@@ -271,14 +264,15 @@ class LLM:
                 if not tool_calls:
                     break
                 # Call tools and continue
-                messages.append(
-                    await self.__process_tool_calls(tool_calls, tools=tools)
-                )
+                tm, trs = await self.__process_tool_calls(tool_calls, tools=tools)
+                for tr in trs:
+                    yield tr
+                messages.append(tm)
                 s.messages.append(messages[-1])
             s.finish_reason = last_finish_reason
             yield spec.StreamPartFinish(usage=s.usage, finish_reason=last_finish_reason)
 
-        if raw:
+        if events:
             s = ChatCompletionEvents(gen())
         else:
             s = ChatCompletionStream(gen())

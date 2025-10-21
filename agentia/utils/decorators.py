@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass, is_dataclass
+import enum
 import inspect
 import json
 import logging
@@ -66,7 +67,7 @@ class ToolFuncParam:
         if self.is_magic and _is_image_type(self.type):
             return None
 
-        if issubclass(self.type, BaseModel):
+        if inspect.isclass(self.type) and issubclass(self.type, BaseModel):
             schema = self.type.model_json_schema()
         else:
             schema = TypeAdapter(self.type).json_schema()
@@ -284,6 +285,22 @@ def magic(
 ) -> Callable[[F], F]: ...
 
 
+def _is_supported_magic_return_type(t: type) -> bool:
+    if t in (int, float, str, bool, type(None)):
+        return True
+    if get_origin(t) is Union or get_origin(t) is types.UnionType:
+        args = get_args(t)
+        if len(args) == 2 and type(None) in args:
+            other_type = args[0] if args[1] is type(None) else args[1]
+            return _is_supported_magic_return_type(other_type)
+    # Enum
+    if inspect.isclass(t) and issubclass(t, enum.Enum):
+        return True
+    if inspect.isclass(t):
+        return issubclass(t, BaseModel)
+    return False
+
+
 def magic(
     func: F | None = None,
     /,
@@ -305,17 +322,7 @@ def magic(
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str
-            if return_type not in (
-                int,
-                float,
-                str,
-                bool,
-                type(None),
-                int | None,
-                float | None,
-                str | None,
-                bool | None,
-            ) and not issubclass(return_type, BaseModel):
+            if not _is_supported_magic_return_type(return_type):
                 raise ValueError(
                     f"Unsupported return type: {return_type} in magic function {callable.__name__}."
                 )

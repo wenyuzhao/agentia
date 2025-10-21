@@ -1,6 +1,5 @@
 from agentia import Agent
-from agentia.message import UserMessage
-from agentia.message import ContentPartImage, ContentPartText
+from agentia.spec import UserMessage, MessagePartText, MessagePartFile
 import pytest
 import dotenv
 
@@ -13,16 +12,18 @@ async def test_vision():
     run = agent.run(
         UserMessage(
             content=[
-                ContentPartText(content="What is this animal?"),
-                ContentPartImage(
-                    url="https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png"
+                MessagePartText(text="What is this animal?"),
+                MessagePartFile(
+                    data="https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png",
+                    media_type="image/png",
                 ),
             ],
         ),
     )
     all_assistant_content = ""
     async for msg in run:
-        assert msg.content is None or isinstance(msg.content, str)
-        all_assistant_content += msg.content or ""
+        for p in msg.content:
+            if p.type == "text":
+                all_assistant_content += p.text or ""
         print(msg)
     assert "cat" in all_assistant_content.lower()

@@ -22,7 +22,8 @@ async def test_mcp():
         all_assistant_content: str = ""
         async for msg in run:
             if msg.role == "assistant":
-                assert msg.content is None or isinstance(msg.content, str)
-                all_assistant_content += msg.content or ""
+                for p in msg.content:
+                    if p.type == "text":
+                        all_assistant_content += p.text or ""
             print(msg)
         assert "12812904" in all_assistant_content

@@ -1,9 +1,13 @@
 from typing import Literal
+import dotenv
 from pydantic import BaseModel
 from agentia import magic
 from agentia.plugins import CalculatorPlugin
 from enum import StrEnum
 import pytest
+
+
+dotenv.load_dotenv()
 
 
 @magic

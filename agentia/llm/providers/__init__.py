@@ -1,9 +1,9 @@
 import abc
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Coroutine, Sequence
-from pydantic import BaseModel
+from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 from agentia.llm import GenerationOptions
+from agentia.llm.tools import ToolSet
 import agentia.spec as spec
 
 if TYPE_CHECKING:
@@ -43,10 +43,10 @@ class Provider(abc.ABC):
 
     @abc.abstractmethod
     async def do_generate(
-        self, prompt: spec.Prompt, options: GenerationOptions
+        self, prompt: spec.Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> ProviderGenerationResult: ...
 
     @abc.abstractmethod
     def do_stream(
-        self, prompt: spec.Prompt, options: GenerationOptions
+        self, prompt: spec.Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> AsyncGenerator[spec.StreamPart, None]: ...

@@ -28,8 +28,10 @@ from .spec import (
     MessagePartToolCall,
     MessagePartToolResult,
     StreamPart,
+    ToolCall,
+    ToolResult,
 )
-from .plugins import Plugin, PluginInitError, ToolResult, register_plugin
+from .plugins import Plugin, PluginInitError, register_plugin
 from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from . import llm
@@ -53,6 +55,8 @@ __all__ = [
     "MessagePartToolCall",
     "MessagePartToolResult",
     "StreamPart",
+    "ToolCall",
+    "ToolResult",
     # plugins
     "Plugin",
     "PluginInitError",

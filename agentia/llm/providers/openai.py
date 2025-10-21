@@ -72,7 +72,7 @@ class OpenAI(Provider):
                         url = f"data:{p.media_type};base64,{base64_data}"
                     detail = (p.provider_options or {}).get("imageDetail", None)
                     if detail not in ["auto", "low", "high"]:
-                        detail = None
+                        detail = "auto"
                     return ChatCompletionContentPartImageParam(
                         type="image_url",
                         image_url={"url": url, "detail": detail},  # type: ignore
@@ -285,7 +285,7 @@ class OpenAI(Provider):
         )
 
     def _prepare_args(
-        self, prompt: Prompt, options: GenerationOptions
+        self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> tuple[dict[str, Any], list[Warning]]:
         msgs = self._to_oai_messages(prompt)
         if not options.response_format or options.response_format.type == "text":
@@ -303,7 +303,7 @@ class OpenAI(Provider):
                 },
             }
         warnings: list[Warning] = []
-        schema = options._tools.get_schema()
+        schema = tool_set.get_schema()
         tools, tool_choice, tool_warnings = self._prepare_tools(
             schema, options.tool_choice
         )
@@ -329,9 +329,9 @@ class OpenAI(Provider):
 
     @override
     async def do_generate(
-        self, prompt: Prompt, options: GenerationOptions
+        self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> ProviderGenerationResult:
-        args, warnings = self._prepare_args(prompt, options)
+        args, warnings = self._prepare_args(prompt, tool_set, options)
         response = await self.client.chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
@@ -379,9 +379,9 @@ class OpenAI(Provider):
 
     @override
     async def do_stream(
-        self, prompt: Prompt, options: GenerationOptions
+        self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> AsyncGenerator[StreamPart, None]:
-        args, warnings = self._prepare_args(prompt, options)
+        args, warnings = self._prepare_args(prompt, tool_set, options)
         response = await self.client.chat.completions.create(
             **args,
             extra_headers=self.extra_headers,

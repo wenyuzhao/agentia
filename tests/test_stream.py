@@ -1,10 +1,10 @@
-from agentia import Agent, Event
+from agentia import Agent
 from typing import Literal, Annotated
 import pytest
 import dotenv
 
-from agentia.message import is_event
-from agentia.run import MessageStream
+from agentia.llm.stream import TextStream
+from agentia.llm.stream import TextStream
 
 dotenv.load_dotenv()
 
@@ -29,15 +29,10 @@ async def test_stream():
     all_assistant_content = ""
     async for stream in run:
         print("stream: ", stream)
-        content = ""
-        async for delta in stream:
-            assert delta is None or isinstance(delta, str)
-            content += delta
-            print(" - ", delta)
-        msg = await stream
-        if msg.role == "assistant":
-            all_assistant_content += content
-        print(msg)
+        if isinstance(stream, TextStream):
+            msg = await stream
+            print(msg)
+            all_assistant_content += msg
     assert "72" in all_assistant_content
 
 
@@ -47,18 +42,10 @@ async def test_stream_with_events():
     run = agent.run("What is the weather like in boston?", stream=True, events=True)
     all_assistant_content = ""
     async for stream in run:
-        if is_event(stream):
-            print(stream)
-            continue
-        assert isinstance(stream, MessageStream)
         print("stream: ", stream)
         content = ""
-        async for delta in stream:
-            assert delta is None or isinstance(delta, str)
-            content += delta
-            print(" - ", delta)
-        msg = await stream
-        if msg.role == "assistant":
-            all_assistant_content += content
-        print(msg)
+        if stream.type == "text-delta":
+            content += stream.delta
+        all_assistant_content += content
+    print(all_assistant_content)
     assert "72" in all_assistant_content

@@ -1,4 +1,4 @@
-from agentia import Agent, UserMessage
+from agentia import Agent
 from typing import Literal, Annotated
 import pytest
 import dotenv
@@ -34,25 +34,13 @@ async def get_current_weather2(
 
 @pytest.mark.asyncio
 async def test_function_call():
-    agent = Agent(model="[openrouter] openai/gpt-4.1-nano", tools=[get_current_weather])
+    agent = Agent(model="openai/gpt-4.1-nano", tools=[get_current_weather2])
     run = agent.run("What is the weather like in boston?")
     all_assistant_content = ""
     async for msg in run:
         if msg.role == "assistant":
-            assert msg.content is None or isinstance(msg.content, str)
-            all_assistant_content += msg.content or ""
-        print(msg)
-    assert "72" in all_assistant_content
-
-
-@pytest.mark.asyncio
-async def test_function_call_async():
-    agent = Agent(model="openai/gpt-4.1-nano", tools=[get_current_weather2])
-    run = agent.run([UserMessage(content="What is the weather like in boston?")])
-    all_assistant_content = ""
-    async for msg in run:
-        if msg.role == "assistant":
-            assert msg.content is None or isinstance(msg.content, str)
-            all_assistant_content += msg.content or ""
+            for p in msg.content:
+                if p.type == "text":
+                    all_assistant_content += p.text or ""
         print(msg)
     assert "72" in all_assistant_content

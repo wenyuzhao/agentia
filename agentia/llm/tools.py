@@ -1,6 +1,6 @@
 import inspect
 import json
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 from pydantic import BaseModel, JsonValue
 from agentia.mcp import MCPServer
@@ -16,24 +16,7 @@ METADATA_TAG = "agentia_tool_metadata"
 
 if TYPE_CHECKING:
     from . import LLM
-    from agentia.agent import Agent
-
-
-class PluginInitError(RuntimeError):
-    def __init__(self, plugin: str, original: Exception) -> None:
-        self.plugin = plugin
-        self.msg = str(original)
-        self.original = original
-        super().__init__(f"Plugin {plugin} failed to initialize: {self.msg}")
-
-
-class Plugin:
-    name: str
-
-    def __init__(self, name: str):
-        self.name = name
-
-    async def init(self) -> None: ...
+    from agentia.plugins import Plugin
 
 
 class _BaseTool:
@@ -55,9 +38,9 @@ class _BaseTool:
 class _PythonFunctionTool(_BaseTool):
     def __init__(self, f: Callable[..., Any], plugin: Optional["Plugin"] = None):
         if plugin:
-            name = getattr(f, NAME_TAG, None) or f"{plugin.name}__{f.__name__}"
+            name = getattr(f, NAME_TAG, None) or f"{plugin.name()}__{f.__name__}"
             display_name: str = (
-                getattr(f, DISPLAY_NAME_TAG, None) or f"{plugin.name}@{f.__name__}"
+                getattr(f, DISPLAY_NAME_TAG, None) or f"{plugin.name()}@{f.__name__}"
             )
         else:
             name = getattr(f, NAME_TAG, f.__name__)
@@ -115,7 +98,7 @@ class _PythonFunctionTool(_BaseTool):
 
         assert self.params is not None
         for p in self.params:
-            is_model = issubclass(p.type, BaseModel)
+            is_model = inspect.isclass(p.type) and issubclass(p.type, BaseModel)
             match p.param.kind:
                 case Parameter.POSITIONAL_ONLY if p.param.annotation == Agent:
                     if llm._agent is not None:
@@ -155,6 +138,8 @@ type Tools = Sequence[Tool]
 
 class ToolSet:
     def __init__(self, tools: Tools):
+        from agentia.plugins import Plugin
+
         self.all_tools = tools
         self.plugins: dict[str, Plugin] = {}
         self.mcp_servers: dict[str, MCPServer] = {}
@@ -182,14 +167,18 @@ class ToolSet:
             try:
                 await plugin.init()
             except Exception as e:
-                raise PluginInitError(plugin.name, e) from e
+                from agentia.plugins import PluginInitError
+
+                raise PluginInitError(plugin.id(), e) from e
         for server in self.mcp_servers.values():
             await server.init()
             tools = server.get_tools()
             for tool in tools:
                 self.__tools[tool.name] = tool
 
-    def add(self, t: Callable[..., Any] | MCPServer | Plugin) -> None:
+    def add(self, t: Union[Callable[..., Any], MCPServer, "Plugin"]) -> None:
+        from agentia.plugins import Plugin
+
         if isinstance(t, Plugin):
             self.__add_plugin(t)
         elif isinstance(t, MCPServer):
@@ -198,23 +187,23 @@ class ToolSet:
             assert inspect.isfunction(t), "Expected a function, MCPServer, or Plugin"
             self.__add_function(t)
 
-    def __add_function(self, f: Callable[..., Any], plugin: Plugin | None = None):
+    def __add_function(self, f: Callable[..., Any], plugin: Optional["Plugin"] = None):
         t = _PythonFunctionTool(f=f, plugin=plugin)
         self.__tools[t.name] = t
 
-    def __add_plugin(self, p: Plugin):
+    def __add_plugin(self, p: "Plugin"):
         # Add all functions from the plugin
         for _n, method in inspect.getmembers(p, predicate=inspect.ismethod):
             if not getattr(method, IS_TOOL_TAG, False):
                 continue
             self.__add_function(method, plugin=p)
         # Add the plugin to the list of plugins
-        self.plugins[p.name] = p
+        self.plugins[p.id()] = p
 
     def __add_mcp_server(self, server: MCPServer):
         self.mcp_servers[server.name] = server
 
-    def get_plugin(self, type: type[Plugin]) -> Plugin | None:
+    def get_plugin(self, type: type["Plugin"]) -> Optional["Plugin"]:
         for p in self.plugins.values():
             if isinstance(p, type):
                 return p
@@ -244,12 +233,12 @@ class ToolSet:
         tool: _PythonFunctionTool,
         llm: "LLM",
         args: Any,
-    ) -> spec.ToolMessage:
+    ) -> tuple[spec.ToolMessage, spec.ToolResult]:
         p_args, kw_args = tool.process_json_args(llm, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
             output = await output
-        return spec.ToolMessage(
+        tm = spec.ToolMessage(
             content=[
                 spec.MessagePartToolResult(
                     tool_call_id=id,
@@ -258,12 +247,18 @@ class ToolSet:
                 )
             ]
         )
+        tr = spec.ToolResult(
+            tool_call_id=id,
+            tool_name=tool.name,
+            result=output,
+        )
+        return tm, tr
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: Any
-    ) -> spec.ToolMessage:
+    ) -> tuple[spec.ToolMessage, spec.ToolResult]:
         result = await tool.server.run(tool.name, args)
-        return spec.ToolMessage(
+        tm = spec.ToolMessage(
             content=[
                 spec.MessagePartToolResult(
                     tool_call_id=id,
@@ -272,11 +267,18 @@ class ToolSet:
                 )
             ]
         )
+        tr = spec.ToolResult(
+            tool_call_id=id,
+            tool_name=tool.name,
+            result=result,
+        )
+        return tm, tr
 
     async def run(
         self, llm: "LLM", tool_calls: list[spec.ToolCall]
-    ) -> spec.ToolMessage:
+    ) -> tuple[spec.ToolMessage, list[spec.ToolResult]]:
         tool_results: list[spec.MessagePartToolResult] = []
+        tool_results2: list[spec.ToolResult] = []
         for c in tool_calls:
             tool = self.__tools.get(c.tool_name, None)
             if not tool:
@@ -284,20 +286,22 @@ class ToolSet:
             try:
                 args = json.loads(c.input)
                 if isinstance(tool, _PythonFunctionTool):
-                    msg = await self.__run_python_tool(
+                    tm, tr = await self.__run_python_tool(
                         id=c.tool_call_id,
                         tool=tool,
                         llm=llm,
                         args=args,
                     )
-                    tool_results.extend(msg.content)
+                    tool_results.extend(tm.content)
+                    tool_results2.append(tr)
                 elif isinstance(tool, _MCPTool):
-                    msg = await self.__run_mcp_tool(
+                    tm, tr = await self.__run_mcp_tool(
                         id=c.tool_call_id,
                         tool=tool,
                         args=args,
                     )
-                    tool_results.extend(msg.content)
+                    tool_results.extend(tm.content)
+                    tool_results2.append(tr)
                 else:
                     raise ValueError(f"Tool {c.tool_name} is of unknown type")
             except Exception as e:
@@ -309,4 +313,4 @@ class ToolSet:
                         output=spec.ToolResultOutputErrorJson(value=output),
                     )
                 )
-        return spec.ToolMessage(content=tool_results)
+        return spec.ToolMessage(content=tool_results), tool_results2

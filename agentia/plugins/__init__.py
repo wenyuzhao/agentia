@@ -15,17 +15,6 @@ class PluginInitError(RuntimeError):
         super().__init__(f"Plugin {plugin} failed to initialize: {self.msg}")
 
 
-class ToolResult(Exception):
-    __result: Any
-
-    def __init__(self, result: Any):
-        self.__result = result
-
-    @property
-    def result(self) -> Any:
-        return self.__result
-
-
 class Plugin(abc.ABC):
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
@@ -85,25 +74,27 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         from .calc import CalculatorPlugin
         from .clock import ClockPlugin
         from .code import CodePlugin
-        from .memory import MemoryPlugin
-        from .search import SearchPlugin
-        from .dalle import DallEPlugin
-        from .vision import VisionPlugin
-        from .web import WebPlugin
-        from .knowledge_base import KnowledgeBasePlugin
+
+        # from .memory import MemoryPlugin
+        # from .search import SearchPlugin
+        # from .dalle import DallEPlugin
+        # from .vision import VisionPlugin
+        # from .web import WebPlugin
+        # from .knowledge_base import KnowledgeBasePlugin
 
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
-            "clock": ClockPlugin,
-            "code": CodePlugin,
-            "memory": MemoryPlugin,
-            "search": SearchPlugin,
-            "dalle": DallEPlugin,
-            "vision": VisionPlugin,
-            "web": WebPlugin,
-            "knowledge_base": KnowledgeBasePlugin,
+            # "clock": ClockPlugin,
+            # "code": CodePlugin,
+            # "memory": MemoryPlugin,
+            # "search": SearchPlugin,
+            # "dalle": DallEPlugin,
+            # "vision": VisionPlugin,
+            # "web": WebPlugin,
+            # "knowledge_base": KnowledgeBasePlugin,
         }
     except ImportError as e:
+        print("Failed to import built-in plugins:", e)
         pass
         # raise e
 
