@@ -24,7 +24,7 @@ class ChatCompletion:
         self,
         gen: AsyncGenerator[AssistantMessage, None],
     ):
-        async def __gen():
+        async def __gen() -> AsyncGenerator[AssistantMessage, None]:
             async for msg in gen:
                 yield msg
             self.on_finish.emit()
