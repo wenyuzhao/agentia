@@ -4,42 +4,69 @@ from pydantic import AliasChoices, BaseModel, Field, JsonValue
 from .base import *
 
 
-class StreamPartBase(BaseModel):
+class StreamPartTextStart(BaseModel):
+    type: Literal["text-start"] = "text-start"
+    id: str
     provider_metadata: ProviderMetadata | None = Field(
         default=None,
         validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
         serialization_alias="providerMetadata",
     )
-    id: str
 
 
-class StreamPartTextStart(StreamPartBase):
-    type: Literal["text-start"] = "text-start"
-
-
-class StreamPartTextDelta(StreamPartBase):
+class StreamPartTextDelta(BaseModel):
     type: Literal["text-delta"] = "text-delta"
     delta: str
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartTextEnd(StreamPartBase):
+class StreamPartTextEnd(BaseModel):
     type: Literal["text-end"] = "text-end"
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartReasoningStart(StreamPartBase):
+class StreamPartReasoningStart(BaseModel):
     type: Literal["reasoning-start"] = "reasoning-start"
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartReasoningDelta(StreamPartBase):
+class StreamPartReasoningDelta(BaseModel):
     type: Literal["reasoning-delta"] = "reasoning-delta"
     delta: str
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartReasoningEnd(StreamPartBase):
+class StreamPartReasoningEnd(BaseModel):
     type: Literal["reasoning-end"] = "reasoning-end"
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartToolInputStart(StreamPartBase):
+class StreamPartToolInputStart(BaseModel):
     type: Literal["tool-input-start"] = "tool-input-start"
     tool_name: str = Field(
         validation_alias=AliasChoices("toolName", "tool_name"),
@@ -50,15 +77,33 @@ class StreamPartToolInputStart(StreamPartBase):
         validation_alias=AliasChoices("providerExecuted", "provider_executed"),
         serialization_alias="providerExecuted",
     )
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartToolInputDelta(StreamPartBase):
+class StreamPartToolInputDelta(BaseModel):
     type: Literal["tool-input-delta"] = "tool-input-delta"
     delta: str
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
-class StreamPartToolInputEnd(StreamPartBase):
+class StreamPartToolInputEnd(BaseModel):
     type: Literal["tool-input-end"] = "tool-input-end"
+    id: str
+    provider_metadata: ProviderMetadata | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
+        serialization_alias="providerMetadata",
+    )
 
 
 class StreamPartStreamStart(BaseModel):

@@ -5,7 +5,12 @@ from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 
 
-class MessageBase(BaseModel):
+class MessageBase(BaseModel): ...
+
+
+class SystemMessage(MessageBase):
+    role: Literal["system"] = "system"
+    content: str
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "providerOptions"),
@@ -13,12 +18,12 @@ class MessageBase(BaseModel):
     )
 
 
-class SystemMessage(MessageBase):
-    role: Literal["system"] = "system"
-    content: str
+class MessagePartBase(BaseModel): ...
 
 
-class MessagePartBase(BaseModel):
+class MessagePartText(MessagePartBase):
+    type: Literal["text"] = "text"
+    text: str
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "provider_options"),
@@ -26,14 +31,14 @@ class MessagePartBase(BaseModel):
     )
 
 
-class MessagePartText(MessagePartBase):
-    type: Literal["text"] = "text"
-    text: str
-
-
 class MessagePartReasoning(MessagePartBase):
     type: Literal["reasoning"] = "reasoning"
     text: str
+    provider_options: ProviderOptions | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerOptions", "provider_options"),
+        serialization_alias="providerOptions",
+    )
 
 
 class MessagePartFile(MessagePartBase):
@@ -44,9 +49,14 @@ class MessagePartFile(MessagePartBase):
         serialization_alias="mediaType",
     )
     filename: str | None = None
+    provider_options: ProviderOptions | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerOptions", "provider_options"),
+        serialization_alias="providerOptions",
+    )
 
 
-class MessagePartToolCall(BaseModel):
+class MessagePartToolCall(MessagePartBase):
     type: Literal["tool-call"] = "tool-call"
     tool_call_id: str = Field(
         validation_alias=AliasChoices("toolCallId", "tool_call_id"),
@@ -130,7 +140,7 @@ type ToolResultOutput = Annotated[
 ]
 
 
-class MessagePartToolResult(BaseModel):
+class MessagePartToolResult(MessagePartBase):
     type: Literal["tool-result"] = "tool-result"
     tool_call_id: str = Field(
         validation_alias=AliasChoices("toolCallId", "tool_call_id"),
@@ -175,6 +185,11 @@ type AssistantMessagePart = Annotated[
 class UserMessage(MessageBase):
     role: Literal["user"] = "user"
     content: Sequence[UserMessagePart]
+    provider_options: ProviderOptions | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerOptions", "providerOptions"),
+        serialization_alias="providerOptions",
+    )
 
     @property
     def text(self) -> str:
@@ -197,6 +212,11 @@ class _Result[X](BaseModel):
 class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
     content: Sequence[AssistantMessagePart]
+    provider_options: ProviderOptions | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerOptions", "providerOptions"),
+        serialization_alias="providerOptions",
+    )
 
     @property
     def reasoning(self) -> str | None:
@@ -261,6 +281,11 @@ class AssistantMessage(MessageBase):
 class ToolMessage(MessageBase):
     role: Literal["tool"] = "tool"
     content: Sequence[MessagePartToolResult]
+    provider_options: ProviderOptions | None = Field(
+        default=None,
+        validation_alias=AliasChoices("providerOptions", "providerOptions"),
+        serialization_alias="providerOptions",
+    )
 
 
 type Message = Annotated[
