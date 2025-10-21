@@ -129,7 +129,7 @@ class _MCPTool(_BaseTool):
 
 class ProviderTool(BaseModel):
     name: str
-    args: dict[str, JsonValue]
+    args: dict[str, JsonValue] | None = None
 
 
 type Tool = Plugin | Callable[..., Any] | ProviderTool | MCPServer
@@ -222,7 +222,7 @@ class ToolSet:
             for (k, v) in self.__tools.items()
         ]
         provider_tools = [
-            spec.ProviderDefinedTool(id=t.name, name=t.name, args=t.args)
+            spec.ProviderDefinedTool(id=t.name, name=t.name, args=t.args or {})
             for t in self.provider_tools.values()
         ]
         return functions + provider_tools

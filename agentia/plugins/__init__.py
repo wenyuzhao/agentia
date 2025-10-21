@@ -94,8 +94,8 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         print("Failed to import built-in plugins:", e)
         pass
         # raise e
-assert ALL_PLUGINS
-print("ALL_PLUGINS:", ALL_PLUGINS)
+
+
 for name, cls in ALL_PLUGINS.items():
     cls._BUILTIN_ID = name
 
