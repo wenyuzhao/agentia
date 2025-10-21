@@ -356,7 +356,6 @@ class OpenAIAPIProvider(Provider):
             extra_body=self.extra_body,
             stream=False,
         )
-        # print(response)
         choice = response.choices[0]
         content: Sequence[Content] = []
         tool_calls: list[ToolCall] = []

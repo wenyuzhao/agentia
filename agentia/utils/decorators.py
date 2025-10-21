@@ -334,23 +334,37 @@ def magic(
                 )
             ]
             for i, (p, image) in enumerate(images):
-                content_type = "png"
+                content_type = "image/png"
                 if isinstance(image, ImageUrl):
                     url = image.url
+                    url_lower = url.lower()
+                    if url_lower.endswith((".jpg", ".jpeg")):
+                        content_type = "image/jpeg"
+                    elif url_lower.endswith(".png"):
+                        content_type = "image/png"
+                    elif url_lower.endswith(".gif"):
+                        content_type = "image/gif"
+                    elif url_lower.endswith(".bmp"):
+                        content_type = "image/bmp"
+                    elif url_lower.endswith(".webp"):
+                        content_type = "image/webp"
+                    elif url_lower.endswith(".ico"):
+                        content_type = "image/ico"
+
                 else:
                     match image.format:
                         case "JPEG":
-                            content_type = "jpeg"
+                            content_type = "image/jpeg"
                         case "PNG":
-                            content_type = "png"
+                            content_type = "image/png"
                         case "GIF":
-                            content_type = "gif"
+                            content_type = "image/gif"
                         case "BMP":
-                            content_type = "bmp"
+                            content_type = "image/bmp"
                         case "WEBP":
-                            content_type = "webp"
+                            content_type = "image/webp"
                         case "ICO":
-                            content_type = "ico"
+                            content_type = "image/ico"
                         case _:
                             raise ValueError(
                                 f"Unsupported image format: {image.format}"
@@ -373,7 +387,7 @@ def magic(
                     )
                 )
             result = await llm.generate_object(
-                messages, return_type=return_type, options={"tools": tools}
+                messages, type=return_type, options={"tools": tools}
             )
             return result
 

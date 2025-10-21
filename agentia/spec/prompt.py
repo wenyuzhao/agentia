@@ -1,3 +1,6 @@
+from enum import Enum
+import inspect
+from typing import Type
 from attr import dataclass
 from .base import *
 
@@ -173,17 +176,60 @@ class UserMessage(MessageBase):
     role: Literal["user"] = "user"
     content: Sequence[UserMessagePart]
 
-
-class AssistantMessage(MessageBase):
-    role: Literal["assistant"] = "assistant"
-    content: Sequence[AssistantMessagePart]
-
-    def get_text_content(self) -> str:
+    @property
+    def text(self) -> str:
         text = ""
         for part in self.content:
             if isinstance(part, MessagePartText):
                 text += part.text
         return text
+
+
+type ObjectType = BaseModel | str | int | float | bool | Enum | None
+
+
+class _Result[X](BaseModel):
+    result: X = Field(..., description="The result", title="Result")
+
+
+class AssistantMessage(MessageBase):
+    role: Literal["assistant"] = "assistant"
+    content: Sequence[AssistantMessagePart]
+
+    @property
+    def reasoning(self) -> str | None:
+        text = ""
+        for part in self.content:
+            if isinstance(part, MessagePartReasoning):
+                text += part.text
+        return text
+
+    @property
+    def text(self) -> str:
+        text = ""
+        for part in self.content:
+            if isinstance(part, MessagePartText):
+                text += part.text
+        return text
+
+    def parse[T: ObjectType](self, return_type: type[T]) -> T:
+        class Result(_Result[return_type]): ...
+
+        if inspect.isclass(return_type) and issubclass(return_type, BaseModel):
+            response_format = return_type
+        else:
+            response_format = Result
+
+        json_string = ""
+        for part in self.content:
+            if isinstance(part, MessagePartText):
+                json_string += part.text
+
+        result = response_format.model_validate_json(json_string)
+        if isinstance(result, _Result):
+            return result.result
+        else:
+            return result
 
     @staticmethod
     def from_contents(contents: Sequence[Content]) -> "AssistantMessage":
@@ -241,6 +287,20 @@ class ResponseFormatJson(BaseModel):
     )
     name: str | None = None
     description: str | None = None
+
+    @staticmethod
+    def from_model[T: ObjectType](return_type: Type[T]) -> "ResponseFormatJson":
+        class Result(_Result[return_type]): ...
+
+        if inspect.isclass(return_type) and issubclass(return_type, BaseModel):
+            response_format = return_type
+        else:
+            response_format = Result
+        return ResponseFormatJson(
+            json_schema=response_format.model_json_schema(),
+            name=return_type.__name__,
+            description=f"JSON object matching the schema of {return_type.__name__}",
+        )
 
 
 type ResponseFormat = Annotated[

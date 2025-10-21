@@ -12,5 +12,5 @@ async def test_load_agent_from_config():
     async with MCPContext():
         run = agent.run("Calculate 2 ^ 12")
         response = await run
-        result_text = response.get_text_content()
+        result_text = response.text
     assert "4096" in result_text

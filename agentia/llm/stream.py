@@ -26,10 +26,12 @@ class TextStream:
         return self.__wait_for_completion().__await__()
 
 
-class ReasoningStream(TextStream): ...
+class ReasoningStream(TextStream):
+    type: Literal["reasoning-stream"] = "reasoning-stream"
 
 
-class MessageStream(TextStream): ...
+class MessageStream(TextStream):
+    type: Literal["message-stream"] = "message-stream"
 
 
 class ChatCompletionStreamBase:

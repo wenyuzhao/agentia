@@ -1,13 +1,23 @@
+from enum import Enum
 from pathlib import Path
 from typing import Literal, Sequence, Union, overload
 
+from unittest import result
 import uuid
+
+from pydantic import BaseModel
 from agentia.history import History
 from agentia.llm import LLM, GenerationOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.tools.tools import Tool, ToolSet
-from agentia.spec import NonSystemMessage, SystemMessage, UserMessage, MessagePartText
+from agentia.spec import (
+    NonSystemMessage,
+    SystemMessage,
+    UserMessage,
+    MessagePartText,
+    ObjectType,
+)
 import logging
 
 
@@ -37,6 +47,17 @@ class Agent:
         from agentia.utils.config import load_agent_from_config
 
         return load_agent_from_config(config)
+
+    def __add_prompt(
+        self,
+        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+    ) -> None:
+        if isinstance(prompt, str):
+            self.history.add(UserMessage(content=[MessagePartText(text=prompt)]))
+        elif not isinstance(prompt, (list, Sequence)):
+            self.history.add(prompt)
+        else:
+            self.history.add(*prompt)
 
     @overload
     def run(
@@ -72,13 +93,7 @@ class Agent:
         stream: bool = False,
         events: bool = False,
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
-        if isinstance(prompt, str):
-            self.history.add(UserMessage(content=[MessagePartText(text=prompt)]))
-        elif not isinstance(prompt, (list, Sequence)):
-            self.history.add(prompt)
-        else:
-            self.history.add(*prompt)
-
+        self.__add_prompt(prompt)
         if stream:
             x = self.llm.stream(self.history.get(), events=events, options=self.options)
         else:
@@ -92,6 +107,20 @@ class Agent:
         x.on_finish.on(on_finish)
 
         return x
+
+    async def generate_object[T: ObjectType](
+        self,
+        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+        type: type[T],
+    ) -> T:
+        self.__add_prompt(prompt)
+        msg = await self.llm._generate_object_impl(
+            self.history.get(), type, options=self.options
+        )
+
+        self.history.add(msg)
+
+        return msg.parse(type)
 
 
 from .utils.config import Config

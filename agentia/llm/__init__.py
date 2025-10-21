@@ -2,7 +2,6 @@ import os
 import re
 from typing import (
     TYPE_CHECKING,
-    Any,
     AsyncGenerator,
     Literal,
     Optional,
@@ -10,12 +9,12 @@ from typing import (
     TypedDict,
     overload,
 )
-from pydantic import AnyUrl, BaseModel, Field
-import inspect
+from pydantic import AnyUrl
 
 from agentia import spec
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
+from agentia.spec.prompt import ObjectType
 from agentia.tools.tools import ToolSet, Tool
 
 if TYPE_CHECKING:
@@ -102,39 +101,25 @@ class LLM:
         await tools.init(self, self._agent)
         return tools
 
-    async def generate_object[T: BaseModel | str | int | float | bool | None](
+    async def generate_object[T: ObjectType](
+        self,
+        prompt: str | spec.Message | Sequence[spec.Message],
+        type: type[T],
+        options: GenerationOptions | None = None,
+    ) -> T:
+        msg = await self._generate_object_impl(prompt, type, options)
+        return msg.parse(type)
+
+    async def _generate_object_impl[T: ObjectType](
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         return_type: type[T],
         options: GenerationOptions | None = None,
-    ) -> T:
+    ) -> spec.AssistantMessage:
         options = options or {}
-
-        class Result[X](BaseModel):
-            result: X = Field(..., description="The result", title="Result")
-
-        class _Result(Result[return_type]): ...
-
-        if inspect.isclass(return_type) and issubclass(return_type, BaseModel):
-            response_format = return_type
-        else:
-            response_format = _Result
-
-        json_string = ""
-        options["response_format"] = spec.ResponseFormatJson(
-            json_schema=response_format.model_json_schema(),
-            name=return_type.__name__,
-            description=f"JSON object matching the schema of {return_type.__name__}",
-        )
+        options["response_format"] = spec.ResponseFormatJson.from_model(return_type)
         msg = await self.generate(prompt, options=options)
-        for part in msg.content:
-            if isinstance(part, spec.MessagePartText):
-                json_string += part.text
-        result = response_format.model_validate_json(json_string)
-        if isinstance(result, _Result):
-            return result.result
-        else:
-            return result
+        return msg
 
     def generate(
         self,
