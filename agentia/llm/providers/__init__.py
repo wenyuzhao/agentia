@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 from agentia.llm import GenerationOptions
-from agentia.llm.tools import ToolSet
+from agentia.tools.tools import ToolSet
 import agentia.spec as spec
 
 if TYPE_CHECKING:

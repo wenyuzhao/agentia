@@ -5,7 +5,7 @@ import os
 from typing import Any, override
 from uuid import uuid4
 
-from agentia.llm.tools import ToolSet
+from agentia.tools.tools import ToolSet
 from . import GenerationOptions, ProviderGenerationResult, Provider
 
 from ...spec import *

@@ -7,11 +7,11 @@ import importlib.util
 from agentia.agent import Agent
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
-from agentia.llm.tools import ProviderTool
-from agentia.mcp import MCPServer
+from agentia.tools.tools import ProviderTool
+from agentia.tools.mcp import MCPServer
 
 if TYPE_CHECKING:
-    from agentia.llm.tools import Tool
+    from agentia.tools.tools import Tool
     from agentia.plugins import Plugin
 
 DEFAULT_AGENT_CONFIG_PATH = Path.cwd() / "agents"
@@ -185,23 +185,26 @@ def __create_mcp_servers(config: Config) -> dict[str, "MCPServer"]:
     return mcps
 
 
-def __load_agent_from_config(file: Path) -> Agent:
+def __load_agent_from_config(file_or_config: Path | Config) -> Agent:
     """Load a bot from a configuration file"""
 
     # Load the configuration file
-    assert file.exists()
-    file = file.resolve()
-    try:
-        config = Config(**tomllib.loads(file.read_text()))
-    except ValidationError as e:
-        raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
+    if isinstance(file_or_config, Config):
+        config = file_or_config
+    else:
+        assert file_or_config.exists()
+        file = file_or_config.resolve()
+        try:
+            config = Config(**tomllib.loads(file.read_text()))
+        except ValidationError as e:
+            raise ValueError(f"Invalid config file: {file}\n{repr(e)}") from e
     # Create tools
     plugins, _ = __create_plugins(config)
     mcp_servers = __create_mcp_servers(config)
     provider_tools = __create_provider_tools(config)
     tools: list["Tool"] = [*plugins, *mcp_servers.values(), *provider_tools]
     # Create agent
-    agent_id = file.stem
+    agent_id = file_or_config.stem if isinstance(file_or_config, Path) else None
     agent = Agent(
         id=agent_id,
         model=config.agent.model,
@@ -248,8 +251,10 @@ def prepare_user_plugins():
         spec.loader.exec_module(module)
 
 
-def load_agent_from_config(config_path: str | Path) -> Agent:
+def load_agent_from_config(config_path: str | Path | Config) -> Agent:
     """Load a bot from a configuration file"""
+    if isinstance(config_path, Config):
+        return __load_agent_from_config(config_path)
     config_path = Path(config_path) if isinstance(config_path, str) else config_path
     assert config_path.suffix == ".toml", "Agent config file must be a .toml file"
     config_path = config_path.resolve()

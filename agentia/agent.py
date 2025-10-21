@@ -1,11 +1,12 @@
-from typing import Literal, Sequence, overload
+from pathlib import Path
+from typing import Literal, Sequence, Union, overload
 
 import uuid
 from agentia.history import History
 from agentia.llm import LLM, GenerationOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.llm.tools import Tool, ToolSet
+from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import NonSystemMessage, SystemMessage, UserMessage, MessagePartText
 import logging
 
@@ -30,6 +31,12 @@ class Agent:
         if instructions:
             self.history.add_instructions(instructions)
         self.log = logging.getLogger(f"agentia.agent")
+
+    @staticmethod
+    def from_config(config: Union[str, Path, "Config"]) -> "Agent":
+        from agentia.utils.config import load_agent_from_config
+
+        return load_agent_from_config(config)
 
     @overload
     def run(
@@ -85,3 +92,6 @@ class Agent:
         x.on_finish.on(on_finish)
 
         return x
+
+
+from .utils.config import Config

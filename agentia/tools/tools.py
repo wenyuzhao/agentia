@@ -3,7 +3,7 @@ import json
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 from pydantic import BaseModel, JsonValue
-from agentia.mcp import MCPServer
+from agentia.tools.mcp import MCPServer
 import agentia.spec as spec
 from agentia.utils.decorators import ToolFuncParam
 from inspect import Parameter
@@ -15,7 +15,7 @@ DESCRIPTION_TAG = "agentia_tool_description"
 METADATA_TAG = "agentia_tool_metadata"
 
 if TYPE_CHECKING:
-    from . import LLM
+    from ..llm import LLM
     from agentia.plugins import Plugin
     from agentia.agent import Agent
 
@@ -84,7 +84,7 @@ class _PythonFunctionTool(_BaseTool):
 
     def process_json_args(self, llm: "LLM", args: Any):
         from agentia.agent import Agent
-        from . import LLM
+        from ..llm import LLM
 
         p_args: list[Any] = []
         kw_args: dict[str, Any] = {}
@@ -170,7 +170,7 @@ class ToolSet:
                 plugin.agent = agent
                 await plugin.init()
             except Exception as e:
-                from agentia.plugins import PluginInitError
+                from . import PluginInitError
 
                 raise PluginInitError(plugin.id(), e) from e
         for server in self.mcp_servers.values():

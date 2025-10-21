@@ -1,6 +1,6 @@
 import pytest
 import dotenv
-from agentia.mcp import MCPContext
+from agentia.tools.mcp import MCPContext
 from agentia.utils.config import load_agent_from_config
 
 dotenv.load_dotenv()

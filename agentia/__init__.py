@@ -32,10 +32,10 @@ from .spec import (
 )
 from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
-from .plugins import Plugin, PluginInitError, register_plugin
-from . import llm
-from . import plugins
-from .llm.tools import ProviderTool, Tool, Tools, MCPServer
+from .plugins import Plugin, PluginInitError, register_plugin, ALL_PLUGINS
+from . import llm, plugins
+from .tools.tools import ProviderTool, Tool, Tools, MCPServer
+from .history import History
 
 __all__ = [
     # submodules
@@ -44,7 +44,8 @@ __all__ = [
     "llm",
     # agent
     "Agent",
-    # message
+    "History",
+    # spec
     "Message",
     "SystemMessage",
     "UserMessage",

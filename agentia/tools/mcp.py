@@ -12,7 +12,7 @@ from httpx import Auth
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from agentia.llm.tools import _MCPTool
+    from agentia.tools.tools import _MCPTool
 
 
 class MCPServerConfig(BaseModel):
@@ -161,7 +161,7 @@ class MCPServer:
         return self.__tools
 
     async def init(self):
-        from agentia.llm.tools import _MCPTool
+        from agentia.tools.tools import _MCPTool
 
         assert not self.initialized, "MCP Server already initialized"
         assert len(MCP_CONTEXTS) > 0, "Agents must be running in an MCP context"

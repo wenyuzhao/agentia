@@ -16,7 +16,7 @@ import inspect
 from agentia import spec
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
-from agentia.llm.tools import ToolSet, Tool
+from agentia.tools.tools import ToolSet, Tool
 
 if TYPE_CHECKING:
     from agentia.agent import Agent

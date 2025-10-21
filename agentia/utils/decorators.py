@@ -29,7 +29,7 @@ import inspect
 from agentia.spec import UserMessage, MessagePartText, MessagePartFile
 
 if TYPE_CHECKING:
-    from agentia.llm.tools import Tools
+    from agentia.tools.tools import Tools
 
 
 @dataclass
@@ -160,7 +160,7 @@ def tool(
     """
 
     def __tool_impl(callable: Callable[..., R]) -> Callable[..., R]:
-        from agentia.llm.tools import (
+        from agentia.tools.tools import (
             NAME_TAG,
             DISPLAY_NAME_TAG,
             DESCRIPTION_TAG,
