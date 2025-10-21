@@ -1,10 +1,7 @@
 import abc
 import os
-from typing import TYPE_CHECKING, Any, Callable, Self, Type
+from typing import Any, Callable, Self, Type
 from ..utils.decorators import tool
-
-if TYPE_CHECKING:
-    from ..agent import Agent
 
 
 class PluginInitError(RuntimeError):
@@ -84,8 +81,8 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
 
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
-            # "clock": ClockPlugin,
-            # "code": CodePlugin,
+            "clock": ClockPlugin,
+            "code": CodePlugin,
             # "memory": MemoryPlugin,
             # "search": SearchPlugin,
             # "dalle": DallEPlugin,
@@ -97,8 +94,8 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         print("Failed to import built-in plugins:", e)
         pass
         # raise e
-
-
+assert ALL_PLUGINS
+print("ALL_PLUGINS:", ALL_PLUGINS)
 for name, cls in ALL_PLUGINS.items():
     cls._BUILTIN_ID = name
 

@@ -19,7 +19,10 @@ plugins = ["calc", "clock"]
 
 # Plugin options
 [plugins]
-search = { country = "Australia" }
+# search = { country = "Australia" }
+
+[provider-tools]
+web_search = {}
 
 # MCP servers
 [mcp]

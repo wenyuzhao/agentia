@@ -12,7 +12,6 @@ def init_logging(level: logging._Level = logging.INFO):
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-from . import plugins
 from . import utils
 
 from .agent import Agent
@@ -31,10 +30,11 @@ from .spec import (
     ToolCall,
     ToolResult,
 )
-from .plugins import Plugin, PluginInitError, register_plugin
 from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
+from .plugins import Plugin, PluginInitError, register_plugin
 from . import llm
+from . import plugins
 
 __all__ = [
     # submodules

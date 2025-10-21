@@ -7,10 +7,11 @@ import importlib.util
 from agentia.agent import Agent
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
+from agentia.llm.tools import ProviderTool
 from agentia.mcp import MCPServer
 
 if TYPE_CHECKING:
-    from agentia.tools import Tool
+    from agentia.llm.tools import Tool
     from agentia.plugins import Plugin
 
 DEFAULT_AGENT_CONFIG_PATH = Path.cwd() / "agents"
@@ -18,11 +19,11 @@ DEFAULT_AGENT_USER_PLUGIN_PATH = Path.cwd() / "plugins"
 
 
 class AgentConfig(BaseModel):
+    model: str
     name: str
     icon: str | None = None
     description: str | None = None
     instructions: str | None = None
-    model: str | None = None
     user: str | None = None
     plugins: list[str] | None = None
     mcp: list[str] | None = None
@@ -98,6 +99,7 @@ class Config(BaseModel):
         default_factory=dict
     )
     mcp: dict[str, MCPConfig] = Field(default_factory=dict)
+    provider_tools: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     def get_enabled_plugins(self) -> list[str]:
         if self.agent.plugins is not None:
@@ -116,6 +118,13 @@ class AgentInfo(BaseModel):
     id: str
     config_path: Path
     config: "Config"
+
+
+def __create_provider_tools(config: Config) -> list[ProviderTool]:
+    ptools: list[ProviderTool] = []
+    for name, args in config.provider_tools.items():
+        ptools.append(ProviderTool(name=name, args=args))
+    return ptools
 
 
 def __create_plugins(config: Config) -> tuple[list["Plugin"], dict[str, Any]]:
@@ -189,7 +198,8 @@ def __load_agent_from_config(file: Path) -> Agent:
     # Create tools
     plugins, _ = __create_plugins(config)
     mcp_servers = __create_mcp_servers(config)
-    tools: list["Tool"] = [*plugins, *mcp_servers.values()]
+    provider_tools = __create_provider_tools(config)
+    tools: list["Tool"] = [*plugins, *mcp_servers.values(), *provider_tools]
     # Create agent
     agent_id = file.stem
     agent = Agent(
@@ -198,7 +208,6 @@ def __load_agent_from_config(file: Path) -> Agent:
         tools=tools,
         instructions=config.agent.build_instructions(),
     )
-    agent.context["config"] = config
     return agent
 
 

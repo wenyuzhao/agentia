@@ -178,6 +178,13 @@ class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
     content: Sequence[AssistantMessagePart]
 
+    def get_text_content(self) -> str:
+        text = ""
+        for part in self.content:
+            if isinstance(part, MessagePartText):
+                text += part.text
+        return text
+
     @staticmethod
     def from_contents(contents: Sequence[Content]) -> "AssistantMessage":
         parts = []
