@@ -66,18 +66,10 @@ def get_provider(selector: str) -> "Provider":
 
 
 class LLM:
-    def __init__(self, model: str, options: GenerationOptions | None = None) -> None:
+    def __init__(self, model: str) -> None:
         self._provider = get_provider(model)
         self._provider.llm = self
         self._agent: Optional["Agent"] = None
-        self.options = options or GenerationOptions()
-        if tools := self.options.get("tools", None):
-            if isinstance(tools, ToolSet):
-                self._tools = tools
-            else:
-                self._tools = ToolSet(tools)
-        else:
-            self._tools = ToolSet([])
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]
@@ -100,13 +92,24 @@ class LLM:
         tm, trs = await tools.run(self, tool_calls)
         return tm, trs
 
-    async def __init_tools(self) -> ToolSet:
-        await self._tools.init()
-        return self._tools
+    async def __init_tools(self, options: GenerationOptions | None) -> ToolSet:
+        if options is None or "tools" not in options or options["tools"] is None:
+            tools = ToolSet([])
+        elif isinstance(options["tools"], ToolSet):
+            tools = options["tools"]
+        else:
+            tools = ToolSet(options["tools"])
+        await tools.init()
+        return tools
 
     async def generate_object[T: BaseModel | str | int | float | bool | None](
-        self, prompt: str | spec.Message | Sequence[spec.Message], return_type: type[T]
+        self,
+        prompt: str | spec.Message | Sequence[spec.Message],
+        return_type: type[T],
+        options: GenerationOptions | None = None,
     ) -> T:
+        options = options or {}
+
         class Result[X](BaseModel):
             result: X = Field(..., description="The result", title="Result")
 
@@ -118,14 +121,12 @@ class LLM:
             response_format = _Result
 
         json_string = ""
-        old_format = self.options.get("response_format", None)
-        self.options["response_format"] = spec.ResponseFormatJson(
+        options["response_format"] = spec.ResponseFormatJson(
             json_schema=response_format.model_json_schema(),
             name=return_type.__name__,
             description=f"JSON object matching the schema of {return_type.__name__}",
         )
-        msg = await self.generate(prompt)
-        self.options["response_format"] = old_format
+        msg = await self.generate(prompt, options=options)
         for part in msg.content:
             if isinstance(part, spec.MessagePartText):
                 json_string += part.text
@@ -138,13 +139,16 @@ class LLM:
     def generate(
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
+        options: GenerationOptions | None = None,
     ) -> ChatCompletion:
+        options = options or {}
+
         async def gen():
-            tools = await self.__init_tools()
+            tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
             while True:
                 result = await self._provider.do_generate(
-                    prompt=messages, tool_set=tools, options=self.options
+                    prompt=messages, tool_set=tools, options=options
                 )
                 c.warnings.extend(result.warnings)
                 c.usage += result.usage
@@ -170,6 +174,7 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: Literal[False] = False,
+        options: GenerationOptions | None = None,
     ) -> ChatCompletionStream: ...
 
     @overload
@@ -178,6 +183,7 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: Literal[True],
+        options: GenerationOptions | None = None,
     ) -> ChatCompletionEvents: ...
 
     def stream(
@@ -185,9 +191,12 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: bool = False,
+        options: GenerationOptions | None = None,
     ) -> ChatCompletionStream | ChatCompletionEvents:
+        options = options or {}
+
         async def gen() -> AsyncGenerator[spec.StreamPart, None]:
-            tools = await self.__init_tools()
+            tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
             last_finish_reason: spec.FinishReason = "unknown"
 
@@ -196,9 +205,7 @@ class LLM:
                 parts: list[spec.MessagePart] = []
                 last_msg = ""
                 last_reasoning = ""
-                async for part in self._provider.do_stream(
-                    messages, tools, self.options
-                ):
+                async for part in self._provider.do_stream(messages, tools, options):
 
                     match part.type:
                         case "stream-start":

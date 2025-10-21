@@ -4,7 +4,7 @@ import uuid
 from agentia.llm import LLM, GenerationOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.llm.tools import Tool
+from agentia.llm.tools import Tool, ToolSet
 from agentia.spec import Message, UserMessage, MessagePartText
 import logging
 
@@ -23,8 +23,9 @@ class Agent:
         self.id = str(id or uuid.uuid4())
         options = options or GenerationOptions()
         if tools:
-            options["tools"] = tools
-        self.llm = LLM(model, options=options)
+            options["tools"] = ToolSet(tools)
+        self.options = options
+        self.llm = LLM(model)
         self.llm._agent = self
         self.history: list[Message] = []
         if instructions:
@@ -73,10 +74,10 @@ class Agent:
             self.history.extend(prompt)
 
         if stream:
-            x = self.llm.stream(self.history, events=events)
+            x = self.llm.stream(self.history, events=events, options=self.options)
         else:
             assert not events, "events=True is only supported with stream=True"
-            x = self.llm.generate(self.history)
+            x = self.llm.generate(self.history, options=self.options)
 
         def on_finish():
             self.history.append(x.messages[-1])
