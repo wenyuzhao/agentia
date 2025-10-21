@@ -37,7 +37,7 @@ class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
 
 
 def get_provider(selector: str) -> "Provider":
-    DEFAULT_PROVIDER = "gateway"
+    DEFAULT_PROVIDER = os.environ.get("AGENTIA_PROVIDER", "openrouter")
     # if has no scheme, assume gateway
     if re.match(r"^\w+:", selector) is None:
         provider = DEFAULT_PROVIDER

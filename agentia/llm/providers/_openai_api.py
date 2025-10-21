@@ -50,9 +50,14 @@ class OpenAIAPIProvider(Provider):
             raise ValueError("OPENAI_API_KEY environment variable not set")
         self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.extra_headers: dict[str, str] = {}
-        self.extra_body: dict[str, Any] = {}
+        self.extra_body: dict[str, Any] = {
+            "modalities": ["text", "image"],
+        }
         if think:
+            self.reasoning = True
             self.enable_reasoning()
+        else:
+            self.reasoning = False
 
     def enable_reasoning(self) -> None:
         self.extra_body["reasoning"] = {
@@ -350,11 +355,12 @@ class OpenAIAPIProvider(Provider):
             extra_body=self.extra_body,
             stream=False,
         )
+        # print(response)
         choice = response.choices[0]
         content: Sequence[Content] = []
         tool_calls: list[ToolCall] = []
 
-        if hasattr(choice.message, "reasoning"):
+        if self.reasoning and hasattr(choice.message, "reasoning"):
             reasoning_text: str = choice.message.reasoning  # type: ignore
             if reasoning_text and reasoning_text.strip() != "":
                 content.append(Reasoning(text=reasoning_text))
@@ -384,6 +390,20 @@ class OpenAIAPIProvider(Provider):
                     title=a.url_citation.title,
                 )
             )
+
+        if images := getattr(choice.message, "images", []):
+            for i in images:
+                if i["type"] == "image_url":
+                    url = i["image_url"]["url"]
+                    media_type = None
+                    if url.startswith("data:"):
+                        media_type = url.split(";")[0][5:]
+                    elif url.startswith("http://") or url.startswith("https://"):
+                        if url.lower().endswith(
+                            (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
+                        ):
+                            media_type = "image/" + url.split(".")[-1].lower()
+                    content.append(File(media_type=media_type or "image/png", data=url))
 
         return ProviderGenerationResult(
             message=AssistantMessage.from_contents(content),
@@ -431,6 +451,8 @@ class OpenAIAPIProvider(Provider):
             delta = choice.delta
 
             if rd := getattr(delta, "reasoning", None):
+                if not self.reasoning:
+                    continue
                 if not streaming_reasoning:
                     streaming_reasoning = True
                     yield StreamPartReasoningStart(id=_gen_id())
