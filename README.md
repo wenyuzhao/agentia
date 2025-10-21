@@ -1,5 +1,6 @@
 # Agentia: Ergonomic LLM Agents
 
+Ergonomic LLM Agents, with chat messages fully compatiable with [Vercel AI SDK](https://ai-sdk.dev/).
 
 # Getting Started
 
