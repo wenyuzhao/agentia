@@ -128,7 +128,9 @@ class LLM:
     ) -> ChatCompletion:
         options = options or {}
 
-        async def gen():
+        async def gen() -> (
+            AsyncGenerator[spec.AssistantMessage | spec.ToolMessage, None]
+        ):
             tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
             while True:
@@ -145,9 +147,9 @@ class LLM:
                 if result.finish_reason != "tool-calls":
                     break
                 # Call tools and continue
-                messages.append(
-                    (await self.__process_tool_calls(tool_calls, tools=tools))[0]
-                )
+                tool_msg = (await self.__process_tool_calls(tool_calls, tools=tools))[0]
+                yield tool_msg
+                messages.append(tool_msg)
                 c.messages.append(messages[-1])
 
         c = ChatCompletion(gen())

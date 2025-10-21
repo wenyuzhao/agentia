@@ -1,7 +1,7 @@
 from typing import AsyncGenerator
 
 from agentia.spec.base import FinishReason, Usage, Warning
-from agentia.spec.prompt import AssistantMessage, Message
+from agentia.spec.prompt import AssistantMessage, Message, ToolMessage
 
 
 class Listeners:
@@ -22,9 +22,9 @@ class Listeners:
 class ChatCompletion:
     def __init__(
         self,
-        gen: AsyncGenerator[AssistantMessage, None],
+        gen: AsyncGenerator[AssistantMessage | ToolMessage, None],
     ):
-        async def __gen() -> AsyncGenerator[AssistantMessage, None]:
+        async def __gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
             async for msg in gen:
                 yield msg
             self.on_finish.emit()
@@ -36,7 +36,7 @@ class ChatCompletion:
         self.messages: list[Message] = []
         self.on_finish = Listeners()
 
-    def __aiter__(self) -> AsyncGenerator[AssistantMessage, None]:
+    def __aiter__(self) -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         return self.__gen
 
     async def __wait_for_completion(self) -> AssistantMessage:
