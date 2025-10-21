@@ -99,7 +99,7 @@ class LLM:
             tools = options["tools"]
         else:
             tools = ToolSet(options["tools"])
-        await tools.init()
+        await tools.init(self, self._agent)
         return tools
 
     async def generate_object[T: BaseModel | str | int | float | bool | None](

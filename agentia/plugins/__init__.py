@@ -1,7 +1,11 @@
 import abc
 import os
-from typing import Any, Callable, Self, Type
+from typing import Any, Callable, Optional, Self, Type, TYPE_CHECKING
 from ..utils.decorators import tool
+
+if TYPE_CHECKING:
+    from agentia.llm import LLM
+    from agentia.agent import Agent
 
 
 class PluginInitError(RuntimeError):
@@ -33,6 +37,8 @@ class Plugin(abc.ABC):
 
     def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
+        self.llm: Optional["LLM"] = None
+        self.agent: Optional["Agent"] = None
 
     @classmethod
     def instantiate(cls, config: dict[str, Any]) -> Self:
@@ -73,22 +79,16 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         from .code import CodePlugin
 
         # from .memory import MemoryPlugin
-        # from .search import SearchPlugin
-        # from .dalle import DallEPlugin
-        # from .vision import VisionPlugin
-        # from .web import WebPlugin
-        # from .knowledge_base import KnowledgeBasePlugin
+        from .search import SearchPlugin
+        from .web import WebPlugin
 
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
             "clock": ClockPlugin,
             "code": CodePlugin,
             # "memory": MemoryPlugin,
-            # "search": SearchPlugin,
-            # "dalle": DallEPlugin,
-            # "vision": VisionPlugin,
-            # "web": WebPlugin,
-            # "knowledge_base": KnowledgeBasePlugin,
+            "search": SearchPlugin,
+            "web": WebPlugin,
         }
     except ImportError as e:
         print("Failed to import built-in plugins:", e)

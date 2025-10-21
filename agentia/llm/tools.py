@@ -17,6 +17,7 @@ METADATA_TAG = "agentia_tool_metadata"
 if TYPE_CHECKING:
     from . import LLM
     from agentia.plugins import Plugin
+    from agentia.agent import Agent
 
 
 class _BaseTool:
@@ -159,12 +160,14 @@ class ToolSet:
                 self.__add_function(t)
         self.__initialized = False
 
-    async def init(self):
+    async def init(self, llm: "LLM", agent: Optional["Agent"] = None):
         if self.__initialized:
             return
         self.__initialized = True
         for plugin in self.plugins.values():
             try:
+                plugin.llm = llm
+                plugin.agent = agent
                 await plugin.init()
             except Exception as e:
                 from agentia.plugins import PluginInitError

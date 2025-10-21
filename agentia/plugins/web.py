@@ -1,48 +1,38 @@
 import os
-
-from agentia.plugins.knowledge_base import KnowledgeBasePlugin
-from . import Plugin
-from .. import tool
+from . import Plugin, tool
 from typing import Annotated
-import requests
+import httpx
 from markdownify import markdownify
-from tavily import TavilyClient
+from tavily import AsyncTavilyClient
 
 
 class WebPlugin(Plugin):
     def __init__(self, tavily_api_key: str | None = None):
-        self.__tavily: TavilyClient | None = None
+        api_key = tavily_api_key or os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            raise ValueError("TAVILY_API_KEY is required for WebPlugin")
+        self.__tavily = AsyncTavilyClient(api_key=api_key)
 
-        if api_key := tavily_api_key or os.environ.get("TAVILY_API_KEY"):
-            self.__tavily = TavilyClient(api_key=api_key)
-
-    def __embed_file(self, url: str, res: requests.Response):
-        kbase = self.agent.get_plugin(KnowledgeBasePlugin)
-        if kbase is None:
-            return None
-        assert kbase.knowledge_base is not None
-        if name := kbase.knowledge_base.add_doc_from_url(url):
-            return {
-                "file_name": name,
-                "content_type": res.headers.get("content-type"),
-                "hint": f"This file is embeded into the knowledge base for you. Use tools to search its content.",
+    async def __get(self, url: str):
+        async with httpx.AsyncClient(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
-        return None
-
-    def __get(self, url: str):
-        res = requests.get(url)
-        res.raise_for_status()
-        content_type = res.headers.get("content-type")
-        if content_type == "text/html":
-            md = markdownify(res.text)
-            return {"content": md, "content_type": content_type}
-        if r := self.__embed_file(url, res):
-            return r
-        # If the content is not supported, return the raw content
-        return {"content": res.text, "content_type": content_type}
+        ) as client:
+            res = await client.get(url)
+            res.raise_for_status()
+            content_type = res.headers.get("content-type")
+            if content_type == "text/html":
+                md = markdownify(res.text)
+                return {"content": md, "content_type": content_type}
+            # raw text: .txt, .csv, .json, .md
+            if content_type in ["text/plain", "application/json", "text/markdown"]:
+                return {"content": res.text, "content_type": content_type}
+            # If the content is not supported, return the raw content
+            return {"content": res.text, "content_type": content_type}
 
     @tool
-    def get_webpage_content(
+    async def get_webpage_content(
         self,
         url: Annotated[str, "The URL of the web page to get the content of"],
     ):
@@ -51,17 +41,15 @@ class WebPlugin(Plugin):
         You can always use this tool to directly access web content or access external sites.
         Use it at any time when you think you may need to access the internet.
         """
-        if self.__tavily:
-            result = self.__tavily.extract(
-                urls=url,
-                # extract_depth="advanced",
-                include_images=True,
-            )
-            failed_results = result.get("failed_results", [])
-            if len(failed_results) > 0:
-                try:
-                    return self.__get(url)
-                except Exception as e:
-                    pass
-            return result
-        return self.__get(url)
+        result = await self.__tavily.extract(
+            urls=url,
+            # extract_depth="advanced",
+            include_images=True,
+        )
+        failed_results = result.get("failed_results", [])
+        if len(failed_results) > 0:
+            try:
+                return await self.__get(url)
+            except Exception as e:
+                pass
+        return result

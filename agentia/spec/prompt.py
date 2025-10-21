@@ -220,6 +220,11 @@ type Message = Annotated[
     Field(discriminator="role"),
 ]
 
+type NonSystemMessage = Annotated[
+    UserMessage | AssistantMessage | ToolMessage,
+    Field(discriminator="role"),
+]
+
 type Prompt = Sequence[Message]
 
 
