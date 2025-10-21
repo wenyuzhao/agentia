@@ -29,7 +29,7 @@ async def test_reasoning():
     # agent = Agent(model="deepseek/deepseek-r1")
     agent = Agent(model="openai/o4-mini")
 
-    run = agent.run("Hi?")
+    run = agent.run("Think for a while and answer: Hi?")
 
     has_reasoning = False
 

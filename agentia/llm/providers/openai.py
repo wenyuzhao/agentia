@@ -45,6 +45,7 @@ class OpenAI(Provider):
         self.extra_body: dict[str, Any] = {
             "reasoning": {
                 "enabled": True,
+                "effort": "high",
             },
         }
 
