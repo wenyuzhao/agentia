@@ -26,10 +26,9 @@ def get_current_weather(
 async def test_reasoning():
     os.environ["OPENROUTER_REASONING_EFFORT"] = "high"
 
-    # agent = Agent(model="deepseek/deepseek-r1")
-    agent = Agent(model="openai/o4-mini")
+    agent = Agent(model="deepseek/deepseek-r1:think")
 
-    run = agent.run("Think for a while and answer: Hi?")
+    run = agent.run("Think for a while; Hi?")
 
     has_reasoning = False
 
@@ -47,9 +46,9 @@ async def test_reasoning():
 async def test_reasoning_stream():
     os.environ["OPENROUTER_REASONING_EFFORT"] = "high"
 
-    agent = Agent(model="deepseek/deepseek-r1")
+    agent = Agent(model="deepseek/deepseek-r1:think")
 
-    run = agent.run("Hi?", stream=True)
+    run = agent.run("Think for a while; Hi?", stream=True)
 
     has_reasoning = False
 

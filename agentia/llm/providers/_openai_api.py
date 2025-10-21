@@ -315,7 +315,7 @@ class OpenAIAPIProvider(Provider):
                 "type": "json_schema",
                 "json_schema": {
                     "schema": rf.json_schema,
-                    # "strict": True,
+                    "strict": True,
                     "name": rf.name or "response",
                     "description": rf.description,
                 },

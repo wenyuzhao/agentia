@@ -1,8 +1,8 @@
 from enum import Enum
 import inspect
 from typing import Type
-from attr import dataclass
 from .base import *
+from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 
 
 class MessageBase(BaseModel):
@@ -299,7 +299,7 @@ class ResponseFormatJson(BaseModel):
         else:
             response_format = Result
         return ResponseFormatJson(
-            json_schema=response_format.model_json_schema(),
+            json_schema=to_strict_json_schema(response_format),
             name=return_type.__name__,
             description=f"JSON object matching the schema of {return_type.__name__}",
         )
