@@ -6,8 +6,7 @@
 Run agents with tools and MCP.
 
 ```python
-from agentia import Agent
-from agentia.mcp import MCPServer, MCPContext
+from agentia import Agent, MCPServer, MCPContext
 from typing import Annotated
 
 # Define a tool as a python function
@@ -19,13 +18,13 @@ def get_weather(location: Annotated[str, "The city name"]):
 calc = MCPServer(name="calculator", command="uvx", args=["mcp-server-calculator"])
 
 # Create an agent
-agent = Agent(tools=[get_weather, calc])
+agent = Agent(model="openai/gpt-5-mini", tools=[get_weather, calc])
 
 # Run the agent with the tool
 async with MCPContext(): # This line can be omitted if not using MCP
     response = await agent.run("What is the weather like in boston?")
 
-print(response)
+print(response.text)
 
 # Output: The current temperature in Boston is 72°F.
 ```
@@ -79,8 +78,8 @@ plugins = ["clock"]
 calc={ command = "uvx", args = ["mcp-server-calculator"] }
 ```
 
-2. Start a REPL session:
+2. Load the agent
 
-```bash
-agentia ./robo.toml
+```python
+agent = Agent.from_config("./robo.toml")
 ```

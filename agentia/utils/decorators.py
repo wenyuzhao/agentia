@@ -4,6 +4,7 @@ import enum
 import inspect
 import json
 import logging
+import os
 import types
 from typing import (
     Any,
@@ -296,6 +297,14 @@ def _is_supported_magic_return_type(t: type) -> bool:
     # Enum
     if inspect.isclass(t) and issubclass(t, enum.Enum):
         return True
+    # tuple, list, dict
+    if get_origin(t) in (list, tuple, dict):
+        args = get_args(t)
+        for arg in args:
+            if not _is_supported_magic_return_type(arg):
+                return False
+        return True
+    # Pydantic BaseModel
     if inspect.isclass(t):
         return issubclass(t, BaseModel)
     return False
@@ -311,6 +320,8 @@ def magic(
     """
     Decorator to mark a function as an agent for the agent.
     """
+    if not model:
+        model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
 
     def __magic_impl(callable: F) -> F:
         async def __func_impl(*args: Any, **kwargs: Any):

@@ -185,7 +185,9 @@ class UserMessage(MessageBase):
         return text
 
 
-type ObjectType = BaseModel | str | int | float | bool | Enum | None
+type ObjectType = BaseModel | Enum | str | int | float | bool | None | list[
+    "ObjectType"
+] | dict[str, "ObjectType"] | tuple["ObjectType", ...]
 
 
 class _Result[X](BaseModel):

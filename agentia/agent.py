@@ -1,4 +1,5 @@
 from enum import Enum
+import os
 from pathlib import Path
 from typing import Literal, Sequence, Union, overload
 
@@ -24,17 +25,25 @@ import logging
 class Agent:
     def __init__(
         self,
-        model: str,
+        model: str | None = None,
         tools: Sequence[Tool] | None = None,
         id: str | None = None,
+        name: str | None = None,
+        icon: str | None = None,
+        description: str | None = None,
         instructions: str | None = None,
         options: GenerationOptions | None = None,
     ) -> None:
         self.id = str(id or uuid.uuid4())
+        self.name = name
+        self.icon = icon
+        self.description = description
         options = options or GenerationOptions()
         if tools:
             options["tools"] = ToolSet(tools)
         self.options = options
+        if not model:
+            model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
         self.llm = LLM(model)
         self.llm._agent = self
         self.history = History()

@@ -12,6 +12,8 @@ def init_logging(level: logging._Level = logging.INFO):
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+from dotenv import load_dotenv
+
 from . import utils
 
 from .agent import Agent
@@ -75,4 +77,5 @@ __all__ = [
     "MCPServer",
     "MCPContext",
     "mcp_context",
+    "load_dotenv",
 ]

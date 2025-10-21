@@ -19,12 +19,12 @@ DEFAULT_AGENT_USER_PLUGIN_PATH = Path.cwd() / "plugins"
 
 
 class AgentConfig(BaseModel):
-    model: str
     name: str
     icon: str | None = None
     description: str | None = None
     instructions: str | None = None
     user: str | None = None
+    model: str | None = None
     plugins: list[str] | None = None
     mcp: list[str] | None = None
 
@@ -207,6 +207,9 @@ def __load_agent_from_config(file_or_config: Path | Config) -> Agent:
     agent_id = file_or_config.stem if isinstance(file_or_config, Path) else None
     agent = Agent(
         id=agent_id,
+        name=config.agent.name,
+        icon=config.agent.icon,
+        description=config.agent.description,
         model=config.agent.model,
         tools=tools,
         instructions=config.agent.build_instructions(),
