@@ -36,15 +36,11 @@ class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
     provider_options: spec.ProviderOptions | None = None
 
 
-class UnsupportedFunctionalityError(Exception):
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-
-
 def get_provider(selector: str) -> "Provider":
+    DEFAULT_PROVIDER = "gateway"
     # if has no scheme, assume gateway
     if re.match(r"^\w+:", selector) is None:
-        provider = "gateway"
+        provider = DEFAULT_PROVIDER
         model = selector
     else:
         uri = AnyUrl(selector)
@@ -53,34 +49,16 @@ def get_provider(selector: str) -> "Provider":
     model = model.strip("/")
     match provider:
         case "openai":
-            from .providers.openai import OpenAI
-
-            return OpenAI(model=model)
+            raise NotImplementedError("Use gateway instead")
 
         case "gateway":
-            from .providers.openai import OpenAI
+            from .providers.gateway import Gateway
 
-            if "AI_GATEWAY_API_KEY" not in os.environ:
-                raise ValueError("AI_GATEWAY_API_KEY environment variable not set")
-
-            return OpenAI(
-                model=model,
-                api_key=os.environ.get("AI_GATEWAY_API_KEY"),
-                base_url="https://ai-gateway.vercel.sh/v1",
-            )
-
+            return Gateway(model=model)
         case "openrouter":
-            from .providers.openai import OpenAI
+            from .providers.openrouter import OpenRouter
 
-            if "OPENROUTER_API_KEY" not in os.environ:
-                raise ValueError("OPENROUTER_API_KEY environment variable not set")
-
-            return OpenAI(
-                model=model,
-                api_key=os.environ.get("OPENROUTER_API_KEY"),
-                base_url="https://openrouter.ai/api/v1",
-            )
-
+            return OpenRouter(model=model)
         case _:
             raise ValueError(f"Unknown provider: {provider}")
 

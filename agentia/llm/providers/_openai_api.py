@@ -5,7 +5,6 @@ import os
 from typing import Any, override
 from uuid import uuid4
 
-from agentia.llm import UnsupportedFunctionalityError
 from agentia.llm.tools import ToolSet
 from . import GenerationOptions, ProviderGenerationResult, Provider
 
@@ -32,21 +31,33 @@ def _gen_id() -> str:
     return uuid4().hex
 
 
-class OpenAI(Provider):
+class OpenAIAPIProvider(Provider):
     def __init__(
-        self, model: str, api_key: str | None = None, base_url: str | None = None
+        self,
+        provider: str,
+        model: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
     ):
-        super().__init__(provider="openai", model=model)
+        if model.endswith(":think"):
+            model = model[: -len(":think")]
+            think = True
+        else:
+            think = False
+        super().__init__(provider=provider, model=model)
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
         self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.extra_headers: dict[str, str] = {}
-        self.extra_body: dict[str, Any] = {
-            "reasoning": {
-                "enabled": True,
-                "effort": "high",
-            },
+        self.extra_body: dict[str, Any] = {}
+        if think:
+            self.enable_reasoning()
+
+    def enable_reasoning(self) -> None:
+        self.extra_body["reasoning"] = {
+            "enabled": True,
+            "effort": "high",
         }
 
     def _to_oai_content_part(
@@ -90,9 +101,7 @@ class OpenAI(Provider):
                             or p.data.startswith("https://")
                         )
                     ):
-                        raise UnsupportedFunctionalityError(
-                            "audio file parts with URLs"
-                        )
+                        raise ValueError("audio file parts with URLs")
                     if isinstance(p.data, str):
                         data = p.data
                     else:
@@ -104,7 +113,7 @@ class OpenAI(Provider):
                     elif p.media_type == "audio/mpeg" or p.media_type == "audio/mp3":
                         format = "mp3"
                     else:
-                        raise UnsupportedFunctionalityError(
+                        raise ValueError(
                             f"audio file parts with media type {p.media_type}"
                         )
                     return ChatCompletionContentPartInputAudioParam(
@@ -138,7 +147,7 @@ class OpenAI(Provider):
                             },
                         }
             case _:
-                raise UnsupportedFunctionalityError(f"content part of type {p.type}")
+                raise ValueError(f"content part of type {p.type}")
 
     def _to_oai_messages(self, prompt: Prompt) -> list[ChatCompletionMessageParam]:
         r: list[ChatCompletionMessageParam] = []
@@ -199,9 +208,7 @@ class OpenAI(Provider):
                         )
                     )
             else:
-                raise UnsupportedFunctionalityError(
-                    f"Unsupported message role {m.role}"
-                )
+                raise ValueError(f"Unsupported message role {m.role}")
         return r
 
     def _get_finish_reason(
