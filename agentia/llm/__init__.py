@@ -50,8 +50,9 @@ def get_provider(selector: str) -> "Provider":
     model = model.strip("/")
     match provider:
         case "openai":
-            raise NotImplementedError("Use gateway instead")
+            from .providers.openai import OpenAI
 
+            return OpenAI(model=model)
         case "gateway":
             from .providers.gateway import Gateway
 
