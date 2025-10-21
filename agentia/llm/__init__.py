@@ -7,6 +7,7 @@ from typing import (
     Literal,
     Optional,
     Sequence,
+    TypedDict,
     overload,
 )
 from pydantic import AnyUrl, BaseModel, Field
@@ -22,18 +23,19 @@ if TYPE_CHECKING:
     from agentia.llm.providers import Provider
 
 
-class GenerationOptions(BaseModel, arbitrary_types_allowed=True):
-    max_output_tokens: int | None = None
-    temperature: float | None = None
-    stop_sequences: Sequence[str] | None = None
-    top_p: float | None = None
-    top_k: int | None = None
-    presence_penalty: float | None = None
-    frequency_penalty: float | None = None
-    response_format: spec.ResponseFormat | None = None
-    seed: int | None = None
-    tool_choice: spec.ToolChoice | None = None
-    provider_options: spec.ProviderOptions | None = None
+class GenerationOptions(TypedDict, total=False):
+    max_output_tokens: int | None
+    temperature: float | None
+    stop_sequences: Sequence[str] | None
+    top_p: float | None
+    top_k: int | None
+    presence_penalty: float | None
+    frequency_penalty: float | None
+    response_format: spec.ResponseFormat | None
+    seed: int | None
+    tool_choice: spec.ToolChoice | None
+    provider_options: spec.ProviderOptions | None
+    tools: Sequence[Tool] | ToolSet | None
 
 
 def get_provider(selector: str) -> "Provider":
@@ -64,11 +66,18 @@ def get_provider(selector: str) -> "Provider":
 
 
 class LLM:
-    def __init__(self, model: str, tools: Sequence[Tool] | None = None) -> None:
+    def __init__(self, model: str, options: GenerationOptions | None = None) -> None:
         self._provider = get_provider(model)
         self._provider.llm = self
         self._agent: Optional["Agent"] = None
-        self._tools = ToolSet(tools or [])
+        self.options = options or GenerationOptions()
+        if tools := self.options.get("tools", None):
+            if isinstance(tools, ToolSet):
+                self._tools = tools
+            else:
+                self._tools = ToolSet(tools)
+        else:
+            self._tools = ToolSet([])
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]
@@ -91,15 +100,12 @@ class LLM:
         tm, trs = await tools.run(self, tool_calls)
         return tm, trs
 
-    async def __init_tools(self, options: GenerationOptions) -> ToolSet:
+    async def __init_tools(self) -> ToolSet:
         await self._tools.init()
         return self._tools
 
     async def generate_object[T: BaseModel | str | int | float | bool | None](
-        self,
-        prompt: str | spec.Message | Sequence[spec.Message],
-        return_type: type[T],
-        options: GenerationOptions | None = None,
+        self, prompt: str | spec.Message | Sequence[spec.Message], return_type: type[T]
     ) -> T:
         class Result[X](BaseModel):
             result: X = Field(..., description="The result", title="Result")
@@ -112,13 +118,14 @@ class LLM:
             response_format = _Result
 
         json_string = ""
-        options = options or GenerationOptions()
-        options.response_format = spec.ResponseFormatJson(
+        old_format = self.options.get("response_format", None)
+        self.options["response_format"] = spec.ResponseFormatJson(
             json_schema=response_format.model_json_schema(),
             name=return_type.__name__,
             description=f"JSON object matching the schema of {return_type.__name__}",
         )
-        msg = await self.generate(prompt, options)
+        msg = await self.generate(prompt)
+        self.options["response_format"] = old_format
         for part in msg.content:
             if isinstance(part, spec.MessagePartText):
                 json_string += part.text
@@ -131,16 +138,13 @@ class LLM:
     def generate(
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
-        options: GenerationOptions | None = None,
     ) -> ChatCompletion:
-        options = options or GenerationOptions()
-
         async def gen():
-            tools = await self.__init_tools(options)
+            tools = await self.__init_tools()
             messages = self.__prepare_messages(prompt)
             while True:
                 result = await self._provider.do_generate(
-                    prompt=messages, tool_set=tools, options=options
+                    prompt=messages, tool_set=tools, options=self.options
                 )
                 c.warnings.extend(result.warnings)
                 c.usage += result.usage
@@ -166,7 +170,6 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: Literal[False] = False,
-        options: GenerationOptions | None = None,
     ) -> ChatCompletionStream: ...
 
     @overload
@@ -175,7 +178,6 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: Literal[True],
-        options: GenerationOptions | None = None,
     ) -> ChatCompletionEvents: ...
 
     def stream(
@@ -183,12 +185,9 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: bool = False,
-        options: GenerationOptions | None = None,
     ) -> ChatCompletionStream | ChatCompletionEvents:
-        options = options or GenerationOptions()
-
         async def gen() -> AsyncGenerator[spec.StreamPart, None]:
-            tools = await self.__init_tools(options)
+            tools = await self.__init_tools()
             messages = self.__prepare_messages(prompt)
             last_finish_reason: spec.FinishReason = "unknown"
 
@@ -197,7 +196,9 @@ class LLM:
                 parts: list[spec.MessagePart] = []
                 last_msg = ""
                 last_reasoning = ""
-                async for part in self._provider.do_stream(messages, tools, options):
+                async for part in self._provider.do_stream(
+                    messages, tools, self.options
+                ):
 
                     match part.type:
                         case "stream-start":

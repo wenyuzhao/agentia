@@ -318,7 +318,7 @@ def magic(
 
             prompt, images = _gen_prompt(callable, list(args), kwargs)
 
-            llm = LLM(model=model or "openai/gpt-5-mini", tools=tools)
+            llm = LLM(model=model or "openai/gpt-5-mini", options={"tools": tools})
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str

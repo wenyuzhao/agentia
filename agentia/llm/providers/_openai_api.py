@@ -305,37 +305,38 @@ class OpenAIAPIProvider(Provider):
         self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> tuple[dict[str, Any], list[Warning]]:
         msgs = self._to_oai_messages(prompt)
-        if not options.response_format or options.response_format.type == "text":
+        rf = options.get("response_format", None)
+        if not rf or rf.type == "text":
             response_format = None
-        elif not options.response_format.json_schema:
+        elif not rf.json_schema:
             response_format = {"type": "json_object"}
         else:
             response_format = {
                 "type": "json_schema",
                 "json_schema": {
-                    "schema": options.response_format.json_schema,
+                    "schema": rf.json_schema,
                     # "strict": True,
-                    "name": options.response_format.name or "response",
-                    "description": options.response_format.description,
+                    "name": rf.name or "response",
+                    "description": rf.description,
                 },
             }
         warnings: list[Warning] = []
         schema = tool_set.get_schema()
         tools, tool_choice, tool_warnings = self._prepare_tools(
-            schema, options.tool_choice
+            schema, options.get("tool_choice", None)
         )
         warnings.extend(tool_warnings)
         args: dict[str, Any] = {
             "model": self.model,
             "messages": msgs,
-            "temperature": options.temperature,
-            "top_p": options.top_p,
-            "max_tokens": options.max_output_tokens,
-            "frequency_penalty": options.frequency_penalty,
-            "presence_penalty": options.presence_penalty,
+            "temperature": options.get("temperature", None),
+            "top_p": options.get("top_p", None),
+            "max_tokens": options.get("max_output_tokens", None),
+            "frequency_penalty": options.get("frequency_penalty", None),
+            "presence_penalty": options.get("presence_penalty", None),
             "response_format": response_format,
-            "stop": options.stop_sequences,
-            "seed": options.seed,
+            "stop": options.get("stop_sequences", None),
+            "seed": options.get("seed", None),
             "tools": tools,
             "tool_choice": tool_choice,
         }
