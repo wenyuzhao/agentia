@@ -42,7 +42,11 @@ class OpenAI(Provider):
             raise ValueError("OPENAI_API_KEY environment variable not set")
         self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.extra_headers: dict[str, str] = {}
-        self.extra_body: dict[str, Any] = {}
+        self.extra_body: dict[str, Any] = {
+            "reasoning": {
+                "enabled": True,
+            },
+        }
 
     def _to_oai_content_part(
         self, p: MessagePart, index: int
@@ -342,6 +346,11 @@ class OpenAI(Provider):
         content: Sequence[Content] = []
         tool_calls: list[ToolCall] = []
 
+        if hasattr(choice.message, "reasoning"):
+            reasoning_text: str = choice.message.reasoning  # type: ignore
+            if reasoning_text and reasoning_text.strip() != "":
+                content.append(Reasoning(text=reasoning_text))
+
         text = choice.message.content
         if text:
             content.append(Text(type="text", text=text))
@@ -393,6 +402,7 @@ class OpenAI(Provider):
         )
         started = False
         streaming_text = False
+        streaming_reasoning = False
         tool_calls: list[ToolCall | None] = []
         async for chunk in response:
             if not started:
@@ -411,6 +421,16 @@ class OpenAI(Provider):
 
             choice = chunk.choices[0]
             delta = choice.delta
+
+            if rd := getattr(delta, "reasoning", None):
+                if not streaming_reasoning:
+                    streaming_reasoning = True
+                    yield StreamPartReasoningStart(id=_gen_id())
+                yield StreamPartReasoningDelta(id=_gen_id(), delta=rd)
+            elif streaming_reasoning:
+                streaming_reasoning = False
+                yield StreamPartReasoningEnd(id=_gen_id())
+
             if delta.content:
                 if not streaming_text:
                     streaming_text = True
@@ -419,6 +439,7 @@ class OpenAI(Provider):
             elif streaming_text:
                 streaming_text = False
                 yield StreamPartTextEnd(id=_gen_id())
+
             if delta.tool_calls:
                 for tc in delta.tool_calls:
                     index = tc.index

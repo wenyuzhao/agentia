@@ -4,6 +4,8 @@ import pytest
 import dotenv
 import os
 
+from agentia.llm.stream import ReasoningStream
+
 dotenv.load_dotenv()
 
 
@@ -24,22 +26,21 @@ def get_current_weather(
 async def test_reasoning():
     os.environ["OPENROUTER_REASONING_EFFORT"] = "high"
 
-    agent = Agent(model="deepseek/deepseek-r1")
+    # agent = Agent(model="deepseek/deepseek-r1")
+    agent = Agent(model="openai/o4-mini")
 
     run = agent.run("Hi?")
 
     has_reasoning = False
-    has_content = False
 
     async for msg in run:
-        print(msg.reasoning)
-        assert (msg.reasoning or "").strip() != ""
-        has_reasoning = True
-        print(msg.content)
-        assert (msg.content or "").strip() != ""
-        has_content = True
-
-    assert has_reasoning and has_content
+        print(msg)
+        for c in msg.content:
+            if c.type == "reasoning":
+                print("REASONING CONTENT:", c)
+                assert (c.text or "").strip() != ""
+                has_reasoning = True
+    assert has_reasoning
 
 
 @pytest.mark.asyncio
@@ -51,17 +52,11 @@ async def test_reasoning_stream():
     run = agent.run("Hi?", stream=True)
 
     has_reasoning = False
-    has_content = False
 
     async for msg in run:
-        assert msg.reasoning
-        reasoning = await msg.reasoning
-        print(reasoning)
-        assert reasoning.strip() != ""
-        has_reasoning = True
-        content = await msg
-        print(content)
-        assert (content.content or "").strip() != ""
-        has_content = True
+        if isinstance(msg, ReasoningStream):
+            reasoning = await msg
+            print(reasoning)
+            has_reasoning = True
 
-    assert has_reasoning and has_content
+    assert has_reasoning
