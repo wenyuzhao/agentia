@@ -14,7 +14,7 @@ keywords = [
     "tools",
     "openai",
     "openrouter",
-    "deepseek",
+    "ai-sdk",
 ]
 dependencies = [
     "filelock>=3.18.0",
@@ -24,24 +24,23 @@ dependencies = [
     "pillow>=11.2.1",
     "pydantic>=2.10.4",
     "python-dotenv>=1.0.0,<2",
-    "pyyaml>=6.0.3",
     "websockets>=15.0.1",
 ]
 
 [project.urls]
 Repository = "https://github.com/wenyuzhao/agentia"
 
+[project.optional-dependencies]
+plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12"]
+all = ["agentia[plugins]"]
+
 [dependency-groups]
-# Development tools
 dev = [
     "pyright>=1.1.361,<2",
     "pytest>=7.3.2,<8",
     "pytest-asyncio>=0.21.1,<0.22",
+    "pyyaml>=6.0.3",
 ]
-# Include all plugins
-plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12"]
-# Include all plugins, the web app, and the API server
-all = ["agentia[plugins]", "agentia[dev]"]
 
 [tool.hatch.build.targets.sdist]
 include = ["agentia"]
@@ -55,6 +54,3 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[tool.uv.workspace]
-members = ["agentia-app"]
