@@ -192,11 +192,16 @@ F = TypeVar("F", bound=Callable)
 
 
 def _gen_prompt(
-    f: Callable, args: list[Any], kwargs: dict[str, Any]
+    f: Callable,
+    args: list[Any],
+    kwargs: dict[str, Any],
+    instructions: str | None,
 ) -> tuple[str, list[tuple[ToolFuncParam, Image | ImageUrl]]]:
     desc = "You need to do the following task and return the result in JSON:\n\n"
     desc += "TASK NAME: " + f.__name__ + "\n"
-    if doc := f.__doc__:
+    if instructions:
+        desc += "DESCRIPTION: \n" + instructions + "\n\n"
+    elif doc := f.__doc__:
         desc += "DESCRIPTION: \n" + doc + "\n\n"
     else:
         logging.getLogger("agentia").warning(
@@ -283,6 +288,7 @@ def magic(func: F, /) -> F: ...
 def magic(
     *,
     model: str | None = None,
+    instructions: str | None = None,
     tools: Optional["Tools"] = None,
 ) -> Callable[[F], F]: ...
 
@@ -316,6 +322,7 @@ def magic(
     /,
     *,
     model: str | None = None,
+    instructions: str | None = None,
     tools: Optional["Tools"] = None,
 ) -> F | Callable[[F], F]:
     """
@@ -328,7 +335,7 @@ def magic(
         async def __func_impl(*args: Any, **kwargs: Any):
             from agentia.llm import LLM
 
-            prompt, images = _gen_prompt(callable, list(args), kwargs)
+            prompt, images = _gen_prompt(callable, list(args), kwargs, instructions)
 
             llm = LLM(model=model or "openai/gpt-5-mini")
             return_type = inspect.signature(callable).return_annotation
