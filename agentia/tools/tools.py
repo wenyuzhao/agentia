@@ -262,9 +262,11 @@ class ToolSet:
                 output: Any = {
                     "file_id": file.id,
                     "media_type": file.media_type,
-                    "data": file.data,
                     "hint": "The tool outputed a file with the given file_id. The file is attached below.",
                 }
+                d = file.data
+                if isinstance(d, str) and (d.startswith(("http://", "https://"))):
+                    output["url"] = d
         else:
             if isinstance(output, FileResult):
                 output = output.model_dump()
