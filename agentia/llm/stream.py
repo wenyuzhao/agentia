@@ -39,7 +39,7 @@ class ChatCompletionStreamBase:
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
         self.warnings: list[Warning] = []
-        self.messages: list[Message] = []
+        self.new_messages: list[Message] = []
         self.on_finish = Listeners()
 
 
@@ -97,7 +97,7 @@ class ChatCompletionStream(ChatCompletionStreamBase):
     async def __wait_for_completion(self) -> AssistantMessage:
         async for item in self.__gen:
             ...
-        m = self.messages[-1]
+        m = self.new_messages[-1]
         assert isinstance(m, AssistantMessage)
         return m
 
@@ -122,7 +122,7 @@ class ChatCompletionEvents(ChatCompletionStreamBase):
     async def __wait_for_completion(self) -> AssistantMessage:
         async for item in self.__gen:
             ...
-        m = self.messages[-1]
+        m = self.new_messages[-1]
         assert isinstance(m, AssistantMessage)
         return m
 

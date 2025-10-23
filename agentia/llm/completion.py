@@ -14,9 +14,9 @@ class Listeners:
     def off(self, listener):
         self.__listeners.remove(listener)
 
-    def emit(self):
+    def emit(self, *args, **kwargs):
         for listener in self.__listeners:
-            listener()
+            listener(*args, **kwargs)
 
 
 class ChatCompletion:
@@ -33,7 +33,7 @@ class ChatCompletion:
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
         self.warnings: list[Warning] = []
-        self.messages: list[Message] = []
+        self.new_messages: list[Message] = []
         self.on_finish = Listeners()
 
     def __aiter__(self) -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
@@ -42,7 +42,7 @@ class ChatCompletion:
     async def __wait_for_completion(self) -> AssistantMessage:
         async for msg in self.__gen:
             ...
-        m = self.messages[-1]
+        m = self.new_messages[-1]
         assert isinstance(m, AssistantMessage)
         return m
 

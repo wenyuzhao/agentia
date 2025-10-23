@@ -28,6 +28,7 @@ from io import BytesIO
 import inspect
 
 from agentia.spec import UserMessage, MessagePartText, MessagePartFile
+from agentia.spec.prompt import Message
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools
@@ -338,7 +339,7 @@ def magic(
                     f"Unsupported return type: {return_type} in magic function {callable.__name__}."
                 )
 
-            messages = [
+            messages: list[Message] = [
                 UserMessage(
                     content=[MessagePartText(text=prompt)],
                     role="user",
@@ -397,9 +398,15 @@ def magic(
                         role="user",
                     )
                 )
-            result = await llm.generate_object(
-                messages, type=return_type, options={"tools": tools}
+            r = llm.generate(messages, options={"tools": tools})
+            await r
+            messages.extend(r.new_messages)
+            messages.append(
+                UserMessage(
+                    content=[MessagePartText(text="Output the result in JSON format")]
+                )
             )
+            result = await llm.generate_object(messages, type=return_type)
             return result
 
         if not inspect.iscoroutinefunction(callable):

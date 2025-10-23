@@ -124,19 +124,21 @@ class LLM:
         type: type[T],
         options: GenerationOptions | None = None,
     ) -> T:
-        msg = await self._generate_object_impl(prompt, type, options)
-        return msg.parse(type)
+        msgs = await self._generate_object_impl(prompt, type, options)
+        assert isinstance(msgs[-1], spec.AssistantMessage)
+        return msgs[-1].parse(type)
 
     async def _generate_object_impl[T: ObjectType](
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         return_type: type[T],
         options: GenerationOptions | None = None,
-    ) -> spec.AssistantMessage:
+    ) -> list[spec.Message]:
         options = options or {}
         options["response_format"] = spec.ResponseFormatJson.from_model(return_type)
-        msg = await self.generate(prompt, options=options)
-        return msg
+        r = self.generate(prompt, options=options)
+        await r
+        return r.new_messages
 
     def generate(
         self,
@@ -156,7 +158,7 @@ class LLM:
                 )
                 c.warnings.extend(result.warnings)
                 c.usage += result.usage
-                c.messages.append(result.message)
+                c.new_messages.append(result.message)
                 yield result.message
                 # Add new messages
                 messages.append(result.message)
@@ -169,10 +171,10 @@ class LLM:
                 )
                 yield tool_msg
                 messages.append(tool_msg)
-                c.messages.append(messages[-1])
+                c.new_messages.append(messages[-1])
                 if extra_msg:
                     messages.append(extra_msg)
-                    c.messages.append(messages[-1])
+                    c.new_messages.append(messages[-1])
 
         c = ChatCompletion(gen())
         return c
@@ -255,7 +257,7 @@ class LLM:
                     else:
                         yield part
                 messages.append(spec.AssistantMessage(content=parts))
-                s.messages.append(messages[-1])
+                s.new_messages.append(messages[-1])
                 if not tool_calls:
                     break
                 # Call tools and continue
@@ -265,10 +267,10 @@ class LLM:
                 for tr in trs:
                     yield tr
                 messages.append(tm)
-                s.messages.append(messages[-1])
+                s.new_messages.append(messages[-1])
                 if extra_msg:
                     messages.append(extra_msg)
-                    s.messages.append(messages[-1])
+                    s.new_messages.append(messages[-1])
             s.finish_reason = last_finish_reason
             yield spec.StreamPartFinish(usage=s.usage, finish_reason=last_finish_reason)
 

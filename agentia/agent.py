@@ -1,20 +1,17 @@
-from enum import Enum
 import os
 from pathlib import Path
 from typing import Literal, Sequence, Union, overload
 
-from unittest import result
 import uuid
 
-from pydantic import BaseModel
 from agentia.history import History
 from agentia.llm import LLM, GenerationOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
+from agentia.spec.prompt import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import (
     NonSystemMessage,
-    SystemMessage,
     UserMessage,
     MessagePartText,
     ObjectType,
@@ -110,8 +107,9 @@ class Agent:
             x = self.llm.generate(self.history.get(), options=self.options)
 
         def on_finish():
-            assert not isinstance(x.messages[-1], SystemMessage)
-            self.history.add(x.messages[-1])
+            for m in x.new_messages:
+                assert isinstance(m, (AssistantMessage, ToolMessage))
+                self.history.add(m)
 
         x.on_finish.on(on_finish)
 
@@ -123,13 +121,17 @@ class Agent:
         type: type[T],
     ) -> T:
         self.__add_prompt(prompt)
-        msg = await self.llm._generate_object_impl(
+        msgs = await self.llm._generate_object_impl(
             self.history.get(), type, options=self.options
         )
 
-        self.history.add(msg)
+        for m in msgs:
+            assert isinstance(m, (AssistantMessage, ToolMessage))
+            self.history.add(m)
 
-        return msg.parse(type)
+        assert isinstance(msgs[-1], AssistantMessage)
+
+        return msgs[-1].parse(type)
 
 
 from .utils.config import Config
