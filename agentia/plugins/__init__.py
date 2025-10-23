@@ -37,7 +37,7 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
             "web": WebPlugin,
         }
     except ImportError as e:
-        print("Failed to import built-in plugins:", e)
+        # print("Failed to import built-in plugins:", e)
         pass
         # raise e
 
