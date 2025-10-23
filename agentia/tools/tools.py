@@ -1,12 +1,14 @@
 import inspect
 import json
+import os
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
-from pydantic import BaseModel, JsonValue
+from pydantic import AliasChoices, BaseModel, Field, JsonValue
 from agentia.tools.mcp import MCPServer
 import agentia.spec as spec
 from agentia.utils.decorators import ToolFuncParam
 from inspect import Parameter
+from uuid import uuid4
 
 NAME_TAG = "agentia_tool_name"
 DISPLAY_NAME_TAG = "agentia_tool_display_name"
@@ -137,6 +139,15 @@ type Tool = Plugin | Callable[..., Any] | ProviderTool | MCPServer
 type Tools = Sequence[Tool]
 
 
+class FileResult(BaseModel):
+    id: str | None = None
+    data: spec.DataContent
+    media_type: str = Field(
+        validation_alias=AliasChoices("mediaType", "media_type"),
+        serialization_alias="mediaType",
+    )
+
+
 class ToolSet:
     def __init__(self, tools: Tools):
         from agentia.plugins import Plugin
@@ -236,11 +247,27 @@ class ToolSet:
         tool: _PythonFunctionTool,
         llm: "LLM",
         args: Any,
-    ) -> tuple[spec.ToolMessage, spec.ToolResult]:
+    ) -> tuple[spec.ToolMessage, spec.ToolResult, FileResult | None]:
         p_args, kw_args = tool.process_json_args(llm, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
             output = await output
+        # if output is a FileResult, transform the result
+        file = None
+        tool_vision = os.getenv("AGENTIA_EXPERIMENTAL_TOOL_FILES", None)
+        if tool_vision and tool_vision != "0" and tool_vision.lower() != "false":
+            if isinstance(output, FileResult):
+                file = output
+                file.id = str(uuid4())
+                output: Any = {
+                    "file_id": file.id,
+                    "media_type": file.media_type,
+                    "data": file.data,
+                    "hint": "The tool outputed a file with the given file_id. The file is attached below.",
+                }
+        else:
+            if isinstance(output, FileResult):
+                output = output.model_dump()
         tm = spec.ToolMessage(
             content=[
                 spec.MessagePartToolResult(
@@ -255,7 +282,7 @@ class ToolSet:
             tool_name=tool.name,
             result=output,
         )
-        return tm, tr
+        return tm, tr, file
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: Any
@@ -279,9 +306,10 @@ class ToolSet:
 
     async def run(
         self, llm: "LLM", tool_calls: list[spec.ToolCall]
-    ) -> tuple[spec.ToolMessage, list[spec.ToolResult]]:
+    ) -> tuple[spec.ToolMessage, list[spec.ToolResult], list[FileResult]]:
         tool_results: list[spec.MessagePartToolResult] = []
         tool_results2: list[spec.ToolResult] = []
+        file_results: list[FileResult] = []
         for c in tool_calls:
             tool = self.__tools.get(c.tool_name, None)
             if not tool:
@@ -289,7 +317,7 @@ class ToolSet:
             try:
                 args = json.loads(c.input)
                 if isinstance(tool, _PythonFunctionTool):
-                    tm, tr = await self.__run_python_tool(
+                    tm, tr, file = await self.__run_python_tool(
                         id=c.tool_call_id,
                         tool=tool,
                         llm=llm,
@@ -297,6 +325,9 @@ class ToolSet:
                     )
                     tool_results.extend(tm.content)
                     tool_results2.append(tr)
+                    if file:
+                        file_results.append(file)
+
                 elif isinstance(tool, _MCPTool):
                     tm, tr = await self.__run_mcp_tool(
                         id=c.tool_call_id,
@@ -316,4 +347,4 @@ class ToolSet:
                         output=spec.ToolResultOutputErrorJson(value=output),
                     )
                 )
-        return spec.ToolMessage(content=tool_results), tool_results2
+        return spec.ToolMessage(content=tool_results), tool_results2, file_results

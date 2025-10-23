@@ -87,10 +87,26 @@ class LLM:
 
     async def __process_tool_calls(
         self, tool_calls: list[spec.ToolCall], tools: ToolSet | None = None
-    ) -> tuple[spec.ToolMessage, list[spec.ToolResult]]:
+    ) -> tuple[spec.ToolMessage, list[spec.ToolResult], spec.Message | None]:
         assert tools is not None, "No tools provided"
-        tm, trs = await tools.run(self, tool_calls)
-        return tm, trs
+        tm, tr, fr = await tools.run(self, tool_calls)
+        if fr:
+            msg = spec.UserMessage(
+                content=[
+                    spec.MessagePartText(text="[[TOOL_OUTPUT_FILES]]"),
+                    *(
+                        spec.MessagePartFile(
+                            filename=f.id,
+                            media_type=f.media_type,
+                            data=f.data,
+                        )
+                        for f in fr
+                    ),
+                ]
+            )
+        else:
+            msg = None
+        return tm, tr, msg
 
     async def __init_tools(self, options: GenerationOptions | None) -> ToolSet:
         if options is None or "tools" not in options or options["tools"] is None:
@@ -148,10 +164,15 @@ class LLM:
                 if result.finish_reason != "tool-calls":
                     break
                 # Call tools and continue
-                tool_msg = (await self.__process_tool_calls(tool_calls, tools=tools))[0]
+                tool_msg, _, extra_msg = await self.__process_tool_calls(
+                    tool_calls, tools=tools
+                )
                 yield tool_msg
                 messages.append(tool_msg)
                 c.messages.append(messages[-1])
+                if extra_msg:
+                    messages.append(extra_msg)
+                    c.messages.append(messages[-1])
 
         c = ChatCompletion(gen())
         return c
@@ -238,11 +259,16 @@ class LLM:
                 if not tool_calls:
                     break
                 # Call tools and continue
-                tm, trs = await self.__process_tool_calls(tool_calls, tools=tools)
+                tm, trs, extra_msg = await self.__process_tool_calls(
+                    tool_calls, tools=tools
+                )
                 for tr in trs:
                     yield tr
                 messages.append(tm)
                 s.messages.append(messages[-1])
+                if extra_msg:
+                    messages.append(extra_msg)
+                    s.messages.append(messages[-1])
             s.finish_reason = last_finish_reason
             yield spec.StreamPartFinish(usage=s.usage, finish_reason=last_finish_reason)
 
