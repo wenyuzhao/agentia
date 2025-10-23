@@ -27,7 +27,7 @@ import base64
 from io import BytesIO
 import inspect
 
-from agentia.spec import UserMessage, MessagePartText, MessagePartFile
+from agentia.spec import UserMessage, MessagePartText, MessagePartFile, SystemMessage
 from agentia.spec.prompt import Message
 
 if TYPE_CHECKING:
@@ -339,12 +339,7 @@ def magic(
                     f"Unsupported return type: {return_type} in magic function {callable.__name__}."
                 )
 
-            messages: list[Message] = [
-                UserMessage(
-                    content=[MessagePartText(text=prompt)],
-                    role="user",
-                )
-            ]
+            messages: list[Message] = [SystemMessage(content=prompt)]
             for i, (p, image) in enumerate(images):
                 content_type = "image/png"
                 if isinstance(image, ImageUrl):

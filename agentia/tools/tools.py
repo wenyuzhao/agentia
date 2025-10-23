@@ -271,6 +271,12 @@ class ToolSet:
         else:
             if isinstance(output, FileResult):
                 output = output.model_dump()
+                if isinstance(output["data"], str) and output["data"].startswith(
+                    "data:"
+                ):
+                    del output["data"]
+                output["hint"] = "The tool outputed a file with the given file_id."
+
         tm = spec.ToolMessage(
             content=[
                 spec.MessagePartToolResult(
