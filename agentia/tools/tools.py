@@ -258,7 +258,8 @@ class ToolSet:
         if tool_vision and tool_vision != "0" and tool_vision.lower() != "false":
             if isinstance(output, FileResult):
                 file = output
-                file.id = str(uuid4())
+                if not file.id:
+                    file.id = str(uuid4())
                 output: Any = {
                     "file_id": file.id,
                     "media_type": file.media_type,
