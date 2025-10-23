@@ -1,6 +1,6 @@
 [project]
 name = "agentia"
-version = "0.1.6"
+version = "0.1.7"
 description = "Ergonomic LLM Agents"
 authors = [{ name = "Wenyu Zhao", email = "wenyuzhaox@gmail.com" }]
 requires-python = ">=3.12"
