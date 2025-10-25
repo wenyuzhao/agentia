@@ -355,7 +355,6 @@ class ToolSet:
                 else:
                     raise ValueError(f"Tool {c.tool_name} is of unknown type")
             except Exception as e:
-                print(f"Error running tool {c.tool_name}: {e}")
                 output: JsonValue = {"error": str(e)}
                 tool_results.append(
                     spec.MessagePartToolResult(
