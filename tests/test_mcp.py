@@ -11,7 +11,7 @@ dotenv.load_dotenv()
 async def test_mcp():
     async with MCPContext():
         agent = Agent(
-            model="openai/gpt-4.1-nano",
+            model="openai/gpt-5-nano",
             tools=[
                 MCPServer(
                     name="calculator", command="uvx", args=["mcp-server-calculator"]

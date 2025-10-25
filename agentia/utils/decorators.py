@@ -20,7 +20,7 @@ from typing import (
     Annotated,
     TYPE_CHECKING,
 )
-from pydantic import BaseModel, Field, TypeAdapter, ConfigDict
+from pydantic import BaseModel, TypeAdapter
 from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
@@ -73,7 +73,10 @@ class ToolFuncParam:
             schema = self.type.model_json_schema()
         else:
             schema = TypeAdapter(self.type).json_schema()
-            if self.description:
+        if self.description:
+            if "description" in schema:
+                schema["description"] += self.description
+            else:
                 schema["description"] = self.description
         return _ensure_strict_json_schema(schema, path=(), root=schema)
 

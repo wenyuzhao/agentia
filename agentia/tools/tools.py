@@ -3,12 +3,13 @@ import json
 import os
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
-from pydantic import AliasChoices, BaseModel, Field, JsonValue
+from pydantic import AliasChoices, BaseModel, Field, JsonValue, ValidationError
 from agentia.tools.mcp import MCPServer
 import agentia.spec as spec
 from agentia.utils.decorators import ToolFuncParam
 from inspect import Parameter
 from uuid import uuid4
+from pydantic.type_adapter import TypeAdapter
 
 NAME_TAG = "agentia_tool_name"
 DISPLAY_NAME_TAG = "agentia_tool_display_name"
@@ -91,13 +92,19 @@ class _PythonFunctionTool(_BaseTool):
         p_args: list[Any] = []
         kw_args: dict[str, Any] = {}
 
-        def get_value(name: str, default: Any, is_model: bool):
+        def get_value(p: ToolFuncParam, name: str, default: Any, is_model: bool):
             if name not in args:
                 return default
             if is_model:
                 return p.type(**args[name])
             else:
-                return args[name]
+                v = args[name]
+                try:
+                    return TypeAdapter(p.type).validate_python(v)
+                except ValidationError as e:
+                    raise ValueError(
+                        f"Error parsing argument '{name}': {e}. Please retry with a valid value."
+                    ) from e
 
         assert self.params is not None
         for p in self.params:
@@ -110,7 +117,7 @@ class _PythonFunctionTool(_BaseTool):
                     p_args.append(llm)
                 case Parameter.POSITIONAL_ONLY:
                     default = p.default if p.default != Parameter.empty else None
-                    p_args.append(get_value(p.name, default, is_model))
+                    p_args.append(get_value(p, p.name, default, is_model))
                 case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY if (
                     p.param.annotation == Agent
                 ):
@@ -118,7 +125,7 @@ class _PythonFunctionTool(_BaseTool):
                         kw_args[p.name] = llm._agent
                 case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY:
                     default = p.default if p.default != Parameter.empty else None
-                    kw_args[p.name] = get_value(p.name, default, is_model)
+                    kw_args[p.name] = get_value(p, p.name, default, is_model)
                 case other:
                     raise ValueError(f"{other} is not supported")
         return p_args, kw_args
@@ -348,6 +355,7 @@ class ToolSet:
                 else:
                     raise ValueError(f"Tool {c.tool_name} is of unknown type")
             except Exception as e:
+                print(f"Error running tool {c.tool_name}: {e}")
                 output: JsonValue = {"error": str(e)}
                 tool_results.append(
                     spec.MessagePartToolResult(

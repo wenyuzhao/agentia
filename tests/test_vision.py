@@ -8,7 +8,7 @@ dotenv.load_dotenv()
 
 @pytest.mark.asyncio
 async def test_vision():
-    agent = Agent(model="gpt-4.1-nano")
+    agent = Agent(model="gpt-5-nano")
     run = agent.run(
         UserMessage(
             content=[

@@ -42,7 +42,7 @@ class FakeWeatherPlugin2(Plugin):
 
 @pytest.mark.asyncio
 async def test_plugin():
-    agent = Agent(model="openai/gpt-4.1-nano", tools=[FakeWeatherPlugin2()])
+    agent = Agent(model="openai/gpt-5-nano", tools=[FakeWeatherPlugin2()])
     run = agent.run("What is the weather like in boston?")
     all_assistant_content: str = ""
     async for msg in run:
