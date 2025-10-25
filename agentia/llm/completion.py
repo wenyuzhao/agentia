@@ -35,6 +35,11 @@ class ChatCompletion:
         self.warnings: list[Warning] = []
         self.new_messages: list[Message] = []
         self.on_finish = Listeners()
+        self.on_new_message = Listeners()
+
+    def add_new_message(self, msg: Message):
+        self.new_messages.append(msg)
+        self.on_new_message.emit(msg)
 
     def __aiter__(self) -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         return self.__gen

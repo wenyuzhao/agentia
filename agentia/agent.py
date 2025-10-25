@@ -108,7 +108,7 @@ class Agent:
 
         def on_finish():
             for m in x.new_messages:
-                assert isinstance(m, (AssistantMessage, ToolMessage))
+                assert isinstance(m, (AssistantMessage, ToolMessage, UserMessage))
                 self.history.add(m)
 
         x.on_finish.on(on_finish)
@@ -126,7 +126,7 @@ class Agent:
         )
 
         for m in msgs:
-            assert isinstance(m, (AssistantMessage, ToolMessage))
+            assert isinstance(m, (AssistantMessage, ToolMessage, UserMessage))
             self.history.add(m)
 
         assert isinstance(msgs[-1], AssistantMessage)

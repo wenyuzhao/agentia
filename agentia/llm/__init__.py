@@ -171,10 +171,10 @@ class LLM:
                 )
                 yield tool_msg
                 messages.append(tool_msg)
-                c.new_messages.append(messages[-1])
+                c.add_new_message(messages[-1])
                 if extra_msg:
                     messages.append(extra_msg)
-                    c.new_messages.append(messages[-1])
+                    c.add_new_message(messages[-1])
 
         c = ChatCompletion(gen())
         return c
@@ -267,10 +267,10 @@ class LLM:
                 for tr in trs:
                     yield tr
                 messages.append(tm)
-                s.new_messages.append(messages[-1])
+                s.add_new_message(messages[-1])
                 if extra_msg:
                     messages.append(extra_msg)
-                    s.new_messages.append(messages[-1])
+                    s.add_new_message(messages[-1])
             s.finish_reason = last_finish_reason
             yield spec.StreamPartFinish(usage=s.usage, finish_reason=last_finish_reason)
 
