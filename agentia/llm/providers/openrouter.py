@@ -13,6 +13,7 @@ class OpenRouter(OpenAIAPIProvider):
         super().__init__(
             provider="openrouter", model=model, api_key=api_key, base_url=base_url
         )
+        self.extra_body["modalities"] = ["text", "image"]
         t = os.getenv("AGENTIA_OPENROUTER_TRANSFORMS", None)
         if t and t != "0" and t.lower() != "false":
             self.extra_body["transforms"] = ["middle-out"]

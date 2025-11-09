@@ -13,3 +13,4 @@ class Gateway(OpenAIAPIProvider):
         super().__init__(
             provider="gateway", model=model, api_key=api_key, base_url=base_url
         )
+        self.extra_body["modalities"] = ["text", "image"]

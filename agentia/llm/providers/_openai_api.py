@@ -50,9 +50,7 @@ class OpenAIAPIProvider(Provider):
             raise ValueError("OPENAI_API_KEY environment variable not set")
         self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.extra_headers: dict[str, str] = {}
-        self.extra_body: dict[str, Any] = {
-            "modalities": ["text", "image"],
-        }
+        self.extra_body: dict[str, Any] = {}
         if think:
             self.reasoning = True
             self.enable_reasoning()
@@ -98,6 +96,26 @@ class OpenAIAPIProvider(Provider):
                         type="image_url",
                         image_url={"url": url, "detail": detail},  # type: ignore
                     )
+                if p.media_type.startswith("video/"):
+                    if isinstance(p.data, str):
+                        if p.data.startswith("data:"):
+                            # this is a data URL
+                            url = p.data
+                        elif p.data.startswith("http://") or p.data.startswith(
+                            "https://"
+                        ):
+                            # this is a URL
+                            url = p.data
+                        else:
+                            # this is a base64 encoded string
+                            url = f"data:{p.media_type};base64,{p.data}"
+                    elif isinstance(p.data, HttpUrl):
+                        url = str(p.data)
+                    else:
+                        assert isinstance(p.data, bytes)
+                        base64_data = base64.b64encode(p.data).decode(encoding="utf-8")
+                        url = f"data:{p.media_type};base64,{base64_data}"
+                    return {"type": "video_url", "video_url": {"url": url}}  # type: ignore
                 elif p.media_type.startswith("audio/"):
                     if isinstance(p.data, HttpUrl) or (
                         isinstance(p.data, str)

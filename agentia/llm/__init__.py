@@ -61,6 +61,18 @@ def get_provider(selector: str) -> "Provider":
             from .providers.openrouter import OpenRouter
 
             return OpenRouter(model=model)
+        case "qwen":
+            from .providers.qwen import Qwen
+
+            return Qwen(model=model)
+        case "chutes":
+            from .providers.chutes import Chutes
+
+            return Chutes(model=model)
+        case "fireworks":
+            from .providers.fireworks import Fireworks
+
+            return Fireworks(model=model)
         case _:
             raise ValueError(f"Unknown provider: {provider}")
 

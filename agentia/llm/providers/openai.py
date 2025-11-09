@@ -13,4 +13,3 @@ class OpenAI(OpenAIAPIProvider):
         super().__init__(
             provider="openai", model=model, api_key=api_key, base_url=base_url
         )
-        del self.extra_body["modalities"]
