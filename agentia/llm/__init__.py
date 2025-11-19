@@ -73,6 +73,10 @@ def get_provider(selector: str) -> "Provider":
             from .providers.fireworks import Fireworks
 
             return Fireworks(model=model)
+        case "ollama":
+            from .providers.ollama import Ollama
+
+            return Ollama(model=model)
         case _:
             raise ValueError(f"Unknown provider: {provider}")
 
