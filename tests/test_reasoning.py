@@ -34,10 +34,9 @@ async def test_reasoning():
 
     async for msg in run:
         print(msg)
-        for c in msg.content:
-            if c.type == "reasoning":
-                print("REASONING CONTENT:", c)
-                assert (c.text or "").strip() != ""
+        if msg.role == "assistant":
+            r = msg.reasoning
+            if r and r.strip() != "":
                 has_reasoning = True
     assert has_reasoning
 

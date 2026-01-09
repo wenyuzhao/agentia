@@ -47,8 +47,6 @@ async def test_plugin():
     all_assistant_content: str = ""
     async for msg in run:
         if msg.role == "assistant":
-            for p in msg.content:
-                if p.type == "text":
-                    all_assistant_content += p.text or ""
+            all_assistant_content += msg.text
         print(msg)
     assert "72" in all_assistant_content

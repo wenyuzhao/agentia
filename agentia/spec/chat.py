@@ -193,15 +193,17 @@ class UserMessage(MessageBase):
     )
 
     @property
-    def text(self) -> str:
+    def content_list(self) -> list[UserMessagePart]:
         if isinstance(self.content, str):
-            return self.content
+            return [MessagePartText(text=self.content)]
         if not isinstance(self.content, Sequence):
-            if isinstance(self.content, MessagePartText):
-                return self.content.text
-            return ""
+            return [self.content]
+        return list(self.content)
+
+    @property
+    def text(self) -> str:
         text = ""
-        for part in self.content:
+        for part in self.content_list:
             if isinstance(part, MessagePartText):
                 text += part.text
         return text
@@ -226,6 +228,14 @@ class AssistantMessage(MessageBase):
     )
 
     @property
+    def content_list(self) -> list[AssistantMessagePart]:
+        if isinstance(self.content, str):
+            return [MessagePartText(text=self.content)]
+        if not isinstance(self.content, Sequence):
+            return [self.content]
+        return list(self.content)
+
+    @property
     def reasoning(self) -> str | None:
         text = ""
         for part in self.content:
@@ -235,14 +245,8 @@ class AssistantMessage(MessageBase):
 
     @property
     def text(self) -> str:
-        if isinstance(self.content, str):
-            return self.content
-        if not isinstance(self.content, Sequence):
-            if isinstance(self.content, MessagePartText):
-                return self.content.text
-            return ""
         text = ""
-        for part in self.content:
+        for part in self.content_list:
             if isinstance(part, MessagePartText):
                 text += part.text
         return text

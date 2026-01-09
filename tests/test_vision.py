@@ -22,8 +22,7 @@ async def test_vision():
     )
     all_assistant_content = ""
     async for msg in run:
-        for p in msg.content:
-            if p.type == "text":
-                all_assistant_content += p.text or ""
+        if msg.role == "assistant":
+            all_assistant_content += msg.text
         print(msg)
     assert "cat" in all_assistant_content.lower()
