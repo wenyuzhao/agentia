@@ -182,21 +182,33 @@ class OpenAIAPIProvider(Provider):
                     ChatCompletionSystemMessageParam(role="system", content=m.content)
                 )
             elif m.role == "user":
-                if len(m.content) == 1 and m.content[0].type == "text":
+                if isinstance(m.content, str):
+                    content = [MessagePartText(text=m.content)]
+                elif not isinstance(m.content, (Sequence, list)):
+                    content = [m.content]
+                else:
+                    content = m.content
+                if len(content) == 1 and content[0].type == "text":
                     r.append(
                         ChatCompletionUserMessageParam(
-                            role="user", content=m.content[0].text
+                            role="user", content=content[0].text
                         )
                     )
                     continue
                 parts: list[ChatCompletionContentPartParam] = []
-                for i, p in enumerate(m.content):
+                for i, p in enumerate(content):
                     parts.append(self._to_oai_content_part(p, i))
                 r.append(ChatCompletionUserMessageParam(role="user", content=parts))
             elif m.role == "assistant":
                 text = ""
                 tool_calls: list[ChatCompletionMessageToolCallParam] = []
-                for i, p in enumerate(m.content):
+                if isinstance(m.content, str):
+                    content = [MessagePartText(text=m.content)]
+                elif not isinstance(m.content, (Sequence, list)):
+                    content = [m.content]
+                else:
+                    content = m.content
+                for i, p in enumerate(content):
                     if p.type == "text":
                         text += p.text
                     elif p.type == "tool-call":

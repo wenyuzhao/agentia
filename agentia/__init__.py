@@ -38,6 +38,14 @@ from .plugins import Plugin, PluginInitError, register_plugin, ALL_PLUGINS
 from . import llm, plugins
 from .tools import ProviderTool, Tool, Tools, MCPServer, MCPContext, mcp_context
 from .history import History
+from .llm.completion import ChatCompletion
+from .llm.stream import (
+    TextStream,
+    ReasoningStream,
+    MessageStream,
+    ChatCompletionStream,
+    ChatCompletionEvents,
+)
 
 __all__ = [
     # submodules
@@ -47,6 +55,13 @@ __all__ = [
     # agent
     "Agent",
     "History",
+    # llm
+    "ChatCompletion",
+    "TextStream",
+    "ReasoningStream",
+    "MessageStream",
+    "ChatCompletionStream",
+    "ChatCompletionEvents",
     # spec
     "Message",
     "SystemMessage",
