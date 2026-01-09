@@ -1,7 +1,7 @@
 from typing import AsyncGenerator
 
 from agentia.spec.base import FinishReason, Usage, Warning
-from agentia.spec.prompt import AssistantMessage, Message, ToolMessage
+from agentia.spec.chat import AssistantMessage, Message, ToolMessage
 
 
 class Listeners:

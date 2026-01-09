@@ -14,7 +14,7 @@ from pydantic import AnyUrl
 from agentia import spec
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
-from agentia.spec.prompt import ObjectType
+from agentia.spec.chat import ObjectType
 from agentia.tools.tools import ToolSet, Tool
 
 if TYPE_CHECKING:

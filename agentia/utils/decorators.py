@@ -28,7 +28,7 @@ from io import BytesIO
 import inspect
 
 from agentia.spec import UserMessage, MessagePartText, MessagePartFile, SystemMessage
-from agentia.spec.prompt import Message
+from agentia.spec.chat import Message
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools

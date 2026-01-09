@@ -8,7 +8,7 @@ from agentia.history import History
 from agentia.llm import LLM, GenerationOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.spec.prompt import AssistantMessage, ToolMessage
+from agentia.spec.chat import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import (
     NonSystemMessage,

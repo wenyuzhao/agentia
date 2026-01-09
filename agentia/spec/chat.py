@@ -3,6 +3,7 @@ import inspect
 from typing import Type
 from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
+from pydantic import RootModel
 
 
 class MessageBase(BaseModel): ...
@@ -184,7 +185,7 @@ type AssistantMessagePart = Annotated[
 
 class UserMessage(MessageBase):
     role: Literal["user"] = "user"
-    content: Sequence[UserMessagePart]
+    content: Sequence[UserMessagePart] | UserMessagePart | str
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "providerOptions"),
@@ -193,6 +194,12 @@ class UserMessage(MessageBase):
 
     @property
     def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+        if not isinstance(self.content, Sequence):
+            if isinstance(self.content, MessagePartText):
+                return self.content.text
+            return ""
         text = ""
         for part in self.content:
             if isinstance(part, MessagePartText):
@@ -211,7 +218,7 @@ class _Result[X](BaseModel):
 
 class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
-    content: Sequence[AssistantMessagePart]
+    content: Sequence[AssistantMessagePart] | AssistantMessagePart | str
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "providerOptions"),
@@ -228,6 +235,12 @@ class AssistantMessage(MessageBase):
 
     @property
     def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+        if not isinstance(self.content, Sequence):
+            if isinstance(self.content, MessagePartText):
+                return self.content.text
+            return ""
         text = ""
         for part in self.content:
             if isinstance(part, MessagePartText):
