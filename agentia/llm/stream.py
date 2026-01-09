@@ -1,6 +1,6 @@
 from typing import AsyncGenerator
 
-from agentia.llm.completion import Listeners
+from agentia.llm.completion import Listeners, async_gen_to_sync
 from agentia.spec import *
 
 
@@ -24,6 +24,9 @@ class TextStream:
 
     def __await__(self):
         return self.__wait_for_completion().__await__()
+
+    def __iter__(self):
+        return async_gen_to_sync(self.__gen)
 
 
 class ReasoningStream(TextStream):
@@ -108,6 +111,9 @@ class ChatCompletionStream(ChatCompletionStreamBase):
 
     def __await__(self):
         return self.__wait_for_completion().__await__()
+
+    def __iter__(self):
+        return async_gen_to_sync(self.__gen)
 
 
 class ChatCompletionEvents(ChatCompletionStreamBase):

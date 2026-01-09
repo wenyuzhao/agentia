@@ -4,6 +4,7 @@ import json
 import os
 from typing import Any, override
 from uuid import uuid4
+import httpx
 
 from agentia.tools.tools import ToolSet
 from . import GenerationOptions, ProviderGenerationResult, Provider
@@ -50,7 +51,8 @@ class OpenAIAPIProvider(Provider):
             raise ValueError("OPENAI_API_KEY environment variable not set")
         if "OPENAI_BASE_URL" in os.environ:
             base_url = os.environ["OPENAI_BASE_URL"]
-        self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.api_key = api_key
+        self.base_url = base_url
         self.extra_headers: dict[str, str] = {}
         self.extra_body: dict[str, Any] = {}
         if think:
@@ -58,6 +60,11 @@ class OpenAIAPIProvider(Provider):
             self.enable_reasoning()
         else:
             self.reasoning = False
+
+    def client(self, client: httpx.AsyncClient) -> openai.AsyncOpenAI:
+        return openai.AsyncOpenAI(
+            api_key=self.api_key, base_url=self.base_url, http_client=client
+        )
 
     def enable_reasoning(self) -> None:
         self.extra_body["reasoning"] = {
@@ -379,14 +386,18 @@ class OpenAIAPIProvider(Provider):
 
     @override
     async def do_generate(
-        self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
+        self,
+        prompt: Prompt,
+        tool_set: ToolSet,
+        options: GenerationOptions,
+        client: httpx.AsyncClient,
     ) -> ProviderGenerationResult:
         args, warnings = self._prepare_args(prompt, tool_set, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
             timeout = None
-        response = await self.client.chat.completions.create(
+        response = await self.client(client).chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self.extra_body,
@@ -453,14 +464,18 @@ class OpenAIAPIProvider(Provider):
 
     @override
     async def do_stream(
-        self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
+        self,
+        prompt: Prompt,
+        tool_set: ToolSet,
+        options: GenerationOptions,
+        client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
         args, warnings = self._prepare_args(prompt, tool_set, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
             timeout = None
-        response = await self.client.chat.completions.create(
+        response = await self.client(client).chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self.extra_body,

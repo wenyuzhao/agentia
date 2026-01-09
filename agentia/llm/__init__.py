@@ -9,6 +9,7 @@ from typing import (
     TypedDict,
     overload,
 )
+import httpx
 from pydantic import AnyUrl
 
 from agentia import spec
@@ -168,29 +169,30 @@ class LLM:
         ):
             tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
-            while True:
-                result = await self._provider.do_generate(
-                    prompt=messages, tool_set=tools, options=options
-                )
-                c.warnings.extend(result.warnings)
-                c.usage += result.usage
-                c.new_messages.append(result.message)
-                yield result.message
-                # Add new messages
-                messages.append(result.message)
-                tool_calls = result.tool_calls
-                if result.finish_reason != "tool-calls":
-                    break
-                # Call tools and continue
-                tool_msg, _, extra_msg = await self.__process_tool_calls(
-                    tool_calls, tools=tools
-                )
-                yield tool_msg
-                messages.append(tool_msg)
-                c.add_new_message(messages[-1])
-                if extra_msg:
-                    messages.append(extra_msg)
+            async with httpx.AsyncClient() as client:
+                while True:
+                    result = await self._provider.do_generate(
+                        prompt=messages, tool_set=tools, options=options, client=client
+                    )
+                    c.warnings.extend(result.warnings)
+                    c.usage += result.usage
+                    c.new_messages.append(result.message)
+                    yield result.message
+                    # Add new messages
+                    messages.append(result.message)
+                    tool_calls = result.tool_calls
+                    if result.finish_reason != "tool-calls":
+                        break
+                    # Call tools and continue
+                    tool_msg, _, extra_msg = await self.__process_tool_calls(
+                        tool_calls, tools=tools
+                    )
+                    yield tool_msg
+                    messages.append(tool_msg)
                     c.add_new_message(messages[-1])
+                    if extra_msg:
+                        messages.append(extra_msg)
+                        c.add_new_message(messages[-1])
 
         c = ChatCompletion(gen())
         return c
@@ -227,66 +229,71 @@ class LLM:
             messages = self.__prepare_messages(prompt)
             last_finish_reason: spec.FinishReason = "unknown"
 
-            while True:
-                tool_calls: list[spec.ToolCall] = []
-                parts: list[spec.MessagePart] = []
-                last_msg = ""
-                last_reasoning = ""
-                async for part in self._provider.do_stream(messages, tools, options):
+            async with httpx.AsyncClient() as client:
+                while True:
+                    tool_calls: list[spec.ToolCall] = []
+                    parts: list[spec.MessagePart] = []
+                    last_msg = ""
+                    last_reasoning = ""
+                    async for part in self._provider.do_stream(
+                        messages, tools, options, client
+                    ):
 
-                    match part.type:
-                        case "stream-start":
-                            s.warnings.extend(part.warnings)
-                        case "text-start":
-                            last_msg = ""
-                        case "text-delta":
-                            last_msg += part.delta
-                        case "text-end":
-                            parts.append(spec.MessagePartText(text=last_msg))
-                        case "reasoning-start":
-                            last_reasoning = ""
-                        case "reasoning-delta":
-                            last_reasoning += part.delta
-                        case "reasoning-end":
-                            parts.append(spec.MessagePartReasoning(text=last_reasoning))
-                        case "file":
-                            parts.append(
-                                spec.MessagePartFile(
-                                    data=part.data, media_type=part.media_type
+                        match part.type:
+                            case "stream-start":
+                                s.warnings.extend(part.warnings)
+                            case "text-start":
+                                last_msg = ""
+                            case "text-delta":
+                                last_msg += part.delta
+                            case "text-end":
+                                parts.append(spec.MessagePartText(text=last_msg))
+                            case "reasoning-start":
+                                last_reasoning = ""
+                            case "reasoning-delta":
+                                last_reasoning += part.delta
+                            case "reasoning-end":
+                                parts.append(
+                                    spec.MessagePartReasoning(text=last_reasoning)
                                 )
-                            )
-                        case "tool-call":
-                            parts.append(
-                                spec.MessagePartToolCall(
-                                    tool_call_id=part.tool_call_id,
-                                    tool_name=part.tool_name,
-                                    input=part.input,
-                                    provider_executed=part.provider_executed,
+                            case "file":
+                                parts.append(
+                                    spec.MessagePartFile(
+                                        data=part.data, media_type=part.media_type
+                                    )
                                 )
-                            )
-                            if not part.provider_executed:
-                                tool_calls.append(part)
+                            case "tool-call":
+                                parts.append(
+                                    spec.MessagePartToolCall(
+                                        tool_call_id=part.tool_call_id,
+                                        tool_name=part.tool_name,
+                                        input=part.input,
+                                        provider_executed=part.provider_executed,
+                                    )
+                                )
+                                if not part.provider_executed:
+                                    tool_calls.append(part)
 
-                    if part.type == "finish":
-                        s.usage += part.usage
-                        last_finish_reason = part.finish_reason
-                    else:
-                        yield part
-                messages.append(spec.AssistantMessage(content=parts))
-                s.new_messages.append(messages[-1])
-                if not tool_calls:
-                    break
-                # Call tools and continue
-                tm, trs, extra_msg = await self.__process_tool_calls(
-                    tool_calls, tools=tools
-                )
-                for tr in trs:
-                    yield tr
-                messages.append(tm)
-                s.add_new_message(messages[-1])
-                if extra_msg:
-                    messages.append(extra_msg)
+                        if part.type == "finish":
+                            s.usage += part.usage
+                            last_finish_reason = part.finish_reason
+                        else:
+                            yield part
+                    messages.append(spec.AssistantMessage(content=parts))
+                    s.new_messages.append(messages[-1])
+                    if not tool_calls:
+                        break
+                    # Call tools and continue
+                    tm, trs, extra_msg = await self.__process_tool_calls(
+                        tool_calls, tools=tools
+                    )
+                    for tr in trs:
+                        yield tr
+                    messages.append(tm)
                     s.add_new_message(messages[-1])
+                    if extra_msg:
+                        messages.append(extra_msg)
+                        s.add_new_message(messages[-1])
             s.finish_reason = last_finish_reason
             yield spec.StreamPartFinish(usage=s.usage, finish_reason=last_finish_reason)
 

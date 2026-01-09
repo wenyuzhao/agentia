@@ -2,6 +2,7 @@ import abc
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, AsyncGenerator, Sequence
+import httpx
 from agentia.llm import GenerationOptions
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
@@ -43,10 +44,18 @@ class Provider(abc.ABC):
 
     @abc.abstractmethod
     async def do_generate(
-        self, prompt: spec.Prompt, tool_set: ToolSet, options: GenerationOptions
+        self,
+        prompt: spec.Prompt,
+        tool_set: ToolSet,
+        options: GenerationOptions,
+        client: httpx.AsyncClient,
     ) -> ProviderGenerationResult: ...
 
     @abc.abstractmethod
     def do_stream(
-        self, prompt: spec.Prompt, tool_set: ToolSet, options: GenerationOptions
+        self,
+        prompt: spec.Prompt,
+        tool_set: ToolSet,
+        options: GenerationOptions,
+        client: httpx.AsyncClient,
     ) -> AsyncGenerator[spec.StreamPart, None]: ...
