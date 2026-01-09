@@ -17,3 +17,7 @@ class OpenRouter(OpenAIAPIProvider):
         t = os.getenv("AGENTIA_OPENROUTER_TRANSFORMS", None)
         if t and t != "0" and t.lower() != "false":
             self.extra_body["transforms"] = ["middle-out"]
+        if p := os.getenv("OPENROUTER_PROVIDERS", None):
+            self.extra_body["provider"] = {
+                "order": [x.strip().lower() for x in p.split(",") if x.strip()],
+            }
