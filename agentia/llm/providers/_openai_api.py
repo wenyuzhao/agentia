@@ -189,12 +189,7 @@ class OpenAIAPIProvider(Provider):
                     ChatCompletionSystemMessageParam(role="system", content=m.content)
                 )
             elif m.role == "user":
-                if isinstance(m.content, str):
-                    content = [MessagePartText(text=m.content)]
-                elif not isinstance(m.content, (Sequence, list)):
-                    content = [m.content]
-                else:
-                    content = m.content
+                content = m.content_list
                 if len(content) == 1 and content[0].type == "text":
                     r.append(
                         ChatCompletionUserMessageParam(
@@ -209,13 +204,7 @@ class OpenAIAPIProvider(Provider):
             elif m.role == "assistant":
                 text = ""
                 tool_calls: list[ChatCompletionMessageToolCallParam] = []
-                if isinstance(m.content, str):
-                    content = [MessagePartText(text=m.content)]
-                elif not isinstance(m.content, (Sequence, list)):
-                    content = [m.content]
-                else:
-                    content = m.content
-                for i, p in enumerate(content):
+                for i, p in enumerate(m.content_list):
                     if p.type == "text":
                         text += p.text
                     elif p.type == "tool-call":

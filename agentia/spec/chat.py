@@ -196,7 +196,7 @@ class UserMessage(MessageBase):
     def content_list(self) -> list[UserMessagePart]:
         if isinstance(self.content, str):
             return [MessagePartText(text=self.content)]
-        if not isinstance(self.content, Sequence):
+        if not isinstance(self.content, (Sequence, list)):
             return [self.content]
         return list(self.content)
 
