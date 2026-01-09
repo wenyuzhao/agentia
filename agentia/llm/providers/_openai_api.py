@@ -382,11 +382,16 @@ class OpenAIAPIProvider(Provider):
         self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> ProviderGenerationResult:
         args, warnings = self._prepare_args(prompt, tool_set, options)
+        if t := os.environ.get("AGENTIA_TIMEOUT"):
+            timeout = float(t)
+        else:
+            timeout = None
         response = await self.client.chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self.extra_body,
             stream=False,
+            timeout=timeout,
         )
         choice = response.choices[0]
         content: Sequence[Content] = []
@@ -451,6 +456,10 @@ class OpenAIAPIProvider(Provider):
         self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
     ) -> AsyncGenerator[StreamPart, None]:
         args, warnings = self._prepare_args(prompt, tool_set, options)
+        if t := os.environ.get("AGENTIA_TIMEOUT"):
+            timeout = float(t)
+        else:
+            timeout = None
         response = await self.client.chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
@@ -459,6 +468,7 @@ class OpenAIAPIProvider(Provider):
             stream_options={
                 "include_usage": True,
             },
+            timeout=timeout,
         )
         started = False
         streaming_text = False
