@@ -3,7 +3,7 @@ from typing import Literal, Sequence, overload
 import logging
 import uuid
 from agentia.history import History
-from agentia.llm import LLM, LLMOptions, LLMOptionsDict
+from agentia.llm import LLM, LLMOptions, LLMOptionsUnion
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import AssistantMessage, ToolMessage
@@ -23,7 +23,7 @@ class Agent:
         icon: str | None = None,
         description: str | None = None,
         instructions: str | None = None,
-        options: LLMOptionsDict | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> None:
         self.id = str(id or uuid.uuid4())
         self.name = name
@@ -64,7 +64,7 @@ class Agent:
         /,
         stream: Literal[False] = False,
         events: Literal[False] = False,
-        options: LLMOptionsDict | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletion: ...
 
     @overload
@@ -74,7 +74,7 @@ class Agent:
         /,
         stream: Literal[True],
         events: Literal[False] = False,
-        options: LLMOptionsDict | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletionStream: ...
 
     @overload
@@ -84,7 +84,7 @@ class Agent:
         /,
         stream: Literal[True],
         events: Literal[True],
-        options: LLMOptionsDict | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletionEvents: ...
 
     def run(
@@ -93,7 +93,7 @@ class Agent:
         /,
         stream: bool = False,
         events: bool = False,
-        options: LLMOptionsDict | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
         self.__add_prompt(prompt)
         options_merged = LLMOptions()
