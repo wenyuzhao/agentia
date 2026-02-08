@@ -27,6 +27,7 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
         from .memory import MemoryPlugin
         from .search import SearchPlugin
         from .web import WebPlugin
+        from .skills import Skills
 
         ALL_PLUGINS = {
             "calc": CalculatorPlugin,
@@ -35,6 +36,7 @@ if os.environ.get("AGENTIA_DISABLE_PLUGINS", "").lower() not in [
             "memory": MemoryPlugin,
             "search": SearchPlugin,
             "web": WebPlugin,
+            "skills": Skills,
         }
     except ImportError as e:
         # print("Failed to import built-in plugins:", e)
