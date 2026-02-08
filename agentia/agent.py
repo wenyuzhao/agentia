@@ -10,6 +10,7 @@ from agentia.spec.chat import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
 from dataclasses import asdict
+from agentia.tools.mcp import MCPContext
 
 
 class Agent:
@@ -43,6 +44,7 @@ class Agent:
         if instructions:
             self.history.add_instructions(instructions)
         self.log = logging.getLogger(f"agentia.agent")
+        self.__mcp_context = MCPContext()
 
     def __add_prompt(
         self,
@@ -137,3 +139,10 @@ class Agent:
         assert isinstance(msgs[-1], AssistantMessage)
 
         return msgs[-1].parse(type)
+
+    async def __aenter__(self):
+        await self.__mcp_context.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.__mcp_context.__aexit__(exc_type, exc_val, exc_tb)

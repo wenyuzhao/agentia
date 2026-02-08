@@ -22,7 +22,7 @@ from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError, register_plugin, ALL_PLUGINS
 from . import llm, plugins
-from .tools import ProviderTool, Tool, Tools, MCPServer, MCPContext, mcp_context
+from .tools import ProviderTool, Tool, Tools, MCP, MCPContext
 from .history import History
 from .llm import LLMOptions
 from .llm.completion import ChatCompletion
@@ -107,8 +107,7 @@ __all__ = [
     "ProviderTool",
     "Tool",
     "Tools",
-    "MCPServer",
+    "MCP",
     "MCPContext",
-    "mcp_context",
     "load_dotenv",
 ]

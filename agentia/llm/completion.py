@@ -26,9 +26,12 @@ class ChatCompletion:
         gen: AsyncGenerator[AssistantMessage | ToolMessage, None],
     ):
         async def __gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
-            async for msg in gen:
-                yield msg
-            self.on_finish.emit()
+            from agentia.tools.mcp import MCPContext
+
+            async with MCPContext() as _ctx:
+                async for msg in gen:
+                    yield msg
+                self.on_finish.emit()
 
         self.__gen = __gen()
         self.usage = Usage()

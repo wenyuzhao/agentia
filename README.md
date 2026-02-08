@@ -7,7 +7,7 @@ Ergonomic LLM Agents, with chat messages fully compatible with [Vercel AI SDK](h
 Run agents with tools and MCP.
 
 ```python
-from agentia import Agent, MCPServer, MCPContext
+from agentia import Agent, MCP
 from typing import Annotated
 
 # Define a tool as a python function
@@ -16,18 +16,17 @@ def get_weather(location: Annotated[str, "The city name"]):
     return { "temperature": 72 }
 
 # Declare a MCP server:
-calc = MCPServer(name="calculator", command="uvx", args=["mcp-server-calculator"])
+calc = MCP(name="calculator", command="uvx", args=["mcp-server-calculator"])
 
 # Create an agent
 agent = Agent(model="openai/gpt-5-mini", tools=[get_weather, calc])
 
-# Run the agent with the tool
-async with MCPContext(): # This line can be omitted if not using MCP
-    response = await agent.run("What is the weather like in boston?")
+# Run the agent with the mcp
+response = await agent.run("Calculate 234 ** 3")
 
 print(response.text)
 
-# Output: The current temperature in Boston is 72°F.
+# Output: The result of 234 raised to the power of 3 is 12,812,904.
 ```
 
 # The Magic Decorator

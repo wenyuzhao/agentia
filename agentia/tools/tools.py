@@ -4,7 +4,7 @@ import os
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 from pydantic import AliasChoices, BaseModel, Field, JsonValue, ValidationError
-from agentia.tools.mcp import MCPServer
+from agentia.tools.mcp import MCP
 import agentia.spec as spec
 from agentia.utils.decorators import ToolFuncParam
 from inspect import Parameter
@@ -132,7 +132,7 @@ class _PythonFunctionTool(_BaseTool):
 
 
 class _MCPTool(_BaseTool):
-    def __init__(self, name: str, schema: Any, server: MCPServer):
+    def __init__(self, name: str, schema: Any, server: MCP):
         super().__init__(name=name, schema=schema)
         self.server = server
 
@@ -142,7 +142,7 @@ class ProviderTool(BaseModel):
     args: dict[str, JsonValue] | None = None
 
 
-type Tool = Plugin | Callable[..., Any] | ProviderTool | MCPServer
+type Tool = Plugin | Callable[..., Any] | ProviderTool | MCP
 type Tools = Sequence[Tool]
 
 
@@ -161,20 +161,20 @@ class ToolSet:
 
         self.all_tools = tools
         self.plugins: dict[str, Plugin] = {}
-        self.mcp_servers: dict[str, MCPServer] = {}
+        self.mcp_servers: dict[str, MCP] = {}
         self.provider_tools: dict[str, ProviderTool] = {}
         self.__tools: dict[str, _BaseTool] = {}
         for t in tools:
             if isinstance(t, Plugin):
                 self.__add_plugin(t)
-            elif isinstance(t, MCPServer):
+            elif isinstance(t, MCP):
                 self.__add_mcp_server(t)
             elif isinstance(t, ProviderTool):
                 self.provider_tools[t.name] = t
             else:
                 assert inspect.isfunction(
                     t
-                ), "Expected a function, MCPServer, Plugin, or ProviderTool"
+                ), "Expected a function, MCP server object, Plugin, or ProviderTool"
                 self.__add_function(t)
         self.__initialized = False
 
@@ -197,15 +197,17 @@ class ToolSet:
             for tool in tools:
                 self.__tools[tool.name] = tool
 
-    def add(self, t: Union[Callable[..., Any], MCPServer, "Plugin"]) -> None:
+    def add(self, t: Union[Callable[..., Any], MCP, "Plugin"]) -> None:
         from agentia.plugins import Plugin
 
         if isinstance(t, Plugin):
             self.__add_plugin(t)
-        elif isinstance(t, MCPServer):
+        elif isinstance(t, MCP):
             self.__add_mcp_server(t)
         else:
-            assert inspect.isfunction(t), "Expected a function, MCPServer, or Plugin"
+            assert inspect.isfunction(
+                t
+            ), "Expected a function, MCP server object, or Plugin"
             self.__add_function(t)
 
     def __add_function(self, f: Callable[..., Any], plugin: Optional["Plugin"] = None):
@@ -221,7 +223,7 @@ class ToolSet:
         # Add the plugin to the list of plugins
         self.plugins[p.id()] = p
 
-    def __add_mcp_server(self, server: MCPServer):
+    def __add_mcp_server(self, server: MCP):
         self.mcp_servers[server.name] = server
 
     def get_plugin(self, type: type["Plugin"]) -> Optional["Plugin"]:

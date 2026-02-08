@@ -225,7 +225,16 @@ class LLM:
                         messages.append(extra_msg)
                         c.add_new_message(messages[-1])
 
-        c = ChatCompletion(gen())
+        async def gen_with_mcp_context() -> (
+            AsyncGenerator[spec.AssistantMessage | spec.ToolMessage, None]
+        ):
+            from agentia.tools.mcp import MCPContext
+
+            async with MCPContext() as _ctx:
+                async for msg in gen():
+                    yield msg
+
+        c = ChatCompletion(gen_with_mcp_context())
         return c
 
     @overload
@@ -326,8 +335,15 @@ class LLM:
             s.finish_reason = last_finish_reason
             yield StreamPartStreamEnd(usage=s.usage, finish_reason=last_finish_reason)
 
+        async def gen_with_mcp_context() -> AsyncGenerator[StreamPart, None]:
+            from agentia.tools.mcp import MCPContext
+
+            async with MCPContext() as _ctx:
+                async for part in gen():
+                    yield part
+
         if events:
-            s = ChatCompletionEvents(gen())
+            s = ChatCompletionEvents(gen_with_mcp_context())
         else:
-            s = ChatCompletionStream(gen())
+            s = ChatCompletionStream(gen_with_mcp_context())
         return s

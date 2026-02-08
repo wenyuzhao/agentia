@@ -1,12 +1,11 @@
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Callable, Literal, overload
+from typing import Any, Literal, overload
 from typing import TYPE_CHECKING, Sequence
 from mcp import ClientSession, StdioServerParameters, stdio_client, Tool as MCPTool
 from mcp.client.websocket import websocket_client
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.client.sse import sse_client
-from pydantic import BaseModel
 import asyncio
 from httpx import Auth
 
@@ -15,16 +14,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from agentia.tools.tools import _MCPTool
 
 
-class MCPServerConfig(BaseModel):
-    command: str
-    args: list[str]
-    env: dict[str, str] | None = None
-
-
 class MCPContext:
     def __init__(self):
         self.exit_stack = AsyncExitStack()
-        self.servers: list[MCPServer] = []
+        self.servers: list[MCP] = []
 
     async def __aenter__(self):
         global MCP_CONTEXTS
@@ -42,20 +35,6 @@ class MCPContext:
 MCP_CONTEXTS: list[MCPContext] = []
 
 
-def mcp_context(f: Callable[..., Any]) -> Callable[..., Any]:
-    """
-    Context manager for MCP server initialization.
-    This ensures that the MCP server is initialized and cleaned up properly.
-    """
-    assert asyncio.iscoroutinefunction(f), "Function must be async"
-
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        async with MCPContext() as ctx:
-            return await f(*args, **kwargs)
-
-    return wrapper
-
-
 def _convert_tool_format(tool: MCPTool) -> Any:
     converted_tool = {
         "name": tool.name,
@@ -69,7 +48,7 @@ def _convert_tool_format(tool: MCPTool) -> Any:
     return converted_tool
 
 
-class MCPServer:
+class MCP:
     @overload
     def __init__(
         self,
