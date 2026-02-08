@@ -41,7 +41,6 @@ class ChatCompletionStreamBase:
     def __init__(self) -> None:
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
-        self.warnings: list[Warning] = []
         self.new_messages: list[Message] = []
         self.on_finish = Listeners()
         self.on_new_message = Listeners()
@@ -55,21 +54,13 @@ class ChatCompletionStream(ChatCompletionStreamBase):
     def __init__(self, gen: AsyncGenerator[StreamPart, None]):
         super().__init__()
 
-        async def __gen() -> AsyncGenerator[
-            ReasoningStream | MessageStream | Source | File | ToolCall | ToolResult,
-            None,
-        ]:
+        async def __gen() -> (
+            AsyncGenerator[
+                ReasoningStream | MessageStream | ToolCall | ToolResult, None
+            ]
+        ):
             async for part in gen:
-                if isinstance(
-                    part,
-                    (
-                        SourceURL,
-                        SourceDocument,
-                        File,
-                        ToolCall,
-                        ToolResult,
-                    ),
-                ):
+                if isinstance(part, (ToolCall, ToolResult)):
                     yield part
                 elif isinstance(part, StreamPartTextStart):
 
@@ -97,9 +88,7 @@ class ChatCompletionStream(ChatCompletionStreamBase):
 
     def __aiter__(
         self,
-    ) -> AsyncGenerator[
-        ReasoningStream | MessageStream | Source | File | ToolCall | ToolResult, None
-    ]:
+    ) -> AsyncGenerator[ReasoningStream | MessageStream | ToolCall | ToolResult, None]:
         return self.__gen
 
     async def __wait_for_completion(self) -> AssistantMessage:

@@ -6,7 +6,9 @@ from openai.lib._parsing._completions import to_strict_json_schema  # type: igno
 from pydantic import RootModel
 
 
-class MessageBase(BaseModel): ...
+class MessageBase(BaseModel):
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
 
 
 class SystemMessage(MessageBase):
@@ -18,8 +20,19 @@ class SystemMessage(MessageBase):
         serialization_alias="providerOptions",
     )
 
+    def __init__(
+        self,
+        content: str,
+        *,
+        role: Literal["system"] = "system",
+        provider_options: ProviderOptions | None = None,
+    ):
+        super().__init__(role=role, content=content, provider_options=provider_options)
 
-class MessagePartBase(BaseModel): ...
+
+class MessagePartBase(BaseModel):
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
 
 
 class MessagePartText(MessagePartBase):
@@ -31,6 +44,15 @@ class MessagePartText(MessagePartBase):
         serialization_alias="providerOptions",
     )
 
+    def __init__(
+        self,
+        text: str,
+        *,
+        type: Literal["text"] = "text",
+        provider_options: ProviderOptions | None = None,
+    ):
+        super().__init__(type=type, text=text, provider_options=provider_options)
+
 
 class MessagePartReasoning(MessagePartBase):
     type: Literal["reasoning"] = "reasoning"
@@ -40,6 +62,15 @@ class MessagePartReasoning(MessagePartBase):
         validation_alias=AliasChoices("providerOptions", "provider_options"),
         serialization_alias="providerOptions",
     )
+
+    def __init__(
+        self,
+        text: str,
+        *,
+        type: Literal["reasoning"] = "reasoning",
+        provider_options: ProviderOptions | None = None,
+    ):
+        super().__init__(type=type, text=text, provider_options=provider_options)
 
 
 class MessagePartFile(MessagePartBase):
@@ -80,67 +111,6 @@ class MessagePartToolCall(MessagePartBase):
     )
 
 
-class ToolResultOutputText(BaseModel):
-    type: Literal["text"] = "text"
-    value: str
-
-
-class ToolResultOutputJson(BaseModel):
-    type: Literal["json"] = "json"
-    value: JsonValue
-
-
-class ToolResultOutputExecutionDenied(BaseModel):
-    type: Literal["execution-denied"] = "execution-denied"
-    reason: str | None = None
-
-
-class ToolResultOutputErrorText(BaseModel):
-    type: Literal["error-text"] = "error-text"
-    value: str
-
-
-class ToolResultOutputErrorJson(BaseModel):
-    type: Literal["error-json"] = "error-json"
-    value: JsonValue
-
-
-class ToolResultOutputContentPartText(BaseModel):
-    type: Literal["text"] = "text"
-    text: str
-
-
-class ToolResultOutputContentPartMedia(BaseModel):
-    type: Literal["media"] = "media"
-    data: str
-    media_type: str = Field(
-        validation_alias=AliasChoices("mediaType", "media_type"),
-        serialization_alias="mediaType",
-    )
-
-
-type ToolResultOutputContentPart = Annotated[
-    ToolResultOutputContentPartText | ToolResultOutputContentPartMedia,
-    Field(discriminator="type"),
-]
-
-
-class ToolResultOutputContent(BaseModel):
-    type: Literal["content"] = "content"
-    value: Sequence[ToolResultOutputContentPart]
-
-
-type ToolResultOutput = Annotated[
-    ToolResultOutputText
-    | ToolResultOutputJson
-    | ToolResultOutputExecutionDenied
-    | ToolResultOutputErrorText
-    | ToolResultOutputErrorJson
-    | ToolResultOutputContent,
-    Field(discriminator="type"),
-]
-
-
 class MessagePartToolResult(MessagePartBase):
     type: Literal["tool-result"] = "tool-result"
     tool_call_id: str = Field(
@@ -151,7 +121,7 @@ class MessagePartToolResult(MessagePartBase):
         validation_alias=AliasChoices("toolName", "tool_name"),
         serialization_alias="toolName",
     )
-    output: ToolResultOutput
+    output: JsonValue
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "provider_options"),
@@ -192,6 +162,16 @@ class UserMessage(MessageBase):
         serialization_alias="providerOptions",
     )
 
+    def __init__(
+        self,
+        content: str | Sequence[UserMessagePart] | UserMessagePart,
+        *,
+        role: Literal["user"] = "user",
+        provider_options: ProviderOptions | None = None,
+    ):
+        print("UserMessage __init__ called with content:", content)
+        super().__init__(role=role, content=content, provider_options=provider_options)
+
     @property
     def content_list(self) -> list[UserMessagePart]:
         if isinstance(self.content, str):
@@ -221,11 +201,22 @@ class _Result[X](BaseModel):
 class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
     content: Sequence[AssistantMessagePart] | AssistantMessagePart | str
+    annotations: list[Annotation] | None = None
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "providerOptions"),
         serialization_alias="providerOptions",
     )
+
+    def __init__(
+        self,
+        content: str | Sequence[AssistantMessagePart] | AssistantMessagePart,
+        *,
+        role: Literal["assistant"] = "assistant",
+        annotations: list[Annotation] | None = None,
+        provider_options: ProviderOptions | None = None,
+    ):
+        super().__init__(role=role, content=content, provider_options=provider_options)
 
     @property
     def content_list(self) -> list[AssistantMessagePart]:
@@ -270,30 +261,6 @@ class AssistantMessage(MessageBase):
         else:
             return result
 
-    @staticmethod
-    def from_contents(contents: Sequence[Content]) -> "AssistantMessage":
-        parts = []
-        for c in contents:
-            if c.type == "text":
-                parts.append(MessagePartText(text=c.text))
-            elif c.type == "reasoning":
-                parts.append(MessagePartReasoning(text=c.text))
-            elif c.type == "file":
-                parts.append(MessagePartFile(data=c.data, media_type=c.media_type))
-            elif c.type == "tool-call":
-                parts.append(
-                    MessagePartToolCall(
-                        tool_call_id=c.tool_call_id,
-                        tool_name=c.tool_name,
-                        input=c.input,
-                        provider_executed=c.provider_executed,
-                    )
-                )
-            else:
-                raise Exception(f"Unknown content type: {c.type}")
-        assert len(parts) > 0
-        return AssistantMessage(content=parts)
-
 
 class ToolMessage(MessageBase):
     role: Literal["tool"] = "tool"
@@ -304,6 +271,15 @@ class ToolMessage(MessageBase):
         serialization_alias="providerOptions",
     )
 
+    def __init__(
+        self,
+        content: Sequence[MessagePartToolResult],
+        *,
+        role: Literal["tool"] = "tool",
+        provider_options: ProviderOptions | None = None,
+    ):
+        super().__init__(role=role, content=content, provider_options=provider_options)
+
 
 type Message = Annotated[
     SystemMessage | UserMessage | AssistantMessage | ToolMessage,
@@ -311,8 +287,7 @@ type Message = Annotated[
 ]
 
 type NonSystemMessage = Annotated[
-    UserMessage | AssistantMessage | ToolMessage,
-    Field(discriminator="role"),
+    UserMessage | AssistantMessage | ToolMessage, Field(discriminator="role")
 ]
 
 type Prompt = Sequence[Message]
@@ -348,6 +323,5 @@ class ResponseFormatJson(BaseModel):
 
 
 type ResponseFormat = Annotated[
-    ResponseFormatText | ResponseFormatJson,
-    Field(discriminator="type"),
+    ResponseFormatText | ResponseFormatJson, Field(discriminator="type")
 ]

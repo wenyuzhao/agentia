@@ -6,18 +6,18 @@ import httpx
 from agentia.llm import GenerationOptions
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
+from agentia.spec.stream import StreamPart
 
 if TYPE_CHECKING:
     from .. import LLM
 
 
 @dataclass
-class ProviderGenerationResult:
+class GenerationResult:
     message: spec.AssistantMessage
     tool_calls: list[spec.ToolCall]
     finish_reason: spec.FinishReason
     usage: spec.Usage
-    warnings: Sequence[spec.Warning]
     provider_metadata: spec.ProviderMetadata | None
 
 
@@ -49,7 +49,7 @@ class Provider(abc.ABC):
         tool_set: ToolSet,
         options: GenerationOptions,
         client: httpx.AsyncClient,
-    ) -> ProviderGenerationResult: ...
+    ) -> GenerationResult: ...
 
     @abc.abstractmethod
     def do_stream(
@@ -58,4 +58,4 @@ class Provider(abc.ABC):
         tool_set: ToolSet,
         options: GenerationOptions,
         client: httpx.AsyncClient,
-    ) -> AsyncGenerator[spec.StreamPart, None]: ...
+    ) -> AsyncGenerator[StreamPart, None]: ...

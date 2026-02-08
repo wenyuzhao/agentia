@@ -13,10 +13,7 @@ async def test_vision():
         UserMessage(
             content=[
                 MessagePartText(text="What is this animal?"),
-                MessagePartFile(
-                    data="https://icons.iconarchive.com/icons/iconarchive/cute-animal/256/Cute-Cat-icon.png",
-                    media_type="image/png",
-                ),
+                MessagePartFile(data="https://cataas.com/cat", media_type="image/png"),
             ],
         ),
     )

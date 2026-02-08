@@ -16,6 +16,7 @@ from agentia import spec
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
 from agentia.spec.chat import ObjectType
+from agentia.spec.stream import *
 from agentia.tools.tools import ToolSet, Tool
 
 if TYPE_CHECKING:
@@ -174,7 +175,6 @@ class LLM:
                     result = await self._provider.do_generate(
                         prompt=messages, tool_set=tools, options=options, client=client
                     )
-                    c.warnings.extend(result.warnings)
                     c.usage += result.usage
                     c.new_messages.append(result.message)
                     yield result.message
@@ -224,7 +224,7 @@ class LLM:
     ) -> ChatCompletionStream | ChatCompletionEvents:
         options = options or {}
 
-        async def gen() -> AsyncGenerator[spec.StreamPart, None]:
+        async def gen() -> AsyncGenerator[StreamPart, None]:
             tools = await self.__init_tools(options)
             messages = self.__prepare_messages(prompt)
             last_finish_reason: spec.FinishReason = "unknown"
@@ -241,7 +241,7 @@ class LLM:
 
                         match part.type:
                             case "stream-start":
-                                s.warnings.extend(part.warnings)
+                                ...
                             case "text-start":
                                 last_msg = ""
                             case "text-delta":
@@ -295,7 +295,7 @@ class LLM:
                         messages.append(extra_msg)
                         s.add_new_message(messages[-1])
             s.finish_reason = last_finish_reason
-            yield spec.StreamPartFinish(usage=s.usage, finish_reason=last_finish_reason)
+            yield StreamPartStreamEnd(usage=s.usage, finish_reason=last_finish_reason)
 
         if events:
             s = ChatCompletionEvents(gen())

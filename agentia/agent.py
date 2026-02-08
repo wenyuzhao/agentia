@@ -48,12 +48,6 @@ class Agent:
             self.history.add_instructions(instructions)
         self.log = logging.getLogger(f"agentia.agent")
 
-    @staticmethod
-    def from_config(config: Union[str, Path, "Config"]) -> "Agent":
-        from agentia.utils.config import load_agent_from_config
-
-        return load_agent_from_config(config)
-
     def __add_prompt(
         self,
         prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
@@ -132,6 +126,3 @@ class Agent:
         assert isinstance(msgs[-1], AssistantMessage)
 
         return msgs[-1].parse(type)
-
-
-from .utils.config import Config

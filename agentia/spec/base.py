@@ -1,9 +1,13 @@
 from datetime import datetime
-from typing import Annotated, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Sequence, TypeGuard
 from pydantic import AliasChoices, BaseModel, Field, JsonValue, HttpUrl
+
+if TYPE_CHECKING:
+    from ..llm.stream import TextStream
 
 type ProviderOptions = dict[str, dict[str, JsonValue]]
 type ProviderMetadata = dict[str, dict[str, JsonValue]]
+
 
 type DataContent = bytes | str | HttpUrl
 
@@ -80,16 +84,6 @@ class Usage(BaseModel):
         return x
 
 
-class ResponseMetadata(BaseModel):
-    id: str | None = None
-    timestamp: datetime | None = None
-    model_id: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("modelId", "model_id"),
-        serialization_alias="modelId",
-    )
-
-
 class FunctionTool(BaseModel):
     type: Literal["function"] = "function"
     name: str
@@ -127,29 +121,6 @@ class ProviderDefinedTool(BaseModel):
 type Tool = Annotated[FunctionTool | ProviderDefinedTool, Field(discriminator="type")]
 
 
-class UnsupportedSettingWarning(BaseModel):
-    type: Literal["unsupported-setting"] = "unsupported-setting"
-    setting: str
-    details: str | None = None
-
-
-class UnsupportedToolWarning(BaseModel):
-    type: Literal["unsupported-tool"] = "unsupported-tool"
-    tool: Tool
-    details: str | None = None
-
-
-class OtherWarning(BaseModel):
-    type: Literal["other"] = "other"
-    message: str
-
-
-type Warning = Annotated[
-    UnsupportedSettingWarning | UnsupportedToolWarning | OtherWarning,
-    Field(discriminator="type"),
-]
-
-
 class ToolCall(BaseModel):
     type: Literal["tool-call"] = "tool-call"
 
@@ -165,8 +136,8 @@ class ToolCall(BaseModel):
     )
     """The name of the tool that should be called."""
 
-    input: str
-    """Stringified JSON object with the tool call arguments. Must match the parameters schema of the tool."""
+    input: JsonValue
+    """JSON object with the tool call arguments. Must match the parameters schema of the tool."""
 
     provider_executed: bool | None = Field(
         default=None,
@@ -265,68 +236,33 @@ class File(BaseModel):
     """
 
 
-class SourceURL(BaseModel):
-    type: Literal["source"] = "source"
-    source_type: Literal["url"] = Field(
-        "url",
-        validation_alias=AliasChoices("sourceType", "source_type"),
-        serialization_alias="sourceType",
-    )
-    id: str
-    url: str
-    title: str | None = None
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+class URLCitation(BaseModel):
+    type: Literal["annotation"] = "annotation"
+    annotation_type: Literal["url"] = "url"
 
+    end: int
+    """The index of the last character of the URL citation in the message."""
 
-class SourceDocument(BaseModel):
-    type: Literal["source"] = "source"
-    source_type: Literal["document"] = Field(
-        "document",
-        validation_alias=AliasChoices("sourceType", "source_type"),
-        serialization_alias="sourceType",
-    )
-    id: str
-    media_type: str = Field(
-        validation_alias=AliasChoices("mediaType", "media_type"),
-        serialization_alias="mediaType",
-    )
+    start: int
+    """The index of the first character of the URL citation in the message."""
+
     title: str
-    filename: str | None = None
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    """The title of the web resource."""
+
+    url: str
+    """The URL of the web resource."""
 
 
-type Source = Annotated[SourceURL | SourceDocument, Field(discriminator="source_type")]
+type Annotation = Annotated[URLCitation, Field(discriminator="type")]
 
-
-class Reasoning(BaseModel):
-    type: Literal["reasoning"] = "reasoning"
-    text: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
-
-
-class Text(BaseModel):
-    type: Literal["text"] = "text"
-    text: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
-
-
-type Content = Annotated[
-    Text | Reasoning | File | Source | ToolCall | ToolResult,
-    Field(discriminator="type"),
-]
+# __all__ = [
+#     "StreamPartTextStart",
+#     "StreamPartTextDelta",
+#     "StreamPartTextEnd",
+#     "StreamPartReasoningStart",
+#     "StreamPartReasoningDelta",
+#     "StreamPartReasoningEnd",
+#     "StreamPartStreamStart",
+#     "StreamPartStreamEnd",
+#     "StreamPart",
+# ]

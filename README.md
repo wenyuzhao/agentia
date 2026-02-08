@@ -63,24 +63,3 @@ print(forcast.temperature_celsius) # Output: 22
     * dataclasses
 * `pydantic.BaseModel` subclasses
 
-# Run agent as a REPL app
-
-1. Create a config file at `./robo.toml`
-
-```toml
-[agent]
-name = "Robo" # This is the only required field
-icon = "🤖"
-instructions = "You are a helpful assistant"
-model = "openai/o3-mini"
-plugins = ["clock"]
-
-[mcp]
-calc={ command = "uvx", args = ["mcp-server-calculator"] }
-```
-
-2. Load the agent
-
-```python
-agent = Agent.from_config("./robo.toml")
-```

@@ -1,7 +1,7 @@
 import asyncio
 from typing import Any, AsyncGenerator, Generator
 
-from agentia.spec.base import FinishReason, Usage, Warning
+from agentia.spec.base import FinishReason, Usage
 from agentia.spec.chat import AssistantMessage, Message, ToolMessage
 
 
@@ -33,7 +33,6 @@ class ChatCompletion:
         self.__gen = __gen()
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
-        self.warnings: list[Warning] = []
         self.new_messages: list[Message] = []
         self.on_finish = Listeners()
         self.on_new_message = Listeners()

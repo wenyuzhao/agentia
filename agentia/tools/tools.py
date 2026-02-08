@@ -287,9 +287,7 @@ class ToolSet:
         tm = spec.ToolMessage(
             content=[
                 spec.MessagePartToolResult(
-                    tool_call_id=id,
-                    tool_name=tool.name,
-                    output=spec.ToolResultOutputJson(value=output),
+                    tool_call_id=id, tool_name=tool.name, output=output
                 )
             ]
         )
@@ -307,9 +305,7 @@ class ToolSet:
         tm = spec.ToolMessage(
             content=[
                 spec.MessagePartToolResult(
-                    tool_call_id=id,
-                    tool_name=tool.name,
-                    output=spec.ToolResultOutputJson(value=result),
+                    tool_call_id=id, tool_name=tool.name, output=result
                 )
             ]
         )
@@ -331,13 +327,12 @@ class ToolSet:
             if not tool:
                 raise ValueError(f"Tool {c.tool_name} not found")
             try:
-                args = json.loads(c.input)
                 if isinstance(tool, _PythonFunctionTool):
                     tm, tr, file = await self.__run_python_tool(
                         id=c.tool_call_id,
                         tool=tool,
                         llm=llm,
-                        args=args,
+                        args=c.input,
                     )
                     tool_results.extend(tm.content)
                     tool_results2.append(tr)
@@ -348,7 +343,7 @@ class ToolSet:
                     tm, tr = await self.__run_mcp_tool(
                         id=c.tool_call_id,
                         tool=tool,
-                        args=args,
+                        args=c.input,
                     )
                     tool_results.extend(tm.content)
                     tool_results2.append(tr)
@@ -360,7 +355,7 @@ class ToolSet:
                     spec.MessagePartToolResult(
                         tool_call_id=c.tool_call_id,
                         tool_name=c.tool_name,
-                        output=spec.ToolResultOutputErrorJson(value=output),
+                        output=output,
                     )
                 )
         return spec.ToolMessage(content=tool_results), tool_results2, file_results

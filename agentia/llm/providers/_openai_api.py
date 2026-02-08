@@ -7,7 +7,7 @@ from uuid import uuid4
 import httpx
 
 from agentia.tools.tools import ToolSet
-from . import GenerationOptions, ProviderGenerationResult, Provider
+from . import GenerationOptions, GenerationResult, Provider
 
 from ...spec import *
 from openai.types.chat import (
@@ -227,14 +227,7 @@ class OpenAIAPIProvider(Provider):
                 )
             elif m.role == "tool":
                 for p in m.content:
-                    out = p.output
-                    if out.type == "text" or out.type == "error-text":
-                        val = out.value
-                    elif out.type == "execution-denied":
-                        val = out.reason or "Tool execution denied"
-                    else:
-                        val = json.dumps(out.value)
-
+                    val = json.dumps(p.output)
                     r.append(
                         ChatCompletionToolMessageParam(
                             role="tool", tool_call_id=p.tool_call_id, content=val
@@ -267,14 +260,11 @@ class OpenAIAPIProvider(Provider):
         tools: Sequence[Tool] | None,
         tool_choice: ToolChoice | None,
     ) -> tuple[
-        list[ChatCompletionToolParam] | None,
-        ChatCompletionToolChoiceOptionParam | None,
-        list[Warning],
+        list[ChatCompletionToolParam] | None, ChatCompletionToolChoiceOptionParam | None
     ]:
         oai_tools: list[ChatCompletionToolParam] = []
-        warnings: list[Warning] = []
         if not tools:
-            return None, None, []
+            return None, None
         for t in tools:
             match t.type:
                 case "function":
@@ -292,23 +282,21 @@ class OpenAIAPIProvider(Provider):
                             "function": f,  # type: ignore
                         }
                     )
-                case _:
-                    warnings.append(UnsupportedToolWarning(tool=t))
         if not tool_choice:
-            return oai_tools, None, warnings
+            return oai_tools, None
         match tool_choice.type:
             case "none":
-                return oai_tools, "none", warnings
+                return oai_tools, "none"
             case "auto":
-                return oai_tools, "auto", warnings
+                return oai_tools, "auto"
             case "required":
-                return oai_tools, "required", warnings
+                return oai_tools, "required"
             case "tool":
                 tc: ChatCompletionToolChoiceOptionParam = {
                     "type": "function",
                     "function": {"name": tool_choice.tool_name},
                 }
-                return oai_tools, tc, warnings
+                return oai_tools, tc
 
     def _get_usage(self, u: CompletionUsage | None) -> Usage:
         if not u:
@@ -331,7 +319,7 @@ class OpenAIAPIProvider(Provider):
 
     def _prepare_args(
         self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
-    ) -> tuple[dict[str, Any], list[Warning]]:
+    ) -> dict[str, Any]:
         msgs = self._to_oai_messages(prompt)
         rf = options.get("response_format", None)
         if not rf or rf.type == "text":
@@ -348,12 +336,10 @@ class OpenAIAPIProvider(Provider):
                     "description": rf.description,
                 },
             }
-        warnings: list[Warning] = []
         schema = tool_set.get_schema()
-        tools, tool_choice, tool_warnings = self._prepare_tools(
+        tools, tool_choice = self._prepare_tools(
             schema, options.get("tool_choice", None)
         )
-        warnings.extend(tool_warnings)
         args: dict[str, Any] = {
             "model": self.model,
             "messages": msgs,
@@ -371,7 +357,7 @@ class OpenAIAPIProvider(Provider):
         for k in list(args.keys()):
             if args[k] is None:
                 del args[k]
-        return args, warnings
+        return args
 
     @override
     async def do_generate(
@@ -380,8 +366,8 @@ class OpenAIAPIProvider(Provider):
         tool_set: ToolSet,
         options: GenerationOptions,
         client: httpx.AsyncClient,
-    ) -> ProviderGenerationResult:
-        args, warnings = self._prepare_args(prompt, tool_set, options)
+    ) -> GenerationResult:
+        args = self._prepare_args(prompt, tool_set, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
@@ -394,37 +380,40 @@ class OpenAIAPIProvider(Provider):
             timeout=timeout,
         )
         choice = response.choices[0]
-        content: Sequence[Content] = []
+        parts: Sequence[AssistantMessagePart] = []
         tool_calls: list[ToolCall] = []
 
         if self.reasoning and hasattr(choice.message, "reasoning"):
             reasoning_text: str = choice.message.reasoning  # type: ignore
             if reasoning_text and reasoning_text.strip() != "":
-                content.append(Reasoning(text=reasoning_text))
+                parts.append(MessagePartReasoning(text=reasoning_text))
 
         text = choice.message.content
         if text:
-            content.append(Text(type="text", text=text))
-
+            parts.append(MessagePartText(text=text))
         for tc in choice.message.tool_calls or []:
             assert tc.type == "function"
+            args = json.loads(tc.function.arguments) if tc.function.arguments else {}
             t = ToolCall(
-                type="tool-call",
-                tool_call_id=tc.id or _gen_id(),
-                tool_name=tc.function.name,
-                input=tc.function.arguments,
+                tool_call_id=tc.id or _gen_id(), tool_name=tc.function.name, input=args
             )
-            content.append(t)
+            parts.append(
+                MessagePartToolCall(
+                    tool_call_id=t.tool_call_id, tool_name=t.tool_name, input=t.input
+                )
+            )
             tool_calls.append(t)
 
+        annotations: list[Annotation] | None = None
         for a in choice.message.annotations or []:
-            content.append(
-                SourceURL(
-                    type="source",
-                    source_type="url",
-                    id=_gen_id(),
-                    url=a.url_citation.url,
+            if not annotations:
+                annotations = []
+            annotations.append(
+                URLCitation(
                     title=a.url_citation.title,
+                    url=a.url_citation.url,
+                    start=a.url_citation.start_index,
+                    end=a.url_citation.end_index,
                 )
             )
 
@@ -440,12 +429,13 @@ class OpenAIAPIProvider(Provider):
                             (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
                         ):
                             media_type = "image/" + url.split(".")[-1].lower()
-                    content.append(File(media_type=media_type or "image/png", data=url))
+                    parts.append(
+                        MessagePartFile(media_type=media_type or "image/png", data=url)
+                    )
 
-        return ProviderGenerationResult(
-            message=AssistantMessage.from_contents(content),
+        return GenerationResult(
+            message=AssistantMessage(content=parts, annotations=annotations),
             tool_calls=tool_calls,
-            warnings=warnings,
             finish_reason=self._get_finish_reason(choice.finish_reason),
             usage=self._get_usage(response.usage),
             provider_metadata=None,
@@ -459,7 +449,7 @@ class OpenAIAPIProvider(Provider):
         options: GenerationOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
-        args, warnings = self._prepare_args(prompt, tool_set, options)
+        args = self._prepare_args(prompt, tool_set, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
@@ -481,14 +471,13 @@ class OpenAIAPIProvider(Provider):
         async for chunk in response:
             if not started:
                 started = True
-                yield StreamPartStreamStart(warnings=[])
-                yield StreamPartResponseMetadata(
+                yield StreamPartStreamStart(
                     id=_gen_id(),
                     timestamp=datetime.fromtimestamp(chunk.created),
                     model_id=self.model,
                 )
             if not chunk.choices:
-                yield StreamPartFinish(
+                yield StreamPartStreamEnd(
                     usage=self._get_usage(chunk.usage), finish_reason="stop"
                 )
                 continue
@@ -522,37 +511,23 @@ class OpenAIAPIProvider(Provider):
                     if index >= len(tool_calls) or tool_calls[index] is None:
                         tool_calls.extend([None] * (index - len(tool_calls) + 1))
                         assert tc.id and tc.function and tc.function.name
-                        yield StreamPartToolInputStart(
-                            id=tc.id,
-                            tool_name=tc.function.name,
-                        )
                         tool_calls[index] = ToolCall(
-                            tool_call_id=tc.id,
-                            tool_name=tc.function.name,
-                            input="",
+                            tool_call_id=tc.id, tool_name=tc.function.name, input=""
                         )
                     tc_obj = tool_calls[index]
                     assert tc_obj is not None
                     if tc.function and tc.function.arguments:
-                        yield StreamPartToolInputDelta(
-                            id=tc_obj.tool_call_id,
-                            delta=tc.function.arguments or "",
-                        )
+                        assert isinstance(tc_obj.input, str)
                         tc_obj.input += tc.function.arguments or ""
 
-                for i, tc in enumerate(tool_calls):
-                    if not tc or not tc.input:
-                        continue
-                    try:
-                        json.loads(tc.input)
-                        yield StreamPartToolInputEnd(id=tc.tool_call_id)
-                        yield tc
-                        tool_calls[i] = None
-                    except Exception:
-                        continue
-
             if choice.finish_reason:
-                yield StreamPartFinish(
+                for i, tc in enumerate(tool_calls):
+                    if not tc:
+                        continue
+                    assert isinstance(tc.input, str)
+                    tc.input = json.loads(tc.input or "{}")
+                    yield tc
+                yield StreamPartStreamEnd(
                     usage=self._get_usage(chunk.usage),
                     finish_reason=self._get_finish_reason(choice.finish_reason),
                 )
