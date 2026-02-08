@@ -1,16 +1,22 @@
 import os
-from typing import Literal, Sequence, overload
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal, Sequence, overload
 import logging
 import uuid
 from agentia.history import History
 from agentia.llm import LLM, LLMOptions, LLMOptionsUnion
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
+from agentia.plugins import skills
 from agentia.spec.chat import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
 from dataclasses import asdict
 from agentia.tools.mcp import MCPContext
+from agentia.tools.plugin import Plugin
+
+if TYPE_CHECKING:
+    from agentia.plugins.skills import Skills
 
 
 class Agent:
@@ -19,21 +25,31 @@ class Agent:
         model: str | None = None,
         tools: Sequence[Tool] | None = None,
         id: str | None = None,
-        name: str | None = None,
-        icon: str | None = None,
-        description: str | None = None,
         instructions: str | None = None,
         options: LLMOptionsUnion | None = None,
+        skills: Sequence[Path | str] | "Skills" | bool | None = None,
     ) -> None:
+        from agentia.plugins.skills import Skills
+
         self.id = str(id or uuid.uuid4())
-        self.name = name
-        self.icon = icon
-        self.description = description
         self.options = (
             LLMOptions(**options)
             if isinstance(options, dict)
             else (options or LLMOptions())
         )
+        if skills:
+            if not tools:
+                tools = []
+            if any(isinstance(t, Skills) for t in tools):
+                raise ValueError(
+                    "Cannot add a Skills plugin when another Skills plugin is already added"
+                )
+            if skills is True:
+                tools = list(tools) + [Skills()]
+            elif isinstance(skills, Skills):
+                tools = list(tools) + [skills]
+            elif isinstance(skills, Sequence):
+                tools = list(tools) + [Skills(search_paths=skills)]
         if tools:
             self.options.tools = ToolSet(tools)
         if not model:
@@ -43,6 +59,8 @@ class Agent:
         self.history = History()
         if instructions:
             self.history.add_instructions(instructions)
+        if self.options.tools and isinstance(self.options.tools, ToolSet):
+            self.history.add_instructions(self.options.tools.get_instructions())
         self.log = logging.getLogger(f"agentia.agent")
         self.__mcp_context = MCPContext()
 

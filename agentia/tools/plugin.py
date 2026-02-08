@@ -18,6 +18,10 @@ class Plugin(abc.ABC):
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
 
+    def get_instructions(self) -> str | None:
+        """Get the instructions for using this plugin. This will be included in the agent's system prompt."""
+        return None
+
     @classmethod
     def name(cls) -> str:
         if cls.NAME:

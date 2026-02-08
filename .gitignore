@@ -167,3 +167,5 @@ cython_debug/
 /data
 /plugins
 .DS_Store
+/.skills
+/.agentia
