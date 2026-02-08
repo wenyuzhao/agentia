@@ -2,12 +2,15 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Literal, overload
 from typing import TYPE_CHECKING, Sequence
-from mcp import ClientSession, StdioServerParameters, stdio_client, Tool as MCPTool
-from mcp.client.websocket import websocket_client
-from mcp.client.streamable_http import streamablehttp_client
-from mcp.client.sse import sse_client
-import asyncio
+from fastmcp import Client
+from fastmcp.mcp_config import (
+    MCPConfig,
+    CanonicalMCPServerTypes,
+    StdioMCPServer,
+    RemoteMCPServer,
+)
 from httpx import Auth
+from mcp.types import Tool as FastMCPTool
 
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -17,7 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover
 class MCPContext:
     def __init__(self):
         self.exit_stack = AsyncExitStack()
-        self.servers: list[MCP] = []
+        self._servers: list[MCP] = []
 
     async def __aenter__(self):
         global MCP_CONTEXTS
@@ -27,23 +30,25 @@ class MCPContext:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         global MCP_CONTEXTS
         MCP_CONTEXTS.remove(self)
-        for server in self.servers:
+        for server in self._servers:
             server.context_available = False
         await self.exit_stack.aclose()
+
+
+class _ClientWrapper(Client):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await super().__aexit__(exc_type, exc_val, exc_tb)
+        await self.transport.close()
 
 
 MCP_CONTEXTS: list[MCPContext] = []
 
 
-def _convert_tool_format(tool: MCPTool) -> Any:
+def _convert_tool_format(tool: FastMCPTool) -> Any:
     converted_tool = {
         "name": tool.name,
         "description": tool.description,
-        "parameters": {
-            "type": "object",
-            "properties": tool.inputSchema["properties"],
-            "required": tool.inputSchema.get("required", []),
-        },
+        "parameters": tool.inputSchema,
     }
     return converted_tool
 
@@ -58,6 +63,7 @@ class MCP:
         args: Sequence[str | Path],
         env: dict[str, str] | None = None,
         cwd: str | Path | None = None,
+        timeout: int | None = None,
         type: Literal["local"] = "local",
     ): ...
 
@@ -66,19 +72,11 @@ class MCP:
         self,
         name: str,
         *,
-        type: Literal["http", "sse"],
+        type: Literal["http", "sse", "streamable-http"],
         url: str,
         headers: dict[str, str] | None = None,
-        auth: Auth | None = None,
-    ): ...
-
-    @overload
-    def __init__(
-        self,
-        name: str,
-        *,
-        type: Literal["websocket"],
-        url: str,
+        auth: str | Literal["oauth"] | Auth | None = None,
+        timeout: int | None = None,
     ): ...
 
     def __init__(
@@ -91,8 +89,9 @@ class MCP:
         cwd: str | Path | None = None,
         url: str | None = None,
         headers: dict[str, str] | None = None,
-        auth: Auth | None = None,
-        type: Literal["websocket", "sse", "http", "local"] = "local",
+        auth: str | Literal["oauth"] | Auth | None = None,
+        timeout: int | None = None,
+        type: Literal["sse", "http", "streamable-http", "local"] = "local",
     ):
 
         self.cmd = None
@@ -109,7 +108,8 @@ class MCP:
         self.initialized = False
         self.context_available = False
         self.__tools: list["_MCPTool"] = []
-        self.session: ClientSession | None = None
+        self.session: Client | None = None
+        self.timeout: int | None = timeout  # Maximum response time in milliseconds
 
         def assert_no_local_args():
             assert command is None, "Remote MCP server does not support command"
@@ -126,14 +126,9 @@ class MCP:
                     command is not None and len(command) > 0
                 ), "Command must be specified"
                 assert args is not None, "Args must be specified"
-            case "http" | "sse":
+            case "http" | "sse" | "streamable-http":
                 assert_no_local_args()
                 assert url is not None, "URL must be specified for HTTP server"
-            case "websocket":
-                assert_no_local_args()
-                assert url is not None, "URL must be specified for WebSocket server"
-                assert headers is None, "WebSocket does not support headers"
-                assert auth is None, "WebSocket does not support auth"
 
     def get_tools(self) -> list["_MCPTool"]:
         assert self.initialized, "MCP Server not initialized"
@@ -145,60 +140,42 @@ class MCP:
         assert not self.initialized, "MCP Server already initialized"
         assert len(MCP_CONTEXTS) > 0, "Agents must be running in an MCP context"
 
-        exit_stack = MCP_CONTEXTS[-1].exit_stack
+        context = MCP_CONTEXTS[-2] if len(MCP_CONTEXTS) >= 2 else MCP_CONTEXTS[0]
+        exit_stack = context.exit_stack
         self.context_available = True
-        MCP_CONTEXTS[-1].servers.append(self)
+        context._servers.append(self)
 
+        config: CanonicalMCPServerTypes
         match self.type:
             case "local":
                 assert self.cmd is not None
-                server_params = StdioServerParameters(
+                config = StdioMCPServer(
                     command=str(self.cmd[0]),
                     args=[str(a) for a in self.cmd[1:]],
-                    env=self.env,
-                    cwd=self.cwd,
+                    env=self.env or {},
+                    cwd=str(self.cwd) if self.cwd else None,
+                    timeout=self.timeout,
                 )
-                self.stdio, self.write = await exit_stack.enter_async_context(
-                    stdio_client(server_params)
-                )
-            case "websocket":
+            case "sse" | "streamable-http" | "http":
                 assert self.url is not None
-                self.stdio, self.write = await exit_stack.enter_async_context(
-                    websocket_client(self.url)
-                )
-            case "sse":
-                assert self.url is not None
-                self.stdio, self.write = await exit_stack.enter_async_context(
-                    sse_client(
-                        self.url,
-                        headers=self.headers,
-                        auth=self.auth,
-                    )
-                )
-            case "http":
-                assert self.url is not None
-                self.stdio, self.write, _ = await exit_stack.enter_async_context(
-                    streamablehttp_client(
-                        self.url, headers=self.headers, auth=self.auth
-                    )
+                config = RemoteMCPServer(
+                    url=self.url,
+                    transport=self.type,
+                    headers=self.headers or {},
+                    auth=self.auth,
+                    timeout=self.timeout,
                 )
             case _:
                 raise ValueError(f"Unsupported MCP server type: {self.type}")
+
         self.session = await exit_stack.enter_async_context(
-            ClientSession(self.stdio, self.write)
+            _ClientWrapper(MCPConfig(mcpServers={self.name: config}))
         )
-        await self.session.initialize()
+
         tools = await self.session.list_tools()
-        for tool in tools.tools:
+        for tool in tools:
             schema = _convert_tool_format(tool)
             self.__tools.append(_MCPTool(name=tool.name, schema=schema, server=self))
-        while tools.nextCursor:
-            tools = await self.session.list_tools(cursor=tools.nextCursor)
-            for tool in tools.tools:
-                schema = _convert_tool_format(tool)
-                self.__tools.append(
-                    _MCPTool(name=tool.name, schema=schema, server=self)
-                )
         self.initialized = True
 
     async def run(self, tool: str, args: Any) -> Any:
