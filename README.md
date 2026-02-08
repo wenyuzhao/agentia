@@ -1,10 +1,10 @@
 # Agentia: Ergonomic LLM Agents
 
-Ergonomic LLM Agents, with chat messages fully compatible with [Vercel AI SDK](https://ai-sdk.dev/).
+Ergonomic LLM Agents with MCP and Skills support.
 
 # Getting Started
 
-Run agents with tools and MCP.
+Run agents with tools, MCP, and Skills
 
 ```python
 from agentia import Agent, MCP
@@ -19,7 +19,8 @@ def get_weather(location: Annotated[str, "The city name"]):
 calc = MCP(name="calculator", command="uvx", args=["mcp-server-calculator"])
 
 # Create an agent
-agent = Agent(model="openai/gpt-5-mini", tools=[get_weather, calc])
+# This will load the function tool, the calculator MCP, and all skills under $CWD/.skills
+agent = Agent(model="openai/gpt-5-nano", tools=[get_weather, calc], skills=True)
 
 # Run the agent with the mcp
 response = await agent.run("Calculate 234 ** 3")
