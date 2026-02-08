@@ -133,11 +133,12 @@ class Skills(Plugin):
             s += f"- **{skill.name}**:\n{skill.description}\n\n"
         return INSTRUCTIONS_TEMPLATE.format(skills=s)
 
-    # @tool(name="list_skills")
-    def list_skills(self, skill_name: str) -> Any:
+    @tool(name="list_skills")
+    def list_skills(self) -> Any:
         """
-        Get the list of available skills, their descriptions, and whether they are loaded.
-        Use this tool to discover what skills are available and their descriptions, to refresh your memory.
+        Get the list of available skills, their high-level descriptions, and whether they are loaded.
+        Use this tool to discover what skills are available and their descriptions.
+        Only use this tool when you need to refresh your memory.
         """
         skills = list(self.skills.values())
         skill_docs = []
