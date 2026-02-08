@@ -1,3 +1,4 @@
+from typing import Sequence
 from agentia.spec import *
 
 

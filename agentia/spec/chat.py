@@ -1,9 +1,9 @@
 from enum import Enum
 import inspect
-from typing import Type
+from typing import Annotated, Any, Literal, Sequence, Type
 from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
-from pydantic import RootModel
+from pydantic import AliasChoices, BaseModel, Field, JsonValue
 
 
 class MessageBase(BaseModel):
@@ -87,6 +87,9 @@ class MessagePartFile(MessagePartBase):
         serialization_alias="providerOptions",
     )
 
+    def to_url(self) -> str:
+        return File(data=self.data, media_type=self.media_type).to_url()
+
 
 class MessagePartToolCall(MessagePartBase):
     type: Literal["tool-call"] = "tool-call"
@@ -139,16 +142,11 @@ type MessagePart = Annotated[
 ]
 
 type UserMessagePart = Annotated[
-    MessagePartText | MessagePartFile,
-    Field(discriminator="type"),
+    MessagePartText | MessagePartFile, Field(discriminator="type")
 ]
 
 type AssistantMessagePart = Annotated[
-    MessagePartText
-    | MessagePartReasoning
-    | MessagePartFile
-    | MessagePartToolCall
-    | MessagePartToolResult,
+    MessagePartText | MessagePartReasoning | MessagePartToolCall,
     Field(discriminator="type"),
 ]
 
@@ -169,7 +167,6 @@ class UserMessage(MessageBase):
         role: Literal["user"] = "user",
         provider_options: ProviderOptions | None = None,
     ):
-        print("UserMessage __init__ called with content:", content)
         super().__init__(role=role, content=content, provider_options=provider_options)
 
     @property
@@ -324,4 +321,29 @@ class ResponseFormatJson(BaseModel):
 
 type ResponseFormat = Annotated[
     ResponseFormatText | ResponseFormatJson, Field(discriminator="type")
+]
+
+
+__all__ = [
+    "MessageBase",
+    "SystemMessage",
+    "MessagePartBase",
+    "MessagePartText",
+    "MessagePartReasoning",
+    "MessagePartFile",
+    "MessagePartToolCall",
+    "MessagePartToolResult",
+    "MessagePart",
+    "UserMessagePart",
+    "AssistantMessagePart",
+    "UserMessage",
+    "ObjectType",
+    "AssistantMessage",
+    "ToolMessage",
+    "Message",
+    "NonSystemMessage",
+    "Prompt",
+    "ResponseFormatText",
+    "ResponseFormatJson",
+    "ResponseFormat",
 ]

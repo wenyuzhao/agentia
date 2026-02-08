@@ -1,11 +1,8 @@
-from datetime import datetime
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Sequence, TypeGuard
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from pydantic import AliasChoices, BaseModel, Field, JsonValue, HttpUrl
 
-if TYPE_CHECKING:
-    from ..llm.stream import TextStream
 
-type ProviderOptions = dict[str, dict[str, JsonValue]]
+type ProviderOptions = dict[str, JsonValue]
 type ProviderMetadata = dict[str, dict[str, JsonValue]]
 
 
@@ -16,30 +13,7 @@ type FinishReason = Literal[
 ]
 
 
-class ToolChoiceAuto(BaseModel):
-    type: Literal["auto"] = "auto"
-
-
-class ToolChoiceNone(BaseModel):
-    type: Literal["none"] = "none"
-
-
-class ToolChoiceRequired(BaseModel):
-    type: Literal["required"] = "required"
-
-
-class ToolChoiceSpecific(BaseModel):
-    type: Literal["tool"] = "tool"
-    tool_name: str = Field(
-        validation_alias=AliasChoices("toolName", "tool_name"),
-        serialization_alias="toolName",
-    )
-
-
-type ToolChoice = Annotated[
-    ToolChoiceAuto | ToolChoiceNone | ToolChoiceRequired | ToolChoiceSpecific,
-    Field(discriminator="type"),
-]
+type ToolChoice = Literal["auto", "none", "required"] | str
 
 
 class Usage(BaseModel):
@@ -112,7 +86,7 @@ class ProviderDefinedTool(BaseModel):
     type: Literal["provider-defined"] = "provider-defined"
     id: str
     name: str
-    args: dict[str, JsonValue]
+    args: dict[str, JsonValue] = Field(default_factory=dict)
 
     def to_openai_schema(self) -> Any:
         return {"type": self.id, **self.args}
@@ -225,7 +199,7 @@ class File(BaseModel):
     @see https://www.iana.org/assignments/media-types/media-types.xhtml
     """
 
-    data: str | bytes
+    data: DataContent
     """
     Generated file data as base64 encoded strings or binary data.
 
@@ -235,10 +209,21 @@ class File(BaseModel):
     be returned as binary data.
     """
 
+    def to_url(self) -> str:
+        if isinstance(self.data, bytes):
+            import base64
 
-class URLCitation(BaseModel):
+            return (
+                f"data:{self.media_type};base64,{base64.b64encode(self.data).decode()}"
+            )
+        elif isinstance(self.data, str):
+            return self.data
+        else:
+            return str(self.data)
+
+
+class Annotation(BaseModel):
     type: Literal["annotation"] = "annotation"
-    annotation_type: Literal["url"] = "url"
 
     end: int
     """The index of the last character of the URL citation in the message."""
@@ -253,16 +238,18 @@ class URLCitation(BaseModel):
     """The URL of the web resource."""
 
 
-type Annotation = Annotated[URLCitation, Field(discriminator="type")]
-
-# __all__ = [
-#     "StreamPartTextStart",
-#     "StreamPartTextDelta",
-#     "StreamPartTextEnd",
-#     "StreamPartReasoningStart",
-#     "StreamPartReasoningDelta",
-#     "StreamPartReasoningEnd",
-#     "StreamPartStreamStart",
-#     "StreamPartStreamEnd",
-#     "StreamPart",
-# ]
+__all__ = [
+    "ProviderOptions",
+    "ProviderMetadata",
+    "DataContent",
+    "FinishReason",
+    "ToolChoice",
+    "Usage",
+    "FunctionTool",
+    "ProviderDefinedTool",
+    "Tool",
+    "ToolCall",
+    "ToolResult",
+    "File",
+    "Annotation",
+]

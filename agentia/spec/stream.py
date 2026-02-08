@@ -108,21 +108,20 @@ type StreamPart = Annotated[
     | StreamPartReasoningEnd
     | ToolCall
     | ToolResult
-    | File
     | Annotation
     | StreamPartStreamStart
     | StreamPartStreamEnd,
     Field(discriminator="type"),
 ]
 
-# __all__ = [
-#     "StreamPartTextStart",
-#     "StreamPartTextDelta",
-#     "StreamPartTextEnd",
-#     "StreamPartReasoningStart",
-#     "StreamPartReasoningDelta",
-#     "StreamPartReasoningEnd",
-#     "StreamPartStreamStart",
-#     "StreamPartStreamEnd",
-#     "StreamPart",
-# ]
+__all__ = [
+    "StreamPartTextStart",
+    "StreamPartTextDelta",
+    "StreamPartTextEnd",
+    "StreamPartReasoningStart",
+    "StreamPartReasoningDelta",
+    "StreamPartReasoningEnd",
+    "StreamPartStreamStart",
+    "StreamPartStreamEnd",
+    "StreamPart",
+]

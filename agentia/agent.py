@@ -1,22 +1,15 @@
 import os
-from pathlib import Path
-from typing import Literal, Sequence, Union, overload
-
+from typing import Literal, Sequence, overload
+import logging
 import uuid
-
 from agentia.history import History
-from agentia.llm import LLM, GenerationOptions
+from agentia.llm import LLM, LLMOptions, LLMOptionsDict
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
-from agentia.spec import (
-    NonSystemMessage,
-    UserMessage,
-    MessagePartText,
-    ObjectType,
-)
-import logging
+from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
+from dataclasses import asdict
 
 
 class Agent:
@@ -29,16 +22,19 @@ class Agent:
         icon: str | None = None,
         description: str | None = None,
         instructions: str | None = None,
-        options: GenerationOptions | None = None,
+        options: LLMOptionsDict | None = None,
     ) -> None:
         self.id = str(id or uuid.uuid4())
         self.name = name
         self.icon = icon
         self.description = description
-        options = options or GenerationOptions()
+        self.options = (
+            LLMOptions(**options)
+            if isinstance(options, dict)
+            else (options or LLMOptions())
+        )
         if tools:
-            options["tools"] = ToolSet(tools)
-        self.options = options
+            self.options.tools = ToolSet(tools)
         if not model:
             model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
         self.llm = LLM(model)
@@ -66,6 +62,7 @@ class Agent:
         /,
         stream: Literal[False] = False,
         events: Literal[False] = False,
+        options: LLMOptionsDict | None = None,
     ) -> ChatCompletion: ...
 
     @overload
@@ -75,6 +72,7 @@ class Agent:
         /,
         stream: Literal[True],
         events: Literal[False] = False,
+        options: LLMOptionsDict | None = None,
     ) -> ChatCompletionStream: ...
 
     @overload
@@ -84,6 +82,7 @@ class Agent:
         /,
         stream: Literal[True],
         events: Literal[True],
+        options: LLMOptionsDict | None = None,
     ) -> ChatCompletionEvents: ...
 
     def run(
@@ -92,13 +91,25 @@ class Agent:
         /,
         stream: bool = False,
         events: bool = False,
+        options: LLMOptionsDict | None = None,
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
         self.__add_prompt(prompt)
+        options_merged = LLMOptions()
+        for k, v in asdict(self.options).items():
+            setattr(options_merged, k, v)
+        if options:
+            options_dict = (
+                asdict(options) if isinstance(options, LLMOptions) else options
+            )
+            for k, v in options_dict.items():
+                setattr(options_merged, k, v)
         if stream:
-            x = self.llm.stream(self.history.get(), events=events, options=self.options)
+            x = self.llm.stream(
+                self.history.get(), events=events, options=options_merged
+            )
         else:
             assert not events, "events=True is only supported with stream=True"
-            x = self.llm.generate(self.history.get(), options=self.options)
+            x = self.llm.generate(self.history.get(), options=options_merged)
 
         def on_finish():
             for m in x.new_messages:

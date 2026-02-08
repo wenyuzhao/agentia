@@ -1,4 +1,4 @@
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Literal
 
 from agentia.llm.completion import Listeners, async_gen_to_sync
 from agentia.spec import *
@@ -88,7 +88,9 @@ class ChatCompletionStream(ChatCompletionStreamBase):
 
     def __aiter__(
         self,
-    ) -> AsyncGenerator[ReasoningStream | MessageStream | ToolCall | ToolResult, None]:
+    ) -> AsyncGenerator[
+        ReasoningStream | MessageStream | ToolCall | ToolResult | Annotation, None
+    ]:
         return self.__gen
 
     async def __wait_for_completion(self) -> AssistantMessage:

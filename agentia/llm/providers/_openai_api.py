@@ -1,13 +1,15 @@
 import base64
 from collections.abc import AsyncGenerator
+from datetime import datetime
 import json
 import os
-from typing import Any, override
+from typing import Any, Literal, Sequence, override
 from uuid import uuid4
 import httpx
+from pydantic import HttpUrl
 
 from agentia.tools.tools import ToolSet
-from . import GenerationOptions, GenerationResult, Provider
+from . import LLMOptions, GenerationResult, Provider
 
 from ...spec import *
 from openai.types.chat import (
@@ -203,10 +205,23 @@ class OpenAIAPIProvider(Provider):
                 r.append(ChatCompletionUserMessageParam(role="user", content=parts))
             elif m.role == "assistant":
                 text = ""
+                reasoning = ""
+                images: list[Any] = []
                 tool_calls: list[ChatCompletionMessageToolCallParam] = []
                 for i, p in enumerate(m.content_list):
                     if p.type == "text":
                         text += p.text
+                    elif p.type == "reasoning":
+                        reasoning += p.text
+                    elif p.type == "file":
+                        if p.media_type.startswith("image/"):
+                            images.append(
+                                {"type": "image_url", "image_url": {"url": p.to_url()}}
+                            )
+                        else:
+                            raise ValueError(
+                                f"Only image files are supported in assistant messages, got media type {p.media_type}"
+                            )
                     elif p.type == "tool-call":
                         tool_calls.append(
                             {
@@ -218,13 +233,16 @@ class OpenAIAPIProvider(Provider):
                                 },
                             }
                         )
-                r.append(
-                    ChatCompletionAssistantMessageParam(
-                        role="assistant",
-                        content=text if text else None,
-                        tool_calls=tool_calls,
-                    )
+                p = ChatCompletionAssistantMessageParam(
+                    role="assistant",
+                    content=text if text else None,
+                    tool_calls=tool_calls,
                 )
+                if reasoning:
+                    p["reasoning"] = reasoning  # type: ignore
+                if images:
+                    p["images"] = images  # type: ignore
+                r.append(p)
             elif m.role == "tool":
                 for p in m.content:
                     val = json.dumps(p.output)
@@ -284,17 +302,18 @@ class OpenAIAPIProvider(Provider):
                     )
         if not tool_choice:
             return oai_tools, None
-        match tool_choice.type:
+        match tool_choice:
             case "none":
                 return oai_tools, "none"
             case "auto":
                 return oai_tools, "auto"
             case "required":
                 return oai_tools, "required"
-            case "tool":
+            case _:
+                assert isinstance(tool_choice, str)
                 tc: ChatCompletionToolChoiceOptionParam = {
                     "type": "function",
-                    "function": {"name": tool_choice.tool_name},
+                    "function": {"name": tool_choice},
                 }
                 return oai_tools, tc
 
@@ -318,10 +337,10 @@ class OpenAIAPIProvider(Provider):
         )
 
     def _prepare_args(
-        self, prompt: Prompt, tool_set: ToolSet, options: GenerationOptions
+        self, prompt: Prompt, tool_set: ToolSet, options: LLMOptions
     ) -> dict[str, Any]:
         msgs = self._to_oai_messages(prompt)
-        rf = options.get("response_format", None)
+        rf = options.response_format
         if not rf or rf.type == "text":
             response_format = None
         elif not rf.json_schema:
@@ -337,20 +356,18 @@ class OpenAIAPIProvider(Provider):
                 },
             }
         schema = tool_set.get_schema()
-        tools, tool_choice = self._prepare_tools(
-            schema, options.get("tool_choice", None)
-        )
+        tools, tool_choice = self._prepare_tools(schema, options.tool_choice)
         args: dict[str, Any] = {
             "model": self.model,
             "messages": msgs,
-            "temperature": options.get("temperature", None),
-            "top_p": options.get("top_p", None),
-            "max_tokens": options.get("max_output_tokens", None),
-            "frequency_penalty": options.get("frequency_penalty", None),
-            "presence_penalty": options.get("presence_penalty", None),
+            "temperature": options.temperature,
+            "top_p": options.top_p,
+            "max_tokens": options.max_output_tokens,
+            "frequency_penalty": options.frequency_penalty,
+            "presence_penalty": options.presence_penalty,
             "response_format": response_format,
-            "stop": options.get("stop_sequences", None),
-            "seed": options.get("seed", None),
+            "stop": options.stop_sequences,
+            "seed": options.seed,
             "tools": tools,
             "tool_choice": tool_choice,
         }
@@ -359,12 +376,18 @@ class OpenAIAPIProvider(Provider):
                 del args[k]
         return args
 
+    def _get_extra_body(self, options: LLMOptions) -> dict[str, Any]:
+        body: dict[str, Any] = {}
+        if options.provider_options:
+            body.update(options.provider_options)
+        return body
+
     @override
     async def do_generate(
         self,
         prompt: Prompt,
         tool_set: ToolSet,
-        options: GenerationOptions,
+        options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> GenerationResult:
         args = self._prepare_args(prompt, tool_set, options)
@@ -375,7 +398,7 @@ class OpenAIAPIProvider(Provider):
         response = await self.client(client).chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
-            extra_body=self.extra_body,
+            extra_body=self._get_extra_body(options),
             stream=False,
             timeout=timeout,
         )
@@ -409,29 +432,13 @@ class OpenAIAPIProvider(Provider):
             if not annotations:
                 annotations = []
             annotations.append(
-                URLCitation(
+                Annotation(
                     title=a.url_citation.title,
                     url=a.url_citation.url,
                     start=a.url_citation.start_index,
                     end=a.url_citation.end_index,
                 )
             )
-
-        if images := getattr(choice.message, "images", []):
-            for i in images:
-                if i["type"] == "image_url":
-                    url = i["image_url"]["url"]
-                    media_type = None
-                    if url.startswith("data:"):
-                        media_type = url.split(";")[0][5:]
-                    elif url.startswith("http://") or url.startswith("https://"):
-                        if url.lower().endswith(
-                            (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
-                        ):
-                            media_type = "image/" + url.split(".")[-1].lower()
-                    parts.append(
-                        MessagePartFile(media_type=media_type or "image/png", data=url)
-                    )
 
         return GenerationResult(
             message=AssistantMessage(content=parts, annotations=annotations),
@@ -446,7 +453,7 @@ class OpenAIAPIProvider(Provider):
         self,
         prompt: Prompt,
         tool_set: ToolSet,
-        options: GenerationOptions,
+        options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
         args = self._prepare_args(prompt, tool_set, options)
@@ -457,7 +464,7 @@ class OpenAIAPIProvider(Provider):
         response = await self.client(client).chat.completions.create(
             **args,
             extra_headers=self.extra_headers,
-            extra_body=self.extra_body,
+            extra_body=self._get_extra_body(options),
             stream=True,
             stream_options={
                 "include_usage": True,

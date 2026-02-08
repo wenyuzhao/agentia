@@ -17,27 +17,14 @@ from dotenv import load_dotenv
 from . import utils
 
 from .agent import Agent
-from .spec import (
-    Message,
-    UserMessage,
-    AssistantMessage,
-    SystemMessage,
-    MessagePart,
-    MessagePartText,
-    MessagePartFile,
-    MessagePartReasoning,
-    MessagePartToolCall,
-    MessagePartToolResult,
-    StreamPart,
-    ToolCall,
-    ToolResult,
-)
+from .spec import *
 from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError, register_plugin, ALL_PLUGINS
 from . import llm, plugins
 from .tools import ProviderTool, Tool, Tools, MCPServer, MCPContext, mcp_context
 from .history import History
+from .llm import LLMOptions
 from .llm.completion import ChatCompletion
 from .llm.stream import (
     TextStream,
@@ -62,20 +49,51 @@ __all__ = [
     "MessageStream",
     "ChatCompletionStream",
     "ChatCompletionEvents",
+    "LLMOptions",
     # spec
-    "Message",
-    "SystemMessage",
-    "UserMessage",
-    "AssistantMessage",
-    "MessagePart",
-    "MessagePartText",
-    "MessagePartFile",
-    "MessagePartReasoning",
-    "MessagePartToolCall",
-    "MessagePartToolResult",
-    "StreamPart",
+    "ProviderOptions",
+    "ProviderMetadata",
+    "DataContent",
+    "FinishReason",
+    "ToolChoice",
+    "Usage",
+    "FunctionTool",
+    "ProviderDefinedTool",
+    "Tool",
     "ToolCall",
     "ToolResult",
+    "File",
+    "Annotation",
+    "MessageBase",
+    "SystemMessage",
+    "MessagePartBase",
+    "MessagePartText",
+    "MessagePartReasoning",
+    "MessagePartFile",
+    "MessagePartToolCall",
+    "MessagePartToolResult",
+    "MessagePart",
+    "UserMessagePart",
+    "AssistantMessagePart",
+    "UserMessage",
+    "ObjectType",
+    "AssistantMessage",
+    "ToolMessage",
+    "Message",
+    "NonSystemMessage",
+    "Prompt",
+    "ResponseFormatText",
+    "ResponseFormatJson",
+    "ResponseFormat",
+    "StreamPartTextStart",
+    "StreamPartTextDelta",
+    "StreamPartTextEnd",
+    "StreamPartReasoningStart",
+    "StreamPartReasoningDelta",
+    "StreamPartReasoningEnd",
+    "StreamPartStreamStart",
+    "StreamPartStreamEnd",
+    "StreamPart",
     # plugins
     "Plugin",
     "PluginInitError",

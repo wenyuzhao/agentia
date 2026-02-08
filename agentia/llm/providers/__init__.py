@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 import httpx
-from agentia.llm import GenerationOptions
+from agentia.llm import LLMOptions
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
 from agentia.spec.stream import StreamPart
@@ -47,7 +47,7 @@ class Provider(abc.ABC):
         self,
         prompt: spec.Prompt,
         tool_set: ToolSet,
-        options: GenerationOptions,
+        options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> GenerationResult: ...
 
@@ -56,6 +56,6 @@ class Provider(abc.ABC):
         self,
         prompt: spec.Prompt,
         tool_set: ToolSet,
-        options: GenerationOptions,
+        options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]: ...

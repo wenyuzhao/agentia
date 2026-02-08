@@ -18,13 +18,14 @@ from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
 from agentia.spec.chat import ObjectType
 from agentia.spec.stream import *
 from agentia.tools.tools import ToolSet, Tool
+from dataclasses import dataclass
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
     from agentia.llm.providers import Provider
 
 
-class GenerationOptions(TypedDict, total=False):
+class LLMOptionsDict(TypedDict, total=False):
     max_output_tokens: int | None
     temperature: float | None
     stop_sequences: Sequence[str] | None
@@ -32,11 +33,30 @@ class GenerationOptions(TypedDict, total=False):
     top_k: int | None
     presence_penalty: float | None
     frequency_penalty: float | None
-    response_format: spec.ResponseFormat | None
     seed: int | None
     tool_choice: spec.ToolChoice | None
     provider_options: spec.ProviderOptions | None
+    response_format: spec.ResponseFormat | None
     tools: Sequence[Tool] | ToolSet | None
+
+
+@dataclass
+class LLMOptions:
+    max_output_tokens: int | None = None
+    temperature: float | None = None
+    stop_sequences: Sequence[str] | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    seed: int | None = None
+    tool_choice: spec.ToolChoice | None = None
+    provider_options: spec.ProviderOptions | None = None
+    response_format: spec.ResponseFormat | None = None
+    tools: Sequence[Tool] | ToolSet | None = None
+
+
+type LLMOptionsUnion = LLMOptions | LLMOptionsDict
 
 
 def get_provider(selector: str) -> "Provider":
@@ -126,13 +146,13 @@ class LLM:
             msg = None
         return tm, tr, msg
 
-    async def __init_tools(self, options: GenerationOptions | None) -> ToolSet:
-        if options is None or "tools" not in options or options["tools"] is None:
+    async def __init_tools(self, options: LLMOptions) -> ToolSet:
+        if not options.tools:
             tools = ToolSet([])
-        elif isinstance(options["tools"], ToolSet):
-            tools = options["tools"]
+        elif isinstance(options.tools, ToolSet):
+            tools = options.tools
         else:
-            tools = ToolSet(options["tools"])
+            tools = ToolSet(options.tools)
         await tools.init(self, self._agent)
         return tools
 
@@ -140,7 +160,7 @@ class LLM:
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         type: type[T],
-        options: GenerationOptions | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> T:
         msgs = await self._generate_object_impl(prompt, type, options)
         assert isinstance(msgs[-1], spec.AssistantMessage)
@@ -150,10 +170,17 @@ class LLM:
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
         return_type: type[T],
-        options: GenerationOptions | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> list[spec.Message]:
-        options = options or {}
-        options["response_format"] = spec.ResponseFormatJson.from_model(return_type)
+        options = (
+            LLMOptions(**options)
+            if isinstance(options, dict)
+            else (options or LLMOptions())
+        )
+        assert (
+            options.response_format is None
+        ), "response_format is not supported in generate_object"
+        options.response_format = spec.ResponseFormatJson.from_model(return_type)
         r = self.generate(prompt, options=options)
         await r
         return r.new_messages
@@ -161,9 +188,13 @@ class LLM:
     def generate(
         self,
         prompt: str | spec.Message | Sequence[spec.Message],
-        options: GenerationOptions | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletion:
-        options = options or {}
+        options = (
+            LLMOptions(**options)
+            if isinstance(options, dict)
+            else (options or LLMOptions())
+        )
 
         async def gen() -> (
             AsyncGenerator[spec.AssistantMessage | spec.ToolMessage, None]
@@ -203,7 +234,7 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: Literal[False] = False,
-        options: GenerationOptions | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletionStream: ...
 
     @overload
@@ -212,7 +243,7 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: Literal[True],
-        options: GenerationOptions | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletionEvents: ...
 
     def stream(
@@ -220,9 +251,13 @@ class LLM:
         prompt: str | spec.Message | Sequence[spec.Message],
         /,
         events: bool = False,
-        options: GenerationOptions | None = None,
+        options: LLMOptionsUnion | None = None,
     ) -> ChatCompletionStream | ChatCompletionEvents:
-        options = options or {}
+        options = (
+            LLMOptions(**options)
+            if isinstance(options, dict)
+            else (options or LLMOptions())
+        )
 
         async def gen() -> AsyncGenerator[StreamPart, None]:
             tools = await self.__init_tools(options)
@@ -232,7 +267,7 @@ class LLM:
             async with httpx.AsyncClient() as client:
                 while True:
                     tool_calls: list[spec.ToolCall] = []
-                    parts: list[spec.MessagePart] = []
+                    parts: list[spec.AssistantMessagePart] = []
                     last_msg = ""
                     last_reasoning = ""
                     async for part in self._provider.do_stream(
@@ -255,12 +290,6 @@ class LLM:
                             case "reasoning-end":
                                 parts.append(
                                     spec.MessagePartReasoning(text=last_reasoning)
-                                )
-                            case "file":
-                                parts.append(
-                                    spec.MessagePartFile(
-                                        data=part.data, media_type=part.media_type
-                                    )
                                 )
                             case "tool-call":
                                 parts.append(
