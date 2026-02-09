@@ -6,11 +6,11 @@ from markdownify import markdownify
 from tavily import AsyncTavilyClient
 
 
-class WebPlugin(Plugin):
+class Web(Plugin):
     def __init__(self, tavily_api_key: str | None = None):
         api_key = tavily_api_key or os.environ.get("TAVILY_API_KEY")
         if not api_key:
-            raise ValueError("TAVILY_API_KEY is required for WebPlugin")
+            raise ValueError("TAVILY_API_KEY is required for Web")
         self.__tavily = AsyncTavilyClient(api_key=api_key)
 
     async def __get(self, url: str):

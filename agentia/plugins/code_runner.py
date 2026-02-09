@@ -1,11 +1,10 @@
 from contextlib import redirect_stderr
-from . import Plugin
-from .. import tool
+from . import Plugin, tool
 from typing import Annotated
 import traceback
 
 
-class CodePlugin(Plugin):
+class CodeRunner(Plugin):
     @tool
     def execute(self, python_code: Annotated[str, "The python code to run."]):
         """Execute python code and return the result. The expression must be an valid python expression that can be execuated by `eval()`."""

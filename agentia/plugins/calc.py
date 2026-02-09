@@ -1,9 +1,8 @@
-from . import Plugin
-from . import tool
+from . import Plugin, tool
 from typing import Annotated
 
 
-class CalculatorPlugin(Plugin):
+class Calculator(Plugin):
     @tool
     def evaluate(
         self,

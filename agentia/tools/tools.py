@@ -226,7 +226,7 @@ class ToolSet:
     def __add_mcp_server(self, server: MCP):
         self.mcp_servers[server.name] = server
 
-    def get_plugin(self, type: type["Plugin"]) -> Optional["Plugin"]:
+    def get_plugin[T: "Plugin"](self, type: type[T]) -> Optional[T]:
         for p in self.plugins.values():
             if isinstance(p, type):
                 return p

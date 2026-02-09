@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from pydantic import BaseModel
 import pydantic
 from . import Plugin, tool
@@ -16,7 +15,7 @@ class MemoryRecord(BaseModel):
 type MemoryRecords = list[MemoryRecord]
 
 
-class MemoryPlugin(Plugin):
+class Memory(Plugin):
     def __init__(self, file: str | Path):
         super().__init__()
         file = Path(file)

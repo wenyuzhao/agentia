@@ -1,9 +1,8 @@
 import datetime
-from . import Plugin
-from .. import tool
+from . import Plugin, tool
 
 
-class ClockPlugin(Plugin):
+class Clock(Plugin):
     @tool
     def get_current_utc_time(self):
         """Get the current UTC time in ISO format"""

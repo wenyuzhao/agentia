@@ -2,7 +2,7 @@ from . import Plugin, tool
 from pathlib import Path
 from typing import Any, Sequence, override
 import frontmatter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import subprocess
 import os
 
@@ -27,13 +27,22 @@ class Skill(BaseModel):
     name: str
     description: str
     instructions: str
-    resource_paths: list[str] = []
-    script_paths: list[str] = []
+    resource_paths: list[str] = Field(default_factory=list)
+    script_paths: list[str] = Field(default_factory=list)
     loaded: bool = False
 
     def to_dict(self) -> dict[str, Any]:
+        resource_paths: list[str | dict[str, Any]] = []
+        for r in self.resource_paths:
+            if r.lower().endswith((".md", ".markdown")):
+                content = (self.path / r).read_text(encoding="utf-8")
+                post = frontmatter.loads(content)
+                resource_paths.append({"path": r, **post.metadata})
+            else:
+                resource_paths.append(r)
         doc = self.model_dump()
         del doc["path"]
+        doc["resource_paths"] = resource_paths
         return doc
 
     def load_resource(self, rel_path: str) -> str:
@@ -74,6 +83,11 @@ class Skills(Plugin):
             for skill in self.__load_skill_recursive(path, no_ignore=True):
                 # assert skill.name not in self.skills, f"Duplicate skill name '{skill.name}' found in '{skill.path}'"
                 self.skills[skill.name] = skill
+
+    def add_skill(self, skill: Skill) -> None:
+        if skill.name in self.skills:
+            raise ValueError(f"A skill with the name '{skill.name}' already exists")
+        self.skills[skill.name] = skill
 
     def __load_skill_recursive(self, path: Path, no_ignore=False) -> list[Skill]:
         assert path.is_dir(), f"'{path}' is not a directory"

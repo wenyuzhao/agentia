@@ -110,6 +110,12 @@ class LLM:
         self._provider = get_provider(model)
         self._provider.llm = self
         self._agent: Optional["Agent"] = None
+        self._model = model
+        self._active_tools: ToolSet | None = None
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     def __prepare_messages(
         self, prompt: str | spec.Message | Sequence[spec.Message]
@@ -156,6 +162,7 @@ class LLM:
         else:
             tools = ToolSet(options.tools)
         await tools.init(self, self._agent)
+        self._active_tools = tools
         return tools
 
     async def generate_object[T: ObjectType](

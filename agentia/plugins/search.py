@@ -4,7 +4,7 @@ import os
 from tavily import AsyncTavilyClient
 
 
-class SearchPlugin(Plugin):
+class Search(Plugin):
     def __init__(
         self,
         tavily_api_key: str | None = None,
