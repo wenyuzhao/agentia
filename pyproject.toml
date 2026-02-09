@@ -1,6 +1,6 @@
 [project]
 name = "agentia"
-version = "0.1.16"
+version = "0.1.17"
 description = "Ergonomic LLM Agents"
 authors = [{ name = "Wenyu Zhao", email = "wenyuzhaox@gmail.com" }]
 requires-python = ">=3.12"
@@ -15,13 +15,13 @@ keywords = [
     "openai",
     "openrouter",
     "ai-sdk",
+    "skills",
+    "mcp",
 ]
 dependencies = [
     "fastmcp>=2.14.5",
-    "filelock>=3.18.0",
     "nest-asyncio>=1.6.0",
     "openai>=1.108.1,<2",
-    "pillow>=11.2.1",
     "pydantic>=2.10.4",
     "python-dotenv>=1.0.0,<2",
     "python-frontmatter>=1.1.0",
@@ -31,7 +31,7 @@ dependencies = [
 Repository = "https://github.com/wenyuzhao/agentia"
 
 [project.optional-dependencies]
-plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12"]
+plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12", "filelock>=3.18.0"]
 all = ["agentia[plugins]"]
 
 [dependency-groups]
