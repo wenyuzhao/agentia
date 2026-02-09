@@ -475,7 +475,10 @@ class OpenAIAPIProvider(Provider):
         streaming_text = False
         streaming_reasoning = False
         tool_calls: list[ToolCall | None] = []
+        finished = False
         async for chunk in response:
+            if finished:
+                continue
             if not started:
                 started = True
                 yield StreamPartStreamStart(
@@ -542,4 +545,4 @@ class OpenAIAPIProvider(Provider):
                     usage=self._get_usage(chunk.usage),
                     finish_reason=self._get_finish_reason(choice.finish_reason),
                 )
-                break
+                finished = True
