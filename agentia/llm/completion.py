@@ -1,8 +1,11 @@
 import asyncio
-from typing import Any, AsyncGenerator, Generator
+from typing import Any, AsyncGenerator, Generator, Optional, TYPE_CHECKING
 
 from agentia.spec.base import FinishReason, Usage
 from agentia.spec.chat import AssistantMessage, Message, ToolMessage
+
+if TYPE_CHECKING:
+    from agentia.agent import Agent
 
 
 class Listeners:
@@ -24,14 +27,12 @@ class ChatCompletion:
     def __init__(
         self,
         gen: AsyncGenerator[AssistantMessage | ToolMessage, None],
+        agent: Optional["Agent"],
     ):
         async def __gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
-            from agentia.tools.mcp import MCPContext
-
-            async with MCPContext() as _ctx:
-                async for msg in gen:
-                    yield msg
-                self.on_finish.emit()
+            async for msg in gen:
+                yield msg
+            self._on_finish()
 
         self.__gen = __gen()
         self.usage = Usage()
@@ -39,6 +40,12 @@ class ChatCompletion:
         self.new_messages: list[Message] = []
         self.on_finish = Listeners()
         self.on_new_message = Listeners()
+        self.agent = agent
+
+    def _on_finish(self):
+        self.on_finish.emit()
+        if self.agent:
+            self.agent.emit("finish")
 
     def add_new_message(self, msg: Message):
         self.new_messages.append(msg)

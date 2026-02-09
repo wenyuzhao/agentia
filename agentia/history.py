@@ -26,13 +26,15 @@ class History:
         messages.extend(self.__non_instruction_messages)
         return messages
 
-    def clear(self) -> None:
+    def clear(self, clear_instructions: bool = False) -> None:
         self.__non_instruction_messages = []
+        if clear_instructions:
+            self.__instructions = []
 
     def load(
         self, messages: Sequence[Message], exclude_instructions: bool = False
     ) -> None:
-        self.clear()
+        self.clear(clear_instructions=not exclude_instructions)
         for m in messages:
             if isinstance(m, SystemMessage):
                 if not exclude_instructions:

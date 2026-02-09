@@ -250,7 +250,7 @@ class LLM:
                 self._mcp_context = None
             self._active_tools = None
 
-        c = ChatCompletion(gen_with_mcp_context())
+        c = ChatCompletion(gen_with_mcp_context(), self._agent)
         return c
 
     @overload
@@ -365,7 +365,7 @@ class LLM:
             self._active_tools = None
 
         if events:
-            s = ChatCompletionEvents(gen_with_mcp_context())
+            s = ChatCompletionEvents(gen_with_mcp_context(), self._agent)
         else:
-            s = ChatCompletionStream(gen_with_mcp_context())
+            s = ChatCompletionStream(gen_with_mcp_context(), self._agent)
         return s

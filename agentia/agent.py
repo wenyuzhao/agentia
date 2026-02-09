@@ -5,7 +5,7 @@ import logging
 import uuid
 from agentia.history import History
 from agentia.llm import LLM, LLMOptions, LLMOptionsUnion
-from agentia.llm.completion import ChatCompletion
+from agentia.llm.completion import ChatCompletion, Listeners
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
@@ -16,6 +16,8 @@ from agentia.tools.mcp import MCPContext
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
 
+type Events = Literal["finish"]
+
 
 class Agent:
     def __init__(
@@ -25,7 +27,7 @@ class Agent:
         id: str | None = None,
         instructions: str | None = None,
         options: LLMOptionsUnion | None = None,
-        skills: Sequence[Path | str] | "Skills" | bool | None = None,
+        skills: Sequence[Path | str] | "Skills" | bool = False,
     ) -> None:
         from agentia.plugins.skills import Skills
 
@@ -35,7 +37,7 @@ class Agent:
             if isinstance(options, dict)
             else (options or LLMOptions())
         )
-        if skills:
+        if skills is not False:
             if not tools:
                 tools = []
             if any(isinstance(t, Skills) for t in tools):
@@ -61,6 +63,7 @@ class Agent:
             self.history.add_instructions(self.options.tools.get_instructions())
         self.log = logging.getLogger(f"agentia.agent")
         self._mcp_context: Optional[MCPContext] = None
+        self.__on_finish = Listeners()
 
     def __add_prompt(
         self,
@@ -165,3 +168,32 @@ class Agent:
         assert self._mcp_context is not None
         await self._mcp_context.__aexit__(exc_type, exc_val, exc_tb)
         self._mcp_context = None
+
+    def emit(self, event: Events, *args, **kwargs):
+        match event:
+            case "finish":
+                self.__on_finish.emit()
+
+    def on(self, event: Events, listener=None):
+        if not listener:
+
+            def decorator(func):
+                self.on(event, func)
+                return func
+
+            return decorator
+        match event:
+            case "finish":
+                self.__on_finish.on(listener)
+
+    def off(self, event: Events, listener=None):
+        if not listener:
+
+            def decorator(func):
+                self.off(event, func)
+                return func
+
+            return decorator
+        match event:
+            case "finish":
+                self.__on_finish.off(listener)

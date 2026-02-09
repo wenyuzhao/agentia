@@ -1,7 +1,10 @@
-from typing import AsyncGenerator, Literal
+from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
 from agentia.llm.completion import Listeners, async_gen_to_sync
 from agentia.spec import *
+
+if TYPE_CHECKING:
+    from agentia.agent import Agent
 
 
 class TextStream:
@@ -38,12 +41,18 @@ class MessageStream(TextStream):
 
 
 class ChatCompletionStreamBase:
-    def __init__(self) -> None:
+    def __init__(self, agent: Optional["Agent"]):
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
         self.new_messages: list[Message] = []
         self.on_finish = Listeners()
         self.on_new_message = Listeners()
+        self.agent = agent
+
+    def _on_finish(self):
+        self.on_finish.emit()
+        if self.agent:
+            self.agent.emit("finish")
 
     def add_new_message(self, msg: Message):
         self.new_messages.append(msg)
@@ -51,8 +60,8 @@ class ChatCompletionStreamBase:
 
 
 class ChatCompletionStream(ChatCompletionStreamBase):
-    def __init__(self, gen: AsyncGenerator[StreamPart, None]):
-        super().__init__()
+    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: Optional["Agent"]):
+        super().__init__(agent)
 
         async def __gen() -> (
             AsyncGenerator[
@@ -82,7 +91,7 @@ class ChatCompletionStream(ChatCompletionStreamBase):
                                 break
 
                     yield ReasoningStream(gen2())
-            self.on_finish.emit()
+            self._on_finish()
 
         self.__gen = __gen()
 
@@ -108,13 +117,13 @@ class ChatCompletionStream(ChatCompletionStreamBase):
 
 
 class ChatCompletionEvents(ChatCompletionStreamBase):
-    def __init__(self, gen: AsyncGenerator[StreamPart, None]):
-        super().__init__()
+    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: Optional["Agent"]):
+        super().__init__(agent)
 
         async def __gen():
             async for part in gen:
                 yield part
-            self.on_finish.emit()
+            self._on_finish()
 
         self.__gen = __gen()
 
