@@ -218,7 +218,9 @@ class LLM:
                         break
                     # Call tools and continue
                     tool_msg, _, extra_msg = await self.__process_tool_calls(
-                        tool_calls, tools=tools, parallel=options.parallel_tool_calls
+                        tool_calls,
+                        tools=tools,
+                        parallel=options.parallel_tool_calls or False,
                     )
                     yield tool_msg
                     messages.append(tool_msg)
@@ -325,7 +327,9 @@ class LLM:
                         break
                     # Call tools and continue
                     tool_msg, tool_results, extra_msg = await self.__process_tool_calls(
-                        tool_calls, tools=tools, parallel=options.parallel_tool_calls
+                        tool_calls,
+                        tools=tools,
+                        parallel=options.parallel_tool_calls or False,
                     )
                     for tr in tool_results:
                         yield tr
