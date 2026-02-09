@@ -73,6 +73,47 @@ class SkillInfo(BaseModel):
         description="(Optional, only when applicable) A list of reference documents for the skill (as appendix or supplementary materials), if any.",
     )
 
+    def save(self, name: str, out: Path) -> Skill:
+        out.mkdir(parents=True, exist_ok=True)
+
+        if any(out.iterdir()):
+            raise ValueError(f"Output directory '{out}' is not empty")
+
+        assert out.is_dir(), f"Output path '{out}' must be a directory"
+        skills_md = frontmatter.dumps(
+            frontmatter.Post(
+                content=self.readme, name=name, description=self.description
+            )
+        )
+        (out / "SKILL.md").write_text(skills_md, encoding="utf-8")
+        if self.scripts:
+            (out / "scripts").mkdir(exist_ok=True)
+        for f in self.scripts:
+            if not f.name.endswith(".py"):
+                f.name += ".py"
+            (out / "scripts" / f.name).write_text(f.content, encoding="utf-8")
+        if self.reference_docs:
+            (out / "references").mkdir(exist_ok=True)
+        for r in self.reference_docs:
+            if not r.name.endswith(".md"):
+                r.name += ".md"
+            doc = frontmatter.dumps(
+                frontmatter.Post(
+                    content=r.content, name=r.name, description=r.description
+                )
+            )
+            (out / "references" / r.name).write_text(doc, encoding="utf-8")
+
+        skill = Skill(
+            path=out,
+            name=name,
+            description=self.description,
+            instructions=self.readme,
+            script_paths=[f.name for f in self.scripts],
+            resource_paths=[f.name for f in self.reference_docs],
+        )
+        return skill
+
 
 async def learn_skill_from_documents(
     docs: Sequence[Path | str], name: str, prompt: str, out: Path, model: str
@@ -138,41 +179,6 @@ async def learn_skill_from_documents(
 
     skill_info = await agent.generate_object(UserMessage(parts), SkillInfo)
 
-    out.mkdir(parents=True, exist_ok=True)
-
-    if any(out.iterdir()):
-        raise ValueError(f"Output directory '{out}' is not empty")
-
-    assert out.is_dir(), f"Output path '{out}' must be a directory"
-    skills_md = frontmatter.dumps(
-        frontmatter.Post(
-            content=skill_info.readme, name=name, description=skill_info.description
-        )
-    )
-    (out / "SKILL.md").write_text(skills_md, encoding="utf-8")
-    if skill_info.scripts:
-        (out / "scripts").mkdir(exist_ok=True)
-    for f in skill_info.scripts:
-        if not f.name.endswith(".py"):
-            f.name += ".py"
-        (out / "scripts" / f.name).write_text(f.content, encoding="utf-8")
-    if skill_info.reference_docs:
-        (out / "references").mkdir(exist_ok=True)
-    for r in skill_info.reference_docs:
-        if not r.name.endswith(".md"):
-            r.name += ".md"
-        doc = frontmatter.dumps(
-            frontmatter.Post(content=r.content, name=r.name, description=r.description)
-        )
-        (out / "references" / r.name).write_text(doc, encoding="utf-8")
-
-    skill = Skill(
-        path=out,
-        name=name,
-        description=skill_info.description,
-        instructions=skill_info.readme,
-        script_paths=[f.name for f in skill_info.scripts],
-        resource_paths=[f.name for f in skill_info.reference_docs],
-    )
+    skill = skill_info.save(name=name, out=out)
 
     return skill

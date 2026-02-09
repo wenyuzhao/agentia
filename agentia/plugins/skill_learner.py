@@ -1,4 +1,5 @@
 from pathlib import Path
+from agentia.utils.skill_learner import SkillInfo
 from . import Plugin, tool
 from typing import Annotated
 
@@ -8,6 +9,36 @@ class SkillLearner(Plugin):
         if save_dir is None:
             save_dir = Path.cwd() / ".skills"
         self.save_dir = Path(save_dir)
+
+    @tool(name="generate_skill")
+    async def generate_skill(
+        self,
+        name: Annotated[
+            str,
+            "The name of the skill. lowercase, no space, hyphen separated. Must be unique among all skills.",
+        ],
+        skill: SkillInfo,
+    ):
+        """
+        Create/generate a skill based on your prior knowledge. The skills can then be reused either by you or other LLMs to solve problems or offer guidance within the scope of the skill.
+        """
+        from agentia.plugins.skills import Skills
+
+        assert self.llm and self.llm._active_tools
+        existing_skills: set[str] = set()
+        skills: Skills | None = self.llm._active_tools.get_plugin(Skills)
+        if skills:
+            existing_skills = set(skills.skills.keys())
+
+        s = skill.save(name=name, out=self.save_dir / name)
+
+        if name in existing_skills:
+            raise ValueError(f"A skill with the name '{name}' already exists")
+
+        if skills:
+            skills.add_skill(s)
+
+        return {"name": s.name, "description": s.description, "loaded": False}
 
     @tool(name="learn_skill_from_documents")
     async def learn_skill_from_documents(
