@@ -14,7 +14,7 @@ def calc(expression: Annotated[str, "The expression to calculate"]):
 @pytest.mark.asyncio
 async def test_events():
     agent = Agent(model="openai/gpt-5-nano", tools=[calc])
-    run = agent.run("Calculate 1 + 1", stream=True, events=True)
+    run = agent.run("Use tools to calculate 1 + 1", stream=True, events=True)
     tool_call_part = None
     tool_result_part = None
     async for e in run:

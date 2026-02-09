@@ -1,5 +1,5 @@
+import asyncio
 import inspect
-import json
 import os
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
@@ -266,7 +266,7 @@ class ToolSet:
         tool: _PythonFunctionTool,
         llm: "LLM",
         args: Any,
-    ) -> tuple[spec.ToolMessage, spec.ToolResult, FileResult | None]:
+    ) -> tuple[spec.ToolResult, FileResult | None]:
         p_args, kw_args = tool.process_json_args(llm, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
@@ -296,78 +296,70 @@ class ToolSet:
                     del output["data"]
                 output["hint"] = "The tool outputed a file with the given file_id."
 
-        tm = spec.ToolMessage(
-            content=[
-                spec.MessagePartToolResult(
-                    tool_call_id=id, tool_name=tool.name, output=output
-                )
-            ]
-        )
-        tr = spec.ToolResult(
-            tool_call_id=id,
-            tool_name=tool.name,
-            result=output,
-        )
-        return tm, tr, file
+        tr = spec.ToolResult(tool_call_id=id, tool_name=tool.name, result=output)
+        return tr, file
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: Any
-    ) -> tuple[spec.ToolMessage, spec.ToolResult]:
+    ) -> spec.ToolResult:
         result = await tool.server.run(tool.name, args)
-        tm = spec.ToolMessage(
-            content=[
-                spec.MessagePartToolResult(
-                    tool_call_id=id, tool_name=tool.name, output=result
+        tr = spec.ToolResult(tool_call_id=id, tool_name=tool.name, result=result)
+        return tr
+
+    async def __run_one(
+        self, llm: "LLM", c: spec.ToolCall
+    ) -> tuple[spec.ToolResult, FileResult | None]:
+        tool = self.__tools.get(c.tool_name, None)
+        if not tool:
+            raise ValueError(f"Tool {c.tool_name} not found")
+        try:
+            if isinstance(tool, _PythonFunctionTool):
+                result, file = await self.__run_python_tool(
+                    id=c.tool_call_id,
+                    tool=tool,
+                    llm=llm,
+                    args=c.input,
                 )
-            ]
-        )
-        tr = spec.ToolResult(
-            tool_call_id=id,
-            tool_name=tool.name,
-            result=result,
-        )
-        return tm, tr
+                return result, file
+            elif isinstance(tool, _MCPTool):
+                result = await self.__run_mcp_tool(
+                    id=c.tool_call_id,
+                    tool=tool,
+                    args=c.input,
+                )
+                return result, None
+            else:
+                raise ValueError(f"Tool {c.tool_name} is of unknown type")
+        except Exception as e:
+            output: JsonValue = {"error": str(e)}
+            r = spec.ToolResult(
+                tool_call_id=c.tool_call_id, tool_name=c.tool_name, result=output
+            )
+            return r, None
 
     async def run(
-        self, llm: "LLM", tool_calls: list[spec.ToolCall]
+        self, llm: "LLM", tool_calls: list[spec.ToolCall], parallel: bool
     ) -> tuple[spec.ToolMessage, list[spec.ToolResult], list[FileResult]]:
-        tool_results: list[spec.MessagePartToolResult] = []
-        tool_results2: list[spec.ToolResult] = []
-        file_results: list[FileResult] = []
-        for c in tool_calls:
-            tool = self.__tools.get(c.tool_name, None)
-            if not tool:
-                raise ValueError(f"Tool {c.tool_name} not found")
-            try:
-                if isinstance(tool, _PythonFunctionTool):
-                    tm, tr, file = await self.__run_python_tool(
-                        id=c.tool_call_id,
-                        tool=tool,
-                        llm=llm,
-                        args=c.input,
-                    )
-                    tool_results.extend(tm.content)
-                    tool_results2.append(tr)
-                    if file:
-                        file_results.append(file)
-
-                elif isinstance(tool, _MCPTool):
-                    tm, tr = await self.__run_mcp_tool(
-                        id=c.tool_call_id,
-                        tool=tool,
-                        args=c.input,
-                    )
-                    tool_results.extend(tm.content)
-                    tool_results2.append(tr)
-                else:
-                    raise ValueError(f"Tool {c.tool_name} is of unknown type")
-            except Exception as e:
-                output: JsonValue = {"error": str(e)}
-                tool_results.append(
-                    spec.MessagePartToolResult(
-                        tool_call_id=c.tool_call_id,
-                        tool_name=c.tool_name,
-                        output=output,
-                    )
+        if parallel:
+            results = await asyncio.gather(
+                *[self.__run_one(llm, c) for c in tool_calls]
+            )
+        else:
+            results = []
+            for c in tool_calls:
+                results.append(await self.__run_one(llm, c))
+        parts: list[spec.MessagePartToolResult] = []
+        tool_results: list[spec.ToolResult] = []
+        files: list[FileResult] = []
+        for r, f in results:
+            tool_results.append(r)
+            parts.append(
+                spec.MessagePartToolResult(
+                    tool_call_id=r.tool_call_id,
+                    tool_name=r.tool_name,
+                    output=r.result,
                 )
-        return spec.ToolMessage(content=tool_results), tool_results2, file_results
+            )
+            if f:
+                files.append(f)
+        return spec.ToolMessage(content=parts), tool_results, files

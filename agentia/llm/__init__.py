@@ -54,6 +54,7 @@ class LLMOptions:
     provider_options: spec.ProviderOptions | None = None
     response_format: spec.ResponseFormat | None = None
     tools: Sequence[Tool] | ToolSet | None = None
+    parallel_tool_calls: bool = True
 
 
 type LLMOptionsUnion = LLMOptions | LLMOptionsDict
@@ -124,11 +125,11 @@ class LLM:
         return messages
 
     async def __process_tool_calls(
-        self, tool_calls: list[spec.ToolCall], tools: ToolSet | None = None
+        self, tool_calls: list[spec.ToolCall], tools: ToolSet | None, parallel: bool
     ) -> tuple[spec.ToolMessage, list[spec.ToolResult], spec.Message | None]:
         assert tools is not None, "No tools provided"
-        tm, tr, fr = await tools.run(self, tool_calls)
-        if fr:
+        tool_msg, tool_results, files = await tools.run(self, tool_calls, parallel)
+        if files:
             msg = spec.UserMessage(
                 content=[
                     spec.MessagePartText(text="[[TOOL_OUTPUT_FILES]]"),
@@ -138,13 +139,13 @@ class LLM:
                             media_type=f.media_type,
                             data=f.data,
                         )
-                        for f in fr
+                        for f in files
                     ),
                 ]
             )
         else:
             msg = None
-        return tm, tr, msg
+        return tool_msg, tool_results, msg
 
     async def __init_tools(self, options: LLMOptions) -> ToolSet:
         if not options.tools:
@@ -216,7 +217,7 @@ class LLM:
                         break
                     # Call tools and continue
                     tool_msg, _, extra_msg = await self.__process_tool_calls(
-                        tool_calls, tools=tools
+                        tool_calls, tools=tools, parallel=options.parallel_tool_calls
                     )
                     yield tool_msg
                     messages.append(tool_msg)
@@ -322,12 +323,12 @@ class LLM:
                     if not tool_calls:
                         break
                     # Call tools and continue
-                    tm, trs, extra_msg = await self.__process_tool_calls(
-                        tool_calls, tools=tools
+                    tool_msg, tool_results, extra_msg = await self.__process_tool_calls(
+                        tool_calls, tools=tools, parallel=options.parallel_tool_calls
                     )
-                    for tr in trs:
+                    for tr in tool_results:
                         yield tr
-                    messages.append(tm)
+                    messages.append(tool_msg)
                     s.add_new_message(messages[-1])
                     if extra_msg:
                         messages.append(extra_msg)
