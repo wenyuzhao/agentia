@@ -38,6 +38,7 @@ class LLMOptionsDict(TypedDict, total=False):
     provider_options: spec.ProviderOptions | None
     response_format: spec.ResponseFormat | None
     tools: Sequence[Tool] | ToolSet | None
+    parallel_tool_calls: bool | None
 
 
 @dataclass
@@ -54,7 +55,7 @@ class LLMOptions:
     provider_options: spec.ProviderOptions | None = None
     response_format: spec.ResponseFormat | None = None
     tools: Sequence[Tool] | ToolSet | None = None
-    parallel_tool_calls: bool = True
+    parallel_tool_calls: bool | None = True
 
 
 type LLMOptionsUnion = LLMOptions | LLMOptionsDict
