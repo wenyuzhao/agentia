@@ -31,6 +31,11 @@ class Skill(BaseModel):
     script_paths: list[str] = []
     loaded: bool = False
 
+    def to_dict(self) -> dict[str, Any]:
+        doc = self.model_dump()
+        del doc["path"]
+        return doc
+
     def load_resource(self, rel_path: str) -> str:
         if rel_path not in self.resource_paths:
             raise ValueError(f"Resource '{rel_path}' not found in skill '{self.name}'")
@@ -164,9 +169,7 @@ class Skills(Plugin):
         if skill_name not in self.skills:
             return {"error": f"Skill '{skill_name}' not found"}
         skill = self.skills[skill_name]
-        doc = skill.model_dump()
-        del doc["path"]
-        return doc
+        return skill.to_dict()
 
     @tool(name="load_skill_resource")
     def load_skill_resource(self, skill_name: str, resource_path: str) -> Any:

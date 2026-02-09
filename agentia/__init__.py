@@ -21,7 +21,7 @@ from .spec import *
 from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError, register_plugin, ALL_PLUGINS
-from .plugins.skills import Skills
+from .plugins.skills import Skills, Skill
 from . import llm, plugins
 from .tools import ProviderTool, Tool, Tools, MCP, MCPContext
 from .history import History
@@ -101,6 +101,7 @@ __all__ = [
     "ToolResult",
     "register_plugin",
     "Skills",
+    "Skill",
     # utils
     "init_logging",
     "magic",
