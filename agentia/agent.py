@@ -1,19 +1,17 @@
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Sequence, overload
+from typing import TYPE_CHECKING, Literal, Optional, Sequence, overload
 import logging
 import uuid
 from agentia.history import History
 from agentia.llm import LLM, LLMOptions, LLMOptionsUnion
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.plugins import skills
 from agentia.spec.chat import AssistantMessage, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
 from dataclasses import asdict
 from agentia.tools.mcp import MCPContext
-from agentia.tools.plugin import Plugin
 
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
@@ -62,7 +60,7 @@ class Agent:
         if self.options.tools and isinstance(self.options.tools, ToolSet):
             self.history.add_instructions(self.options.tools.get_instructions())
         self.log = logging.getLogger(f"agentia.agent")
-        self.__mcp_context = MCPContext()
+        self._mcp_context: Optional[MCPContext] = None
 
     def __add_prompt(
         self,
@@ -159,8 +157,11 @@ class Agent:
         return msgs[-1].parse(type)
 
     async def __aenter__(self):
-        await self.__mcp_context.__aenter__()
+        self._mcp_context = MCPContext()
+        await self._mcp_context.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.__mcp_context.__aexit__(exc_type, exc_val, exc_tb)
+        assert self._mcp_context is not None
+        await self._mcp_context.__aexit__(exc_type, exc_val, exc_tb)
+        self._mcp_context = None

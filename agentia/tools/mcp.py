@@ -1,6 +1,6 @@
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Literal, overload
+from typing import Any, Literal, Optional, overload
 from typing import TYPE_CHECKING, Sequence
 from fastmcp import Client
 from fastmcp.mcp_config import (
@@ -15,21 +15,21 @@ from mcp.types import Tool as FastMCPTool
 
 if TYPE_CHECKING:  # pragma: no cover
     from agentia.tools.tools import _MCPTool
+    from agentia.agent import Agent, LLM
 
 
 class MCPContext:
     def __init__(self):
         self.exit_stack = AsyncExitStack()
         self._servers: list[MCP] = []
+        self.active = False
 
     async def __aenter__(self):
-        global MCP_CONTEXTS
-        MCP_CONTEXTS.append(self)
+        self.active = True
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        global MCP_CONTEXTS
-        MCP_CONTEXTS.remove(self)
+        self.active = False
         for server in self._servers:
             server.context_available = False
         await self.exit_stack.aclose()
@@ -39,9 +39,6 @@ class _ClientWrapper(Client):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await super().__aexit__(exc_type, exc_val, exc_tb)
         await self.transport.close()
-
-
-MCP_CONTEXTS: list[MCPContext] = []
 
 
 def _convert_tool_format(tool: FastMCPTool) -> Any:
@@ -65,6 +62,7 @@ class MCP:
         cwd: str | Path | None = None,
         timeout: int | None = None,
         type: Literal["local"] = "local",
+        context: Optional[MCPContext] = None,
     ): ...
 
     @overload
@@ -77,6 +75,7 @@ class MCP:
         headers: dict[str, str] | None = None,
         auth: str | Literal["oauth"] | Auth | None = None,
         timeout: int | None = None,
+        context: Optional[MCPContext] = None,
     ): ...
 
     def __init__(
@@ -92,6 +91,7 @@ class MCP:
         auth: str | Literal["oauth"] | Auth | None = None,
         timeout: int | None = None,
         type: Literal["sse", "http", "streamable-http", "local"] = "local",
+        context: Optional[MCPContext] = None,
     ):
 
         self.cmd = None
@@ -110,6 +110,8 @@ class MCP:
         self.__tools: list["_MCPTool"] = []
         self.session: Client | None = None
         self.timeout: int | None = timeout  # Maximum response time in milliseconds
+
+        self.context = context
 
         def assert_no_local_args():
             assert command is None, "Remote MCP server does not support command"
@@ -134,13 +136,21 @@ class MCP:
         assert self.initialized, "MCP Server not initialized"
         return self.__tools
 
-    async def init(self):
+    async def init(self, llm: "LLM", agent: Optional["Agent"] = None) -> None:
         from agentia.tools.tools import _MCPTool
 
         assert not self.initialized, "MCP Server already initialized"
-        assert len(MCP_CONTEXTS) > 0, "Agents must be running in an MCP context"
 
-        context = MCP_CONTEXTS[-2] if len(MCP_CONTEXTS) >= 2 else MCP_CONTEXTS[0]
+        context: MCPContext
+        if self.context:
+            context = self.context
+        elif agent and agent._mcp_context and agent._mcp_context.active:
+            context = agent._mcp_context
+        elif llm and llm._mcp_context and llm._mcp_context.active:
+            context = llm._mcp_context
+        else:
+            raise RuntimeError("MCP Server must be running in an MCP context")
+
         exit_stack = context.exit_stack
         self.context_available = True
         context._servers.append(self)

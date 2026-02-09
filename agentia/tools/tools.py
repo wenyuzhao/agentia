@@ -192,7 +192,7 @@ class ToolSet:
 
                 raise PluginInitError(plugin.id(), e) from e
         for server in self.mcp_servers.values():
-            await server.init()
+            await server.init(llm=llm, agent=agent)
             tools = server.get_tools()
             for tool in tools:
                 self.__tools[tool.name] = tool

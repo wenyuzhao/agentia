@@ -23,6 +23,7 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     from agentia.agent import Agent
     from agentia.llm.providers import Provider
+    from agentia.tools.mcp import MCPContext
 
 
 class LLMOptionsDict(TypedDict, total=False):
@@ -112,6 +113,7 @@ class LLM:
         self._agent: Optional["Agent"] = None
         self._model = model
         self._active_tools: ToolSet | None = None
+        self._mcp_context: Optional["MCPContext"] = None
 
     @property
     def model(self) -> str:
@@ -242,8 +244,11 @@ class LLM:
             from agentia.tools.mcp import MCPContext
 
             async with MCPContext() as _ctx:
+                self._mcp_context = _ctx
                 async for msg in gen():
                     yield msg
+                self._mcp_context = None
+            self._active_tools = None
 
         c = ChatCompletion(gen_with_mcp_context())
         return c
@@ -352,8 +357,12 @@ class LLM:
             from agentia.tools.mcp import MCPContext
 
             async with MCPContext() as _ctx:
+                self._mcp_context = _ctx
                 async for part in gen():
                     yield part
+                self._mcp_context = None
+
+            self._active_tools = None
 
         if events:
             s = ChatCompletionEvents(gen_with_mcp_context())
