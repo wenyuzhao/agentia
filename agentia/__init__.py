@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 LOGGER = logging.getLogger("agentia")
 
@@ -34,6 +35,11 @@ from .llm.stream import (
     ChatCompletionStream,
     ChatCompletionEvents,
 )
+
+if os.environ.get("AGENTIA_PATCH", "true").lower() in ("true", "1", "yes"):
+    from .utils.patches import patch_all
+
+    patch_all()
 
 __all__ = [
     # submodules
