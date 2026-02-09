@@ -534,10 +534,6 @@ class OpenAIAPIProvider(Provider):
                 for i, tc in enumerate(tool_calls):
                     if not tc:
                         continue
-                    if isinstance(tc.input, str):
-                        print(
-                            f"Warning: invalid tool call input {type(tc.input)}, {tc}"
-                        )
                     assert isinstance(tc.input, str)
                     tc.input = json.loads(tc.input or "{}")
                     yield tc
