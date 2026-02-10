@@ -5,9 +5,7 @@ import os
 
 
 class Chutes(OpenAIAPIProvider):
-    def __init__(
-        self, model: str, api_key: str | None = None, base_url: str | None = None
-    ):
+    def __init__(self, model: str, api_key: str | None = None):
         api_key = (
             api_key
             or os.environ.get("CHUTES_API_KEY")

@@ -44,16 +44,20 @@ type LLMOptionsUnion = LLMOptions | LLMOptionsDict
 
 
 def get_provider(selector: str) -> "Provider":
-    DEFAULT_PROVIDER = os.environ.get("AGENTIA_PROVIDER", "openrouter")
-    # if has no scheme, assume gateway
+    # Parse selector
     if re.match(r"^\w+:", selector) is None:
-        provider = DEFAULT_PROVIDER
-        model = selector
-    else:
-        uri = AnyUrl(selector)
-        provider = uri.scheme
-        model = (uri.host or "") + (uri.path or "")
-    model = model.strip("/")
+        # Default to openrouter if no provider specified
+        default_provider = os.environ.get("AGENTIA_PROVIDER", "openrouter")
+        model = f"{default_provider.strip().lower()}:{selector}"
+    uri = AnyUrl(selector)
+    for c in ["username", "password", "host", "port", "query", "fragment"]:
+        if getattr(uri, c) is not None:
+            raise ValueError(f"Invalid LLM selector: {selector}")
+    provider, model = uri.scheme, (uri.path or "").strip("/")
+    if not provider or not model:
+        raise ValueError(f"Invalid LLM selector: {selector}")
+
+    # Instantiate provider
     match provider:
         case "openai":
             from .providers.openai import OpenAI

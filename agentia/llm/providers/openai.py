@@ -9,7 +9,9 @@ class OpenAI(OpenAIAPIProvider):
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
-        base_url = "https://api.openai.com/v1"
+        base_url = base_url or os.environ.get(
+            "OPENAI_BASE_URL", "https://api.openai.com/v1"
+        )
         super().__init__(
             provider="openai", model=model, api_key=api_key, base_url=base_url
         )

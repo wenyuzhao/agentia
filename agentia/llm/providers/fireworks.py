@@ -5,9 +5,7 @@ import os
 
 
 class Fireworks(OpenAIAPIProvider):
-    def __init__(
-        self, model: str, api_key: str | None = None, base_url: str | None = None
-    ):
+    def __init__(self, model: str, api_key: str | None = None):
         api_key = api_key or os.environ.get("FIREWORKS_API_KEY")
         if not api_key:
             raise ValueError("FIREWORKS_API_KEY environment variable not set")

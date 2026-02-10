@@ -6,11 +6,11 @@ class Ollama(OpenAIAPIProvider):
     def __init__(
         self, model: str, api_key: str | None = None, base_url: str | None = None
     ):
-        base_url = os.environ.get(
+        base_url = base_url or os.environ.get(
             "OLLAMA_BASE_URL",
             os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1"),
         )
-        api_key = os.environ.get("OLLAMA_API_KEY", "dummy")
+        api_key = api_key or os.environ.get("OLLAMA_API_KEY", "dummy")
         think = model.endswith(":think")
         if think:
             model = model[:-6]
