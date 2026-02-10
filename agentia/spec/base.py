@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import Annotated, Any, Literal
 from pydantic import AliasChoices, BaseModel, Field, JsonValue, HttpUrl
 
 

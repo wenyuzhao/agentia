@@ -1,4 +1,3 @@
-import os
 from ..utils.decorators import tool
 from agentia.tools import Plugin, PluginInitError
 

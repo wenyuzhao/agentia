@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
+from typing import AsyncGenerator, Literal, TYPE_CHECKING
 
 from agentia.llm.completion import Listeners, async_gen_to_sync
 from agentia.spec import *

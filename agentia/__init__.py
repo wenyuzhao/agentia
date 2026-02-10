@@ -15,8 +15,6 @@ def init_logging(level: logging._Level = logging.INFO):
 
 from dotenv import load_dotenv
 
-from . import utils
-
 from .agent import Agent
 from .spec import *
 from .utils.decorators import magic, ImageUrl
