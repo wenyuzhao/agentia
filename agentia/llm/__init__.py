@@ -48,7 +48,7 @@ def get_provider(selector: str) -> "Provider":
     if re.match(r"^\w+:", selector) is None:
         # Default to openrouter if no provider specified
         default_provider = os.environ.get("AGENTIA_PROVIDER", "openrouter")
-        model = f"{default_provider.strip().lower()}:{selector}"
+        selector = f"{default_provider.strip().lower()}:{selector}"
     uri = AnyUrl(selector)
     for c in ["username", "password", "host", "port", "query", "fragment"]:
         if getattr(uri, c) is not None:
