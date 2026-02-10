@@ -129,14 +129,6 @@ class Agent:
         else:
             assert not events, "events=True is only supported with stream=True"
             x = run_agent_loop(self, options_merged)
-
-        def on_finish():
-            for m in x.new_messages:
-                assert isinstance(m, (AssistantMessage, ToolMessage, UserMessage))
-                self.history.add(m)
-
-        x.on_finish.on(on_finish)
-
         return x
 
     async def generate_object[T: ObjectType](

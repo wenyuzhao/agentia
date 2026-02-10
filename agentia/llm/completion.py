@@ -36,7 +36,6 @@ class ChatCompletion:
         self.finish_reason: FinishReason | None = None
         self.new_messages: list[NonSystemMessage] = []
         self.on_finish = Listeners()
-        self.on_new_message = Listeners()
         self.agent = agent
 
     def _on_finish(self):
@@ -45,7 +44,6 @@ class ChatCompletion:
 
     def _add_new_message(self, msg: NonSystemMessage):
         self.new_messages.append(msg)
-        self.on_new_message.emit(msg)
 
     def __aiter__(self) -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         return self.__gen

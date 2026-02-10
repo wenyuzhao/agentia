@@ -403,11 +403,10 @@ def magic(
                     )
                 )
             async with agent:
-                r = agent.run(messages)
-                await r
-                messages.extend(r.new_messages)
-                messages.append(UserMessage("Output the result in JSON format"))
-                result = await agent.generate_object(messages, type=return_type)
+                await agent.run(messages)
+                result = await agent.generate_object(
+                    "Output the result in JSON format", type=return_type
+                )
             return result
 
         if not inspect.iscoroutinefunction(callable):

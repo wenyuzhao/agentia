@@ -42,7 +42,7 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
                     messages=messages, tools=tools, options=options, client=client
                 )
                 c.usage += result.usage
-                c.new_messages.append(result.message)
+                c._add_new_message(result.message)
                 yield result.message
                 # Add new messages
                 messages.append(result.message)
@@ -63,9 +63,7 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
                     messages.append(extra_msg)
                     c._add_new_message(extra_msg)
 
-        for m in c.new_messages:
-            assert isinstance(m, (AssistantMessage, ToolMessage, UserMessage))
-            agent.history.add(m)
+        agent.history.add(*c.new_messages)
 
     async def gen_with_mcp_context() -> (
         AsyncGenerator[AssistantMessage | ToolMessage, None]
@@ -156,9 +154,7 @@ def run_agent_loop_streamed(
         s.finish_reason = last_finish_reason
         yield StreamPartStreamEnd(usage=s.usage, finish_reason=last_finish_reason)
 
-        for m in s.new_messages:
-            assert isinstance(m, (AssistantMessage, ToolMessage, UserMessage))
-            agent.history.add(m)
+        agent.history.add(*s.new_messages)
 
     async def gen_with_mcp_context() -> AsyncGenerator[StreamPart, None]:
         from agentia.tools.mcp import MCPContext
