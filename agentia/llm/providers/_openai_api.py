@@ -520,13 +520,13 @@ class OpenAIAPIProvider(Provider):
                         tool_calls.extend([None] * (index - len(tool_calls) + 1))
                         assert tc.id and tc.function and tc.function.name
                         tool_calls[index] = ToolCall(
-                            tool_call_id=tc.id, tool_name=tc.function.name, input=""
+                            tool_call_id=tc.id, tool_name=tc.function.name, input=""  # type: ignore
                         )
                     tc_obj = tool_calls[index]
                     assert tc_obj is not None
                     if tc.function and tc.function.arguments:
                         assert isinstance(tc_obj.input, str)
-                        tc_obj.input += tc.function.arguments or ""
+                        tc_obj.input += tc.function.arguments or ""  # type: ignore
 
             if choice.finish_reason:
                 if streaming_text:

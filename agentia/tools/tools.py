@@ -260,7 +260,7 @@ class ToolSet:
         id: str,
         tool: _PythonFunctionTool,
         agent: "Agent",
-        args: Any,
+        args: dict[str, JsonValue],
     ) -> tuple[spec.ToolResult, FileResult | None]:
         p_args, kw_args = tool.process_json_args(agent, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
@@ -291,14 +291,18 @@ class ToolSet:
                     del output["data"]
                 output["hint"] = "The tool outputed a file with the given file_id."
 
-        tr = spec.ToolResult(tool_call_id=id, tool_name=tool.name, result=output)
+        tr = spec.ToolResult(
+            tool_call_id=id, tool_name=tool.name, input=args, output=output
+        )
         return tr, file
 
     async def __run_mcp_tool(
-        self, id: str, tool: _MCPTool, args: Any
+        self, id: str, tool: _MCPTool, args: dict[str, JsonValue]
     ) -> spec.ToolResult:
         result = await tool.server.run(tool.name, args)
-        tr = spec.ToolResult(tool_call_id=id, tool_name=tool.name, result=result)
+        tr = spec.ToolResult(
+            tool_call_id=id, tool_name=tool.name, input=args, output=result
+        )
         return tr
 
     async def __run_one(
@@ -328,7 +332,10 @@ class ToolSet:
         except Exception as e:
             output: JsonValue = {"error": str(e)}
             r = spec.ToolResult(
-                tool_call_id=c.tool_call_id, tool_name=c.tool_name, result=output
+                tool_call_id=c.tool_call_id,
+                tool_name=c.tool_name,
+                input=c.input,
+                output=output,
             )
             return r, None
 
@@ -352,7 +359,8 @@ class ToolSet:
                 spec.MessagePartToolResult(
                     tool_call_id=r.tool_call_id,
                     tool_name=r.tool_name,
-                    output=r.result,
+                    input=r.input,
+                    output=r.output,
                 )
             )
             if f:

@@ -101,7 +101,7 @@ class MessagePartToolCall(MessagePartBase):
         validation_alias=AliasChoices("toolName", "tool_name"),
         serialization_alias="toolName",
     )
-    input: JsonValue
+    input: dict[str, JsonValue]
     provider_executed: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("providerExecuted", "provider_executed"),
@@ -124,6 +124,7 @@ class MessagePartToolResult(MessagePartBase):
         validation_alias=AliasChoices("toolName", "tool_name"),
         serialization_alias="toolName",
     )
+    input: dict[str, JsonValue]
     output: JsonValue
     provider_options: ProviderOptions | None = Field(
         default=None,

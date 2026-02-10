@@ -110,7 +110,7 @@ class ToolCall(BaseModel):
     )
     """The name of the tool that should be called."""
 
-    input: JsonValue
+    input: dict[str, JsonValue]
     """JSON object with the tool call arguments. Must match the parameters schema of the tool."""
 
     provider_executed: bool | None = Field(
@@ -146,7 +146,9 @@ class ToolResult(BaseModel):
     )
     """Name of the tool that generated this result."""
 
-    result: JsonValue
+    input: dict[str, JsonValue]
+
+    output: JsonValue
     """Result of the tool call. This is a JSON-serializable object."""
 
     is_error: bool | None = Field(
