@@ -26,7 +26,9 @@ class Memory(Plugin):
     async def init(self):
         assert self.agent is not None, "Agent is required for MemoryPlugin"
         # Load existing memory records
-        assert self.__memory_cache.exists()
+        if not self.__memory_cache.exists():
+            self.__memory_cache.touch()
+            self.__memory_cache.write_text("[]")
         content = self.__memory_cache.read_text().strip()
         records = pydantic.TypeAdapter[MemoryRecords](MemoryRecords).validate_json(
             content
@@ -40,12 +42,16 @@ class Memory(Plugin):
         self,
         content: Annotated[str, "The content to remember. Keep it short and brief."],
     ):
-        """Permanently remember something in your memory, as long as you think it's important or will be useful in the future. Use this to remember any important information whilst you are chatting with the user or fulfilling tasks."""
+        """
+        Permanently remember key information in your memory, as long as you think it's important or will be useful in the future.
+        Use this to remember any important information whilst you are chatting with the user or fulfilling tasks.
+        If the info is about a person or an entity, describe it clearly.
+        """
         with FileLock(str(self.__memory_cache) + ".lock"):
             record = MemoryRecord(timestamp=datetime.now(), content=content)
             self.__records.append(record)
             # save to file
-            with open(self.__memory_cache) as f:
+            with open(self.__memory_cache, "w") as f:
                 f.write(
                     pydantic.TypeAdapter[MemoryRecords](MemoryRecords)
                     .dump_json(self.__records, indent=2)
@@ -55,7 +61,7 @@ class Memory(Plugin):
 
     @tool
     def recall(self):
-        """Recall all the things you remembered"""
+        """Recall all the key information from your memory."""
         try:
             with open(self.__memory_cache, "r") as f:
                 return f.read()
