@@ -24,7 +24,9 @@ def get_current_weather(
 @pytest.mark.asyncio
 async def test_function_call():
     agent = Agent(model="openai/gpt-5-nano", tools=[get_current_weather])
-    run = agent.run("What is the weather like in boston?")
+    run = agent.run(
+        "What is the weather like in boston? Use the tool to answer the question."
+    )
     all_assistant_content = ""
     async for msg in run:
         if msg.role == "assistant":
@@ -107,3 +109,20 @@ async def test_complex_arg():
     assert len(status["animals"]) == 2
     assert Animal.cat in status["animals"]
     assert Animal.bird in status["animals"]
+
+
+@pytest.mark.asyncio
+async def test_tool_lazy_loading():
+    agent = Agent(model="openai/gpt-5-nano")
+    msg = await agent.run("Hi, how are you?")
+    print(msg)
+    agent.tools.add(get_current_weather)
+    run = agent.run(
+        "What is the weather like in boston? Use the tool to answer the question."
+    )
+    all_assistant_content = ""
+    async for msg in run:
+        if msg.role == "assistant":
+            all_assistant_content += msg.text
+        print(msg)
+    assert "72" in all_assistant_content
