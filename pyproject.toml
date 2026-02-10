@@ -26,14 +26,15 @@ dependencies = [
     "pydantic>=2.10.4",
     "python-dotenv>=1.0.0,<2",
     "python-frontmatter>=1.1.0",
+    "markdownify>=1.2.2",
+    "tavily-python>=0.7.21",
 ]
 
 [project.urls]
 Repository = "https://github.com/wenyuzhao/agentia"
 
 [project.optional-dependencies]
-plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12"]
-all = ["agentia[plugins]"]
+all = []
 
 [dependency-groups]
 dev = [
