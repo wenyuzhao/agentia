@@ -39,12 +39,9 @@ class Agent:
             else (options or LLMOptions())
         )
         if skills is not False:
-            if not tools:
-                tools = []
+            tools = tools or []
             if any(isinstance(t, Skills) for t in tools):
-                raise ValueError(
-                    "Cannot add a Skills plugin when another Skills plugin is already added"
-                )
+                raise ValueError("Multiple Skills plugins provided.")
             if skills is True:
                 tools = list(tools) + [Skills()]
             elif isinstance(skills, Skills):
@@ -66,8 +63,7 @@ class Agent:
         self.__on_finish = Listeners()
 
     def __add_prompt(
-        self,
-        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+        self, prompt: str | NonSystemMessage | Sequence[NonSystemMessage]
     ) -> None:
         if isinstance(prompt, str):
             self.history.add(UserMessage(content=[MessagePartText(text=prompt)]))
