@@ -529,6 +529,9 @@ class OpenAIAPIProvider(Provider):
                         tc_obj.input += tc.function.arguments or ""
 
             if choice.finish_reason:
+                if streaming_text:
+                    streaming_text = False
+                    yield StreamPartTextEnd(id=_gen_id())
                 for i, tc in enumerate(tool_calls):
                     if not tc:
                         continue
