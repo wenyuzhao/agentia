@@ -227,14 +227,15 @@ class ToolSet:
                 return p
         return None
 
-    def get_instructions(self) -> str:
+    def get_instructions(self) -> str | None:
         instructions = []
         for plugin in self.plugins.values():
             ins = plugin.get_instructions()
             if ins:
-                ins = ins.strip()
-                if ins:
-                    instructions.append(ins)
+                if s := ins.strip():
+                    instructions.append(s)
+        if not instructions:
+            return None
         return "\n\n".join(instructions)
 
     def is_empty(self) -> bool:

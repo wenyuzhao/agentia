@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, overload
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Sequence, overload
 import logging
 import uuid
 from agentia.history import History
@@ -8,7 +8,7 @@ from agentia.llm import LLMOptions, LLMOptionsUnion, get_provider
 from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
 from agentia.llm.completion import ChatCompletion, Listeners
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.spec.chat import AssistantMessage, ResponseFormatJson, ToolMessage
+from agentia.spec.chat import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
 from dataclasses import asdict
@@ -26,7 +26,7 @@ class Agent:
         model: str | None = None,
         tools: Sequence[Tool] | None = None,
         id: str | None = None,
-        instructions: str | None = None,
+        instructions: str | Callable[[], str | None] | None = None,
         options: LLMOptionsUnion | None = None,
         skills: Sequence[Path | str] | "Skills" | bool = False,
     ) -> None:
@@ -56,11 +56,14 @@ class Agent:
         self.history = History()
         if instructions:
             self.history.add_instructions(instructions)
-        self.history.add_instructions(self.tools.get_instructions())
+        self.add_instructions(self.tools.get_instructions)
         self.log = logging.getLogger(f"agentia.agent")
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
         self.__on_finish = Listeners()
+
+    def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
+        self.history.add_instructions(instructions)
 
     def __add_prompt(
         self, prompt: str | NonSystemMessage | Sequence[NonSystemMessage]
