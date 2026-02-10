@@ -26,9 +26,8 @@ from PIL.Image import Image
 import base64
 from io import BytesIO
 import inspect
-
-from agentia.spec import UserMessage, MessagePartText, MessagePartFile, SystemMessage
-from agentia.spec.chat import Message
+from agentia.spec import UserMessage, MessagePartText, MessagePartFile
+from agentia.spec.chat import NonSystemMessage
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools
@@ -336,11 +335,11 @@ def magic(
 
     def __magic_impl(callable: F) -> F:
         async def __func_impl(*args: Any, **kwargs: Any):
-            from agentia.llm import LLM
+            from agentia.agent import Agent
 
             prompt, images = _gen_prompt(callable, list(args), kwargs, instructions)
 
-            llm = LLM(model=model or "openai/gpt-5-mini")
+            agent = Agent(model=model, instructions=prompt, tools=tools)
             return_type = inspect.signature(callable).return_annotation
             if isinstance(return_type, inspect._empty):
                 return_type = str
@@ -349,7 +348,7 @@ def magic(
                     f"Unsupported return type: {return_type} in magic function {callable.__name__}."
                 )
 
-            messages: list[Message] = [SystemMessage(content=prompt)]
+            messages: list[NonSystemMessage] = []
             for i, (p, image) in enumerate(images):
                 content_type = "image/png"
                 if isinstance(image, ImageUrl):
@@ -403,15 +402,12 @@ def magic(
                         role="user",
                     )
                 )
-            r = llm.generate(messages, options={"tools": tools})
-            await r
-            messages.extend(r.new_messages)
-            messages.append(
-                UserMessage(
-                    content=[MessagePartText(text="Output the result in JSON format")]
-                )
-            )
-            result = await llm.generate_object(messages, type=return_type)
+            async with agent:
+                r = agent.run(messages)
+                await r
+                messages.extend(r.new_messages)
+                messages.append(UserMessage("Output the result in JSON format"))
+                result = await agent.generate_object(messages, type=return_type)
             return result
 
         if not inspect.iscoroutinefunction(callable):

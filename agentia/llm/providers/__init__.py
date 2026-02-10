@@ -1,21 +1,18 @@
 import abc
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, AsyncGenerator, Sequence
+from typing import AsyncGenerator, Sequence
 import httpx
 from agentia.llm import LLMOptions
+from agentia.spec.chat import Message
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
 from agentia.spec.stream import StreamPart
-
-if TYPE_CHECKING:
-    from .. import LLM
 
 
 @dataclass
 class GenerationResult:
     message: spec.AssistantMessage
-    tool_calls: list[spec.ToolCall]
     finish_reason: spec.FinishReason
     usage: spec.Usage
     provider_metadata: spec.ProviderMetadata | None
@@ -35,7 +32,6 @@ class Provider(abc.ABC):
 
     Matched URLs are supported natively by the model and are not downloaded.
     """
-    llm: "LLM"
 
     def __init__(self, provider: str, model: str):
         self.provider = provider
@@ -43,19 +39,19 @@ class Provider(abc.ABC):
         self.supported_urls = {}
 
     @abc.abstractmethod
-    async def do_generate(
+    async def generate(
         self,
-        prompt: spec.Prompt,
-        tool_set: ToolSet,
+        messages: list[Message],
+        tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> GenerationResult: ...
 
     @abc.abstractmethod
-    def do_stream(
+    def stream(
         self,
-        prompt: spec.Prompt,
-        tool_set: ToolSet,
+        messages: list[Message],
+        tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]: ...

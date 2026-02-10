@@ -18,7 +18,6 @@ DESCRIPTION_TAG = "agentia_tool_description"
 METADATA_TAG = "agentia_tool_metadata"
 
 if TYPE_CHECKING:
-    from ..llm import LLM
     from agentia.plugins import Plugin
     from agentia.agent import Agent
 
@@ -85,9 +84,8 @@ class _PythonFunctionTool(_BaseTool):
             "parameters": params,
         }
 
-    def process_json_args(self, llm: "LLM", args: Any):
+    def process_json_args(self, agent: "Agent", args: Any):
         from agentia.agent import Agent
-        from ..llm import LLM
 
         p_args: list[Any] = []
         kw_args: dict[str, Any] = {}
@@ -111,18 +109,15 @@ class _PythonFunctionTool(_BaseTool):
             is_model = inspect.isclass(p.type) and issubclass(p.type, BaseModel)
             match p.param.kind:
                 case Parameter.POSITIONAL_ONLY if p.param.annotation == Agent:
-                    if llm._agent is not None:
-                        p_args.append(llm._agent)
-                case Parameter.POSITIONAL_ONLY if p.param.annotation == LLM:
-                    p_args.append(llm)
+                    if agent is not None:
+                        p_args.append(agent)
                 case Parameter.POSITIONAL_ONLY:
                     default = p.default if p.default != Parameter.empty else None
                     p_args.append(get_value(p, p.name, default, is_model))
                 case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY if (
                     p.param.annotation == Agent
                 ):
-                    if llm._agent is not None:
-                        kw_args[p.name] = llm._agent
+                    kw_args[p.name] = agent
                 case Parameter.POSITIONAL_OR_KEYWORD | Parameter.KEYWORD_ONLY:
                     default = p.default if p.default != Parameter.empty else None
                     kw_args[p.name] = get_value(p, p.name, default, is_model)
@@ -156,12 +151,13 @@ class FileResult(BaseModel):
 
 
 class ToolSet:
-    def __init__(self, tools: Tools):
+    def __init__(self, tools: Tools, agent: "Agent"):
         from agentia.plugins import Plugin
 
         self.all_tools = tools
         self.plugins: dict[str, Plugin] = {}
         self.mcp_servers: dict[str, MCP] = {}
+        self.agent = agent
         self.provider_tools: dict[str, ProviderTool] = {}
         self.__tools: dict[str, _BaseTool] = {}
         for t in tools:
@@ -178,21 +174,20 @@ class ToolSet:
                 self.__add_function(t)
         self.__initialized = False
 
-    async def init(self, llm: "LLM", agent: Optional["Agent"] = None):
+    async def init(self):
         if self.__initialized:
             return
         self.__initialized = True
         for plugin in self.plugins.values():
             try:
-                plugin.llm = llm
-                plugin.agent = agent
+                plugin.agent = self.agent
                 await plugin.init()
             except Exception as e:
                 from . import PluginInitError
 
                 raise PluginInitError(plugin.id(), e) from e
         for server in self.mcp_servers.values():
-            await server.init(llm=llm, agent=agent)
+            await server.init(agent=self.agent)
             tools = server.get_tools()
             for tool in tools:
                 self.__tools[tool.name] = tool
@@ -264,10 +259,10 @@ class ToolSet:
         self,
         id: str,
         tool: _PythonFunctionTool,
-        llm: "LLM",
+        agent: "Agent",
         args: Any,
     ) -> tuple[spec.ToolResult, FileResult | None]:
-        p_args, kw_args = tool.process_json_args(llm, args)
+        p_args, kw_args = tool.process_json_args(agent, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
             output = await output
@@ -307,7 +302,7 @@ class ToolSet:
         return tr
 
     async def __run_one(
-        self, llm: "LLM", c: spec.ToolCall
+        self, agent: "Agent", c: spec.ToolCall
     ) -> tuple[spec.ToolResult, FileResult | None]:
         tool = self.__tools.get(c.tool_name, None)
         if not tool:
@@ -317,7 +312,7 @@ class ToolSet:
                 result, file = await self.__run_python_tool(
                     id=c.tool_call_id,
                     tool=tool,
-                    llm=llm,
+                    agent=agent,
                     args=c.input,
                 )
                 return result, file
@@ -338,16 +333,16 @@ class ToolSet:
             return r, None
 
     async def run(
-        self, llm: "LLM", tool_calls: list[spec.ToolCall], parallel: bool
+        self, agent: "Agent", tool_calls: list[spec.ToolCall], parallel: bool
     ) -> tuple[spec.ToolMessage, list[spec.ToolResult], list[FileResult]]:
         if parallel:
             results = await asyncio.gather(
-                *[self.__run_one(llm, c) for c in tool_calls]
+                *[self.__run_one(agent, c) for c in tool_calls]
             )
         else:
             results = []
             for c in tool_calls:
-                results.append(await self.__run_one(llm, c))
+                results.append(await self.__run_one(agent, c))
         parts: list[spec.MessagePartToolResult] = []
         tool_results: list[spec.ToolResult] = []
         files: list[FileResult] = []

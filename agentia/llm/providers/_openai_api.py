@@ -183,9 +183,11 @@ class OpenAIAPIProvider(Provider):
             case _:
                 raise ValueError(f"content part of type {p.type}")
 
-    def _to_oai_messages(self, prompt: Prompt) -> list[ChatCompletionMessageParam]:
+    def _to_oai_messages(
+        self, messages: list[Message]
+    ) -> list[ChatCompletionMessageParam]:
         r: list[ChatCompletionMessageParam] = []
-        for m in prompt:
+        for m in messages:
             if m.role == "system":
                 r.append(
                     ChatCompletionSystemMessageParam(role="system", content=m.content)
@@ -337,9 +339,9 @@ class OpenAIAPIProvider(Provider):
         )
 
     def _prepare_args(
-        self, prompt: Prompt, tool_set: ToolSet, options: LLMOptions
+        self, messages: list[Message], tool_set: ToolSet, options: LLMOptions
     ) -> dict[str, Any]:
-        msgs = self._to_oai_messages(prompt)
+        msgs = self._to_oai_messages(messages)
         rf = options.response_format
         if not rf or rf.type == "text":
             response_format = None
@@ -383,14 +385,14 @@ class OpenAIAPIProvider(Provider):
         return body
 
     @override
-    async def do_generate(
+    async def generate(
         self,
-        prompt: Prompt,
-        tool_set: ToolSet,
+        messages: list[Message],
+        tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> GenerationResult:
-        args = self._prepare_args(prompt, tool_set, options)
+        args = self._prepare_args(messages, tools, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
@@ -404,7 +406,6 @@ class OpenAIAPIProvider(Provider):
         )
         choice = response.choices[0]
         parts: Sequence[AssistantMessagePart] = []
-        tool_calls: list[ToolCall] = []
 
         if self.reasoning and hasattr(choice.message, "reasoning"):
             reasoning_text: str = choice.message.reasoning  # type: ignore
@@ -417,15 +418,13 @@ class OpenAIAPIProvider(Provider):
         for tc in choice.message.tool_calls or []:
             assert tc.type == "function"
             args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-            t = ToolCall(
-                tool_call_id=tc.id or _gen_id(), tool_name=tc.function.name, input=args
-            )
             parts.append(
                 MessagePartToolCall(
-                    tool_call_id=t.tool_call_id, tool_name=t.tool_name, input=t.input
+                    tool_call_id=tc.id or _gen_id(),
+                    tool_name=tc.function.name,
+                    input=args,
                 )
             )
-            tool_calls.append(t)
 
         annotations: list[Annotation] | None = None
         for a in choice.message.annotations or []:
@@ -442,21 +441,20 @@ class OpenAIAPIProvider(Provider):
 
         return GenerationResult(
             message=AssistantMessage(content=parts, annotations=annotations),
-            tool_calls=tool_calls,
             finish_reason=self._get_finish_reason(choice.finish_reason),
             usage=self._get_usage(response.usage),
             provider_metadata=None,
         )
 
     @override
-    async def do_stream(
+    async def stream(
         self,
-        prompt: Prompt,
-        tool_set: ToolSet,
+        messages: list[Message],
+        tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
-        args = self._prepare_args(prompt, tool_set, options)
+        args = self._prepare_args(messages, tools, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:

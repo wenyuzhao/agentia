@@ -4,10 +4,11 @@ from typing import TYPE_CHECKING, Literal, Optional, Sequence, overload
 import logging
 import uuid
 from agentia.history import History
-from agentia.llm import LLM, LLMOptions, LLMOptionsUnion
+from agentia.llm import LLMOptions, LLMOptionsUnion, get_provider
+from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
 from agentia.llm.completion import ChatCompletion, Listeners
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.spec.chat import AssistantMessage, ToolMessage
+from agentia.spec.chat import AssistantMessage, ResponseFormatJson, ToolMessage
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
 from dataclasses import asdict
@@ -50,19 +51,18 @@ class Agent:
                 tools = list(tools) + [skills]
             elif isinstance(skills, Sequence):
                 tools = list(tools) + [Skills(search_paths=skills)]
-        if tools:
-            self.options.tools = ToolSet(tools)
+        self.tools = ToolSet(tools or [], self)
         if not model:
             model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
-        self.llm = LLM(model)
-        self.llm._agent = self
+        self.model = model
+        self.provider = get_provider(model)
         self.history = History()
         if instructions:
             self.history.add_instructions(instructions)
-        if self.options.tools and isinstance(self.options.tools, ToolSet):
-            self.history.add_instructions(self.options.tools.get_instructions())
+        self.history.add_instructions(self.tools.get_instructions())
         self.log = logging.getLogger(f"agentia.agent")
         self._mcp_context: Optional[MCPContext] = None
+        self._temp_mcp_context: Optional[MCPContext] = None
         self.__on_finish = Listeners()
 
     def __add_prompt(
@@ -76,45 +76,7 @@ class Agent:
         else:
             self.history.add(*prompt)
 
-    @overload
-    def run(
-        self,
-        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
-        /,
-        stream: Literal[False] = False,
-        events: Literal[False] = False,
-        options: LLMOptionsUnion | None = None,
-    ) -> ChatCompletion: ...
-
-    @overload
-    def run(
-        self,
-        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
-        /,
-        stream: Literal[True],
-        events: Literal[False] = False,
-        options: LLMOptionsUnion | None = None,
-    ) -> ChatCompletionStream: ...
-
-    @overload
-    def run(
-        self,
-        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
-        /,
-        stream: Literal[True],
-        events: Literal[True],
-        options: LLMOptionsUnion | None = None,
-    ) -> ChatCompletionEvents: ...
-
-    def run(
-        self,
-        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
-        /,
-        stream: bool = False,
-        events: bool = False,
-        options: LLMOptionsUnion | None = None,
-    ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
-        self.__add_prompt(prompt)
+    def __merge_options(self, options: LLMOptionsUnion | None) -> LLMOptions:
         options_merged = LLMOptions()
         for k, v in asdict(self.options).items():
             setattr(options_merged, k, v)
@@ -124,13 +86,53 @@ class Agent:
             )
             for k, v in options_dict.items():
                 setattr(options_merged, k, v)
+        return options_merged
+
+    @overload
+    def run(
+        self,
+        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+        *,
+        stream: Literal[False] = False,
+        events: Literal[False] = False,
+        options: LLMOptionsUnion | None = None,
+    ) -> ChatCompletion: ...
+
+    @overload
+    def run(
+        self,
+        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+        *,
+        stream: Literal[True],
+        events: Literal[False] = False,
+        options: LLMOptionsUnion | None = None,
+    ) -> ChatCompletionStream: ...
+
+    @overload
+    def run(
+        self,
+        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+        *,
+        stream: Literal[True],
+        events: Literal[True],
+        options: LLMOptionsUnion | None = None,
+    ) -> ChatCompletionEvents: ...
+
+    def run(
+        self,
+        prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+        *,
+        stream: bool = False,
+        events: bool = False,
+        options: LLMOptionsUnion | None = None,
+    ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
+        self.__add_prompt(prompt)
+        options_merged = self.__merge_options(options)
         if stream:
-            x = self.llm.stream(
-                self.history.get(), events=events, options=options_merged
-            )
+            x = run_agent_loop_streamed(self, events, options_merged)
         else:
             assert not events, "events=True is only supported with stream=True"
-            x = self.llm.generate(self.history.get(), options=options_merged)
+            x = run_agent_loop(self, options_merged)
 
         def on_finish():
             for m in x.new_messages:
@@ -145,19 +147,13 @@ class Agent:
         self,
         prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
         type: type[T],
+        options: LLMOptionsUnion | None = None,
     ) -> T:
         self.__add_prompt(prompt)
-        msgs = await self.llm._generate_object_impl(
-            self.history.get(), type, options=self.options
-        )
-
-        for m in msgs:
-            assert isinstance(m, (AssistantMessage, ToolMessage, UserMessage))
-            self.history.add(m)
-
-        assert isinstance(msgs[-1], AssistantMessage)
-
-        return msgs[-1].parse(type)
+        options_merged = self.__merge_options(options)
+        options_merged.response_format = ResponseFormatJson.from_model(type)
+        result_msg = await run_agent_loop(self, options_merged)
+        return result_msg.parse(type)
 
     async def __aenter__(self):
         self._mcp_context = MCPContext()

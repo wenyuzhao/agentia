@@ -24,9 +24,9 @@ class SkillLearner(Plugin):
         """
         from agentia.plugins.skills import Skills
 
-        assert self.llm and self.llm._active_tools
+        assert self.agent
         existing_skills: set[str] = set()
-        skills: Skills | None = self.llm._active_tools.get_plugin(Skills)
+        skills: Skills | None = self.agent.tools.get_plugin(Skills)
         if skills:
             existing_skills = set(skills.skills.keys())
 
@@ -60,7 +60,7 @@ class SkillLearner(Plugin):
         from agentia.utils.skill_learner import learn_skill_from_documents
         from agentia.plugins.skills import Skills
 
-        assert self.llm and self.llm._active_tools
+        assert self.agent
 
         for d in docs:
             if not d.startswith(("http://", "https://")):
@@ -68,7 +68,7 @@ class SkillLearner(Plugin):
                     raise ValueError(f"Document '{d}' does not exist")
 
         existing_skills: set[str] = set()
-        skills: Skills | None = self.llm._active_tools.get_plugin(Skills)
+        skills: Skills | None = self.agent.tools.get_plugin(Skills)
         if skills:
             existing_skills = set(skills.skills.keys())
 
@@ -79,7 +79,7 @@ class SkillLearner(Plugin):
         path.mkdir(parents=True, exist_ok=True)
 
         skill = await learn_skill_from_documents(
-            docs=docs, name=name, prompt=prompt, out=path, model=self.llm.model
+            docs=docs, name=name, prompt=prompt, out=path, model=self.agent.model
         )
 
         if skills:

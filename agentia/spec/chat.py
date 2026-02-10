@@ -239,6 +239,21 @@ class AssistantMessage(MessageBase):
                 text += part.text
         return text
 
+    @property
+    def tool_calls(self) -> list[ToolCall]:
+        tool_calls = []
+        for part in self.content_list:
+            if isinstance(part, MessagePartToolCall):
+                tool_calls.append(
+                    ToolCall(
+                        tool_call_id=part.tool_call_id,
+                        tool_name=part.tool_name,
+                        input=part.input,
+                        provider_executed=part.provider_executed,
+                    )
+                )
+        return tool_calls
+
     def parse[T: ObjectType](self, return_type: type[T]) -> T:
         class Result(_Result[return_type]): ...
 
@@ -286,8 +301,6 @@ type Message = Annotated[
 type NonSystemMessage = Annotated[
     UserMessage | AssistantMessage | ToolMessage, Field(discriminator="role")
 ]
-
-type Prompt = Sequence[Message]
 
 
 class ResponseFormatText(BaseModel):
@@ -342,7 +355,6 @@ __all__ = [
     "ToolMessage",
     "Message",
     "NonSystemMessage",
-    "Prompt",
     "ResponseFormatText",
     "ResponseFormatJson",
     "ResponseFormat",

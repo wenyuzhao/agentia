@@ -41,10 +41,10 @@ class MessageStream(TextStream):
 
 
 class ChatCompletionStreamBase:
-    def __init__(self, agent: Optional["Agent"]):
+    def __init__(self, agent: "Agent"):
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
-        self.new_messages: list[Message] = []
+        self.new_messages: list[NonSystemMessage] = []
         self.on_finish = Listeners()
         self.on_new_message = Listeners()
         self.agent = agent
@@ -54,13 +54,13 @@ class ChatCompletionStreamBase:
         if self.agent:
             self.agent.emit("finish")
 
-    def add_new_message(self, msg: Message):
+    def _add_new_message(self, msg: NonSystemMessage):
         self.new_messages.append(msg)
         self.on_new_message.emit(msg)
 
 
 class ChatCompletionStream(ChatCompletionStreamBase):
-    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: Optional["Agent"]):
+    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: "Agent"):
         super().__init__(agent)
 
         async def __gen() -> (
@@ -117,7 +117,7 @@ class ChatCompletionStream(ChatCompletionStreamBase):
 
 
 class ChatCompletionEvents(ChatCompletionStreamBase):
-    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: Optional["Agent"]):
+    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: "Agent"):
         super().__init__(agent)
 
         async def __gen():

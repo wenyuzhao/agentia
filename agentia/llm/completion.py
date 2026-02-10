@@ -1,8 +1,7 @@
 import asyncio
-from typing import Any, AsyncGenerator, Generator, Optional, TYPE_CHECKING
-import os
+from typing import Any, AsyncGenerator, Generator, TYPE_CHECKING
 from agentia.spec.base import FinishReason, Usage
-from agentia.spec.chat import AssistantMessage, Message, ToolMessage
+from agentia.spec.chat import AssistantMessage, Message, NonSystemMessage, ToolMessage
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -25,9 +24,7 @@ class Listeners:
 
 class ChatCompletion:
     def __init__(
-        self,
-        gen: AsyncGenerator[AssistantMessage | ToolMessage, None],
-        agent: Optional["Agent"],
+        self, gen: AsyncGenerator[AssistantMessage | ToolMessage, None], agent: "Agent"
     ):
         async def __gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
             async for msg in gen:
@@ -37,17 +34,16 @@ class ChatCompletion:
         self.__gen = __gen()
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
-        self.new_messages: list[Message] = []
+        self.new_messages: list[NonSystemMessage] = []
         self.on_finish = Listeners()
         self.on_new_message = Listeners()
         self.agent = agent
 
     def _on_finish(self):
         self.on_finish.emit()
-        if self.agent:
-            self.agent.emit("finish")
+        self.agent.emit("finish")
 
-    def add_new_message(self, msg: Message):
+    def _add_new_message(self, msg: NonSystemMessage):
         self.new_messages.append(msg)
         self.on_new_message.emit(msg)
 

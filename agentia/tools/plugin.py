@@ -2,7 +2,6 @@ import abc
 from typing import Any, Optional, Self, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from agentia.llm import LLM
     from agentia.agent import Agent
 
 
@@ -39,7 +38,6 @@ class Plugin(abc.ABC):
 
     def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
-        self.llm: Optional["LLM"] = None
         self.agent: Optional["Agent"] = None
 
     @classmethod

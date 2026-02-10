@@ -88,7 +88,6 @@ __all__ = [
     "ToolMessage",
     "Message",
     "NonSystemMessage",
-    "Prompt",
     "ResponseFormatText",
     "ResponseFormatJson",
     "ResponseFormat",

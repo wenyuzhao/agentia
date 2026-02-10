@@ -13,9 +13,9 @@ from httpx import Auth
 from mcp.types import Tool as FastMCPTool
 
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from agentia.tools.tools import _MCPTool
-    from agentia.agent import Agent, LLM
+    from agentia.agent import Agent
 
 
 class MCPContext:
@@ -136,7 +136,7 @@ class MCP:
         assert self.initialized, "MCP Server not initialized"
         return self.__tools
 
-    async def init(self, llm: "LLM", agent: Optional["Agent"] = None) -> None:
+    async def init(self, agent: "Agent") -> None:
         from agentia.tools.tools import _MCPTool
 
         assert not self.initialized, "MCP Server already initialized"
@@ -144,10 +144,10 @@ class MCP:
         context: MCPContext
         if self.context:
             context = self.context
-        elif agent and agent._mcp_context and agent._mcp_context.active:
+        elif agent._mcp_context and agent._mcp_context.active:
             context = agent._mcp_context
-        elif llm and llm._mcp_context and llm._mcp_context.active:
-            context = llm._mcp_context
+        elif agent._temp_mcp_context and agent._temp_mcp_context.active:
+            context = agent._temp_mcp_context
         else:
             raise RuntimeError("MCP Server must be running in an MCP context")
 
