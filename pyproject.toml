@@ -20,6 +20,7 @@ keywords = [
 ]
 dependencies = [
     "fastmcp>=2.14.5",
+    "filelock>=3.18.0",
     "nest-asyncio>=1.6.0",
     "openai>=1.108.1,<2",
     "pydantic>=2.10.4",
@@ -31,7 +32,7 @@ dependencies = [
 Repository = "https://github.com/wenyuzhao/agentia"
 
 [project.optional-dependencies]
-plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12", "filelock>=3.18.0"]
+plugins = ["markdownify>=1.1.0", "tavily-python>=0.7.12"]
 all = ["agentia[plugins]"]
 
 [dependency-groups]

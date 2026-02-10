@@ -44,8 +44,6 @@ if os.environ.get("AGENTIA_PATCH", "true").lower() in ("true", "1", "yes"):
 __all__ = [
     # submodules
     "plugins",
-    "utils",
-    "llm",
     # agent
     "Agent",
     "History",
