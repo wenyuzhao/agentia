@@ -473,6 +473,7 @@ class OpenAIAPIProvider(Provider):
         streaming_text = False
         streaming_reasoning = False
         tool_calls: list[ToolCall | None] = []
+        tool_call_partial_inputs: dict[str, str] = {}
         finished = False
         async for chunk in response:
             if finished:
@@ -520,13 +521,16 @@ class OpenAIAPIProvider(Provider):
                         tool_calls.extend([None] * (index - len(tool_calls) + 1))
                         assert tc.id and tc.function and tc.function.name
                         tool_calls[index] = ToolCall(
-                            tool_call_id=tc.id, tool_name=tc.function.name, input=""  # type: ignore
+                            tool_call_id=tc.id, tool_name=tc.function.name, input={}
                         )
+                        tool_call_partial_inputs[tc.id] = ""
                     tc_obj = tool_calls[index]
                     assert tc_obj is not None
                     if tc.function and tc.function.arguments:
-                        assert isinstance(tc_obj.input, str)
-                        tc_obj.input += tc.function.arguments or ""  # type: ignore
+                        assert isinstance(
+                            tool_call_partial_inputs[tc_obj.tool_call_id], str
+                        )
+                        tool_call_partial_inputs[tc_obj.tool_call_id] += tc.function.arguments or ""  # type: ignore
 
             if choice.finish_reason:
                 if streaming_text:
@@ -535,8 +539,10 @@ class OpenAIAPIProvider(Provider):
                 for i, tc in enumerate(tool_calls):
                     if not tc:
                         continue
-                    assert isinstance(tc.input, str)
-                    tc.input = json.loads(tc.input or "{}")
+                    assert isinstance(tool_call_partial_inputs[tc.tool_call_id], str)
+                    tc.input = json.loads(
+                        tool_call_partial_inputs[tc.tool_call_id] or "{}"
+                    )
                     yield tc
                 yield StreamPartStreamEnd(
                     usage=self._get_usage(chunk.usage),
