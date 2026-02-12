@@ -247,7 +247,7 @@ class OpenAIAPIProvider(Provider):
                 r.append(p)
             elif m.role == "tool":
                 for p in m.content:
-                    val = json.dumps(p.output)
+                    val = p.serialize_output()
                     r.append(
                         ChatCompletionToolMessageParam(
                             role="tool", tool_call_id=p.tool_call_id, content=val

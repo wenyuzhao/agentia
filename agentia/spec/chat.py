@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal, Sequence, Type
 from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 from pydantic import AliasChoices, BaseModel, Field, JsonValue
+import json
 
 
 class MessageBase(BaseModel):
@@ -131,6 +132,13 @@ class MessagePartToolResult(MessagePartBase):
         validation_alias=AliasChoices("providerOptions", "provider_options"),
         serialization_alias="providerOptions",
     )
+
+    def serialize_output(self) -> str:
+        return (
+            json.dumps(self.output)
+            if isinstance(self.output, (list, dict))
+            else str(self.output)
+        )
 
 
 type MessagePart = Annotated[
