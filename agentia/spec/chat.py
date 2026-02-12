@@ -3,7 +3,7 @@ import inspect
 from typing import Annotated, Any, Literal, Sequence, Type
 from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
-from pydantic import AliasChoices, BaseModel, Field, JsonValue
+from pydantic import BaseModel, Field, JsonValue
 import json
 
 
@@ -15,11 +15,7 @@ class MessageBase(BaseModel):
 class SystemMessage(MessageBase):
     role: Literal["system"] = "system"
     content: str
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "providerOptions"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -39,11 +35,7 @@ class MessagePartBase(BaseModel):
 class MessagePartText(MessagePartBase):
     type: Literal["text"] = "text"
     text: str
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "provider_options"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -58,11 +50,7 @@ class MessagePartText(MessagePartBase):
 class MessagePartReasoning(MessagePartBase):
     type: Literal["reasoning"] = "reasoning"
     text: str
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "provider_options"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -77,16 +65,9 @@ class MessagePartReasoning(MessagePartBase):
 class MessagePartFile(MessagePartBase):
     type: Literal["file"] = "file"
     data: DataContent
-    media_type: str = Field(
-        validation_alias=AliasChoices("mediaType", "media_type"),
-        serialization_alias="mediaType",
-    )
+    media_type: str
     filename: str | None = None
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "provider_options"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def to_url(self) -> str:
         return File(data=self.data, media_type=self.media_type).to_url()
@@ -94,49 +75,21 @@ class MessagePartFile(MessagePartBase):
 
 class MessagePartToolCall(MessagePartBase):
     type: Literal["tool-call"] = "tool-call"
-    tool_call_id: str = Field(
-        validation_alias=AliasChoices("toolCallId", "tool_call_id"),
-        serialization_alias="toolCallId",
-    )
-    tool_name: str = Field(
-        validation_alias=AliasChoices("toolName", "tool_name"),
-        serialization_alias="toolName",
-    )
+    tool_call_id: str
+    tool_name: str
     input: dict[str, JsonValue]
-    provider_executed: bool | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerExecuted", "provider_executed"),
-        serialization_alias="providerExecuted",
-    )
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "provider_options"),
-        serialization_alias="providerOptions",
-    )
+    provider_executed: bool | None = None
+    provider_options: ProviderOptions | None = None
 
 
 class MessagePartToolResult(MessagePartBase):
     type: Literal["tool-result"] = "tool-result"
-    tool_call_id: str = Field(
-        validation_alias=AliasChoices("toolCallId", "tool_call_id"),
-        serialization_alias="toolCallId",
-    )
-    tool_name: str = Field(
-        validation_alias=AliasChoices("toolName", "tool_name"),
-        serialization_alias="toolName",
-    )
+    tool_call_id: str
+    tool_name: str
     input: dict[str, JsonValue]
     output: JsonValue
-    output_files: list[File] | None = Field(
-        default=None,
-        validation_alias=AliasChoices("outputFiles", "output_files"),
-        serialization_alias="outputFiles",
-    )
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "provider_options"),
-        serialization_alias="providerOptions",
-    )
+    output_files: list[File] | None = None
+    provider_options: ProviderOptions | None = None
 
     def serialize_output(self) -> str:
         return (
@@ -168,11 +121,7 @@ type AssistantMessagePart = Annotated[
 class UserMessage(MessageBase):
     role: Literal["user"] = "user"
     content: Sequence[UserMessagePart] | UserMessagePart | str
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "providerOptions"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -213,11 +162,7 @@ class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
     content: Sequence[AssistantMessagePart] | AssistantMessagePart | str
     annotations: list[Annotation] | None = None
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "providerOptions"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -291,11 +236,7 @@ class AssistantMessage(MessageBase):
 class ToolMessage(MessageBase):
     role: Literal["tool"] = "tool"
     content: Sequence[MessagePartToolResult]
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "providerOptions"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -323,11 +264,7 @@ class ResponseFormatText(BaseModel):
 
 class ResponseFormatJson(BaseModel):
     type: Literal["json"] = "json"
-    json_schema: JsonValue | None = Field(
-        default=None,
-        validation_alias=AliasChoices("schema", "json_schema"),
-        serialization_alias="schema",
-    )
+    json_schema: JsonValue | None = None
     name: str | None = None
     description: str | None = None
 

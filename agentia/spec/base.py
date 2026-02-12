@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from pydantic import AliasChoices, BaseModel, Field, JsonValue, HttpUrl
+from pydantic import BaseModel, Field, JsonValue, HttpUrl
 from uuid import uuid4
 import base64
 
@@ -19,31 +19,11 @@ type ToolChoice = Literal["auto", "none", "required"] | str
 
 
 class Usage(BaseModel):
-    input_tokens: int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("inputTokens", "input_tokens"),
-        serialization_alias="inputTokens",
-    )
-    output_tokens: int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("outputTokens", "output_tokens"),
-        serialization_alias="outputTokens",
-    )
-    total_tokens: int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("totalTokens", "total_tokens"),
-        serialization_alias="totalTokens",
-    )
-    reasoning_tokens: int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("reasoningTokens", "reasoning_tokens"),
-        serialization_alias="reasoningTokens",
-    )
-    cached_input_tokens: int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("cachedInputTokens", "cached_input_tokens"),
-        serialization_alias="cachedInputTokens",
-    )
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    cached_input_tokens: int | None = None
 
     def __add__(self, y: "Usage") -> "Usage":
         x = Usage(**self.model_dump())
@@ -63,16 +43,9 @@ class Usage(BaseModel):
 class FunctionTool(BaseModel):
     type: Literal["function"] = "function"
     name: str
-    input_schema: JsonValue = Field(
-        validation_alias=AliasChoices("inputSchema", "input_schema"),
-        serialization_alias="inputSchema",
-    )
+    input_schema: JsonValue
     description: str | None = None
-    provider_options: ProviderOptions | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerOptions", "provider_options"),
-        serialization_alias="providerOptions",
-    )
+    provider_options: ProviderOptions | None = None
 
     def to_openai_schema(self) -> Any:
         return {
@@ -102,44 +75,27 @@ type ToolSchema = Annotated[
 class ToolCall(BaseModel):
     type: Literal["tool-call"] = "tool-call"
 
-    tool_call_id: str = Field(
-        validation_alias=AliasChoices("toolCallId", "tool_call_id"),
-        serialization_alias="toolCallId",
-    )
+    tool_call_id: str
     """The identifier of the tool call. It must be unique across all tool calls."""
 
-    tool_name: str = Field(
-        validation_alias=AliasChoices("toolName", "tool_name"),
-        serialization_alias="toolName",
-    )
+    tool_name: str
     """The name of the tool that should be called."""
 
     input: dict[str, JsonValue]
     """JSON object with the tool call arguments. Must match the parameters schema of the tool."""
 
-    provider_executed: bool | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerExecuted", "provider_executed"),
-        serialization_alias="providerExecuted",
-    )
+    provider_executed: bool | None = None
     """
     Whether the tool call will be executed by the provider.
     If this flag is not set or is false, the tool call will be executed by the client.
     """
 
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
     """Additional provider-specific metadata for the tool call."""
 
 
 class File(BaseModel):
-    media_type: str = Field(
-        validation_alias=AliasChoices("mediaType", "media_type"),
-        serialization_alias="mediaType",
-    )
+    media_type: str
     data: DataContent
     id: str = Field(default_factory=lambda: str(uuid4()))
 
@@ -163,16 +119,10 @@ class File(BaseModel):
 class ToolCallResponse(BaseModel):
     type: Literal["tool-result"] = "tool-result"
 
-    tool_call_id: str = Field(
-        validation_alias=AliasChoices("toolCallId", "tool_call_id"),
-        serialization_alias="toolCallId",
-    )
+    tool_call_id: str
     """The ID of the tool call that this result is associated with."""
 
-    tool_name: str = Field(
-        validation_alias=AliasChoices("toolName", "tool_name"),
-        serialization_alias="toolName",
-    )
+    tool_name: str
     """Name of the tool that generated this result."""
 
     input: dict[str, JsonValue]
@@ -180,25 +130,13 @@ class ToolCallResponse(BaseModel):
     output: JsonValue
     """Result of the tool call. This is a JSON-serializable object."""
 
-    output_files: list[File] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("outputFiles", "output_files"),
-        serialization_alias="outputFiles",
-    )
+    output_files: list[File] = Field(default_factory=list)
     """Optional list of files generated by the tool call."""
 
-    is_error: bool | None = Field(
-        default=None,
-        validation_alias=AliasChoices("isError", "is_error"),
-        serialization_alias="isError",
-    )
+    is_error: bool | None = None
     """Optional flag if the result is an error or an error message."""
 
-    provider_executed: bool | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerExecuted", "provider_executed"),
-        serialization_alias="providerExecuted",
-    )
+    provider_executed: bool | None = None
     """
     Whether the tool result was generated by the provider.
     If this flag is set to true, the tool result was generated by the provider.
@@ -216,11 +154,7 @@ class ToolCallResponse(BaseModel):
     If this flag is not set or is false, the tool result is not preliminary.
     """
 
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
     """Additional provider-specific metadata for the tool result."""
 
 

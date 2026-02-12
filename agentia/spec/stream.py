@@ -1,89 +1,58 @@
 from datetime import datetime
 from typing import Annotated, Literal, Sequence
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, Field
 from .base import *
 
 
 class StreamPartTextStart(BaseModel):
     type: Literal["text-start"] = "text-start"
     id: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartTextDelta(BaseModel):
     type: Literal["text-delta"] = "text-delta"
     delta: str
     id: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartTextEnd(BaseModel):
     type: Literal["text-end"] = "text-end"
     id: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartReasoningStart(BaseModel):
     type: Literal["reasoning-start"] = "reasoning-start"
     id: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartReasoningDelta(BaseModel):
     type: Literal["reasoning-delta"] = "reasoning-delta"
     delta: str
     id: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartReasoningEnd(BaseModel):
     type: Literal["reasoning-end"] = "reasoning-end"
     id: str
-    provider_metadata: ProviderMetadata | None = Field(
-        default=None,
-        validation_alias=AliasChoices("providerMetadata", "provider_metadata"),
-        serialization_alias="providerMetadata",
-    )
+    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartStreamStart(BaseModel):
     type: Literal["stream-start"] = "stream-start"
     id: str | None = None
     timestamp: datetime | None = None
-    model_id: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("modelId", "model_id"),
-        serialization_alias="modelId",
-    )
+    model_id: str | None = None
 
 
 class StreamPartStreamEnd(BaseModel):
     type: Literal["finish"] = "finish"
     usage: Usage
-    finish_reason: FinishReason = Field(
-        validation_alias=AliasChoices("finishReason", "finish_reason"),
-        serialization_alias="finishReason",
-    )
+    finish_reason: FinishReason
 
 
 class Annotations(BaseModel):
