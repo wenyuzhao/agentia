@@ -67,6 +67,7 @@ __all__ = [
     "ToolResult",
     "File",
     "Annotation",
+    "UserConsent",
     "MessageBase",
     "SystemMessage",
     "MessagePartBase",

@@ -180,7 +180,7 @@ class ToolSet:
         self.__initialized = True
         for plugin in self.plugins.values():
             try:
-                plugin.agent = self.agent
+                plugin._agent = self.agent
                 await plugin.init()
             except Exception as e:
                 from . import PluginInitError

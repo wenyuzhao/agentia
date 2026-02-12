@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Literal
 from pydantic import AliasChoices, BaseModel, Field, JsonValue, HttpUrl
-
+from uuid import uuid4
 
 type ProviderOptions = dict[str, JsonValue]
 type ProviderMetadata = dict[str, dict[str, JsonValue]]
@@ -240,6 +240,16 @@ class Annotation(BaseModel):
     """The URL of the web resource."""
 
 
+class UserConsent(BaseModel):
+    type: Literal["user-consent"] = "user-consent"
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    message: str
+    details: str | None = None
+
+    def __init__(self, message: str, details: str | None = None):
+        super().__init__(message=message, details=details)
+
+
 __all__ = [
     "ProviderOptions",
     "ProviderMetadata",
@@ -254,4 +264,5 @@ __all__ = [
     "ToolResult",
     "File",
     "Annotation",
+    "UserConsent",
 ]

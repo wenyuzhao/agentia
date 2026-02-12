@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Sequence, overload
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Sequence, overload, Any
 import logging
 import uuid
 from agentia.history import History
@@ -10,14 +10,20 @@ from agentia.llm.completion import ChatCompletion, Listeners
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
-from agentia.spec import NonSystemMessage, UserMessage, MessagePartText, ObjectType
+from agentia.spec import (
+    NonSystemMessage,
+    UserMessage,
+    MessagePartText,
+    ObjectType,
+    UserConsent,
+)
 from dataclasses import asdict
 from agentia.tools.mcp import MCPContext
 
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
 
-type Events = Literal["finish"]
+type Events = Literal["finish", "user-consent"]
 
 
 class Agent:
@@ -61,6 +67,7 @@ class Agent:
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
         self.__on_finish = Listeners()
+        self.__on_user_consent = Listeners()
 
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.history.add_instructions(instructions)
@@ -156,10 +163,22 @@ class Agent:
         await self._mcp_context.__aexit__(exc_type, exc_val, exc_tb)
         self._mcp_context = None
 
-    def emit(self, event: Events, *args, **kwargs):
+    async def _emit(self, event: Events, *args, **kwargs):
         match event:
             case "finish":
-                self.__on_finish.emit()
+                await self.__on_finish.emit(*args, **kwargs)
+
+    @overload
+    def on(
+        self, event: Literal["finish"], listener: Callable[[], Any] | None = None
+    ): ...
+
+    @overload
+    def on(
+        self,
+        event: Literal["user-consent"],
+        listener: Callable[[UserConsent], bool | None] | None = None,
+    ): ...
 
     def on(self, event: Events, listener=None):
         if not listener:
@@ -173,6 +192,18 @@ class Agent:
             case "finish":
                 self.__on_finish.on(listener)
 
+    @overload
+    def off(
+        self, event: Literal["finish"], listener: Callable[[], Any] | None = None
+    ): ...
+
+    @overload
+    def off(
+        self,
+        event: Literal["user-consent"],
+        listener: Callable[[UserConsent], bool | None] | None = None,
+    ): ...
+
     def off(self, event: Events, listener=None):
         if not listener:
 
@@ -184,3 +215,11 @@ class Agent:
         match event:
             case "finish":
                 self.__on_finish.off(listener)
+
+    async def user_consent(self, consent: UserConsent) -> bool | None:
+        if len(self.__on_user_consent) > 0:
+            results = await self.__on_user_consent.emit(consent)
+            if results[0] is None or isinstance(results[0], bool):
+                return results[0]
+            return not not results[0]
+        return True

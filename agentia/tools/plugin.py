@@ -38,7 +38,13 @@ class Plugin(abc.ABC):
 
     def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
-        self.agent: Optional["Agent"] = None
+        self._agent: Optional["Agent"] = None
+
+    @property
+    def agent(self) -> "Agent":
+        if self._agent is None:
+            raise AttributeError("Plugin is not attached to any agent.")
+        return self._agent
 
     @classmethod
     def instantiate(cls, config: dict[str, Any]) -> Self:

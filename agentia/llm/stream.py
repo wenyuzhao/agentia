@@ -48,10 +48,10 @@ class ChatCompletionStreamBase:
         self.on_finish = Listeners()
         self.agent = agent
 
-    def _on_finish(self):
-        self.on_finish.emit()
+    async def _on_finish(self):
+        await self.on_finish.emit()
         if self.agent:
-            self.agent.emit("finish")
+            await self.agent._emit("finish")
 
     def _add_new_message(self, msg: NonSystemMessage):
         self.new_messages.append(msg)
@@ -89,7 +89,7 @@ class ChatCompletionStream(ChatCompletionStreamBase):
                                 break
 
                     yield ReasoningStream(gen2())
-            self._on_finish()
+            await self._on_finish()
 
         self.__gen = __gen()
 
@@ -121,7 +121,7 @@ class ChatCompletionEvents(ChatCompletionStreamBase):
         async def __gen():
             async for part in gen:
                 yield part
-            self._on_finish()
+            await self._on_finish()
 
         self.__gen = __gen()
 

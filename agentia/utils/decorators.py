@@ -18,6 +18,7 @@ from typing import (
     get_args,
     get_origin,
     Annotated,
+    Generator,
     TYPE_CHECKING,
 )
 from pydantic import BaseModel, TypeAdapter
@@ -125,7 +126,7 @@ class ToolFuncParam:
         return t, required
 
 
-R = TypeVar("R", Coroutine[Any, Any, Optional[Any | str]], Optional[Any | str])
+R = TypeVar("R", Coroutine[Any, Any, Any], Any)
 
 
 @overload
