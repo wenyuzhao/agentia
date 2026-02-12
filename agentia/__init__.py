@@ -21,8 +21,8 @@ from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError
 from .plugins.skills import Skills, Skill
-from . import llm, plugins
-from .tools import ProviderTool, Tool, Tools, MCP, MCPContext
+from . import plugins
+from .tools import ProviderTool, Tool, Tools, MCP, MCPContext, ToolResult
 from .history import History
 from .llm import LLMOptions
 from .llm.completion import ChatCompletion
@@ -60,11 +60,8 @@ __all__ = [
     "FinishReason",
     "ToolChoice",
     "Usage",
-    "FunctionTool",
-    "ProviderDefinedTool",
-    "Tool",
     "ToolCall",
-    "ToolResult",
+    "ToolCallResponse",
     "File",
     "Annotation",
     "UserConsent",
@@ -97,21 +94,21 @@ __all__ = [
     "StreamPartStreamStart",
     "StreamPartStreamEnd",
     "StreamPart",
-    # plugins
+    # tools & plugins
     "Plugin",
     "PluginInitError",
-    "ToolResult",
     "Skills",
     "Skill",
-    # utils
-    "init_logging",
     "magic",
     "tool",
     "ImageUrl",
     "ProviderTool",
     "Tool",
     "Tools",
+    "ToolResult",
     "MCP",
     "MCPContext",
+    # utils
+    "init_logging",
     "load_dotenv",
 ]

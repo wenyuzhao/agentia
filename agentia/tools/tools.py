@@ -1,14 +1,13 @@
 import asyncio
 import inspect
-import os
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
-from pydantic import AliasChoices, BaseModel, Field, JsonValue, ValidationError
+from pydantic import BaseModel, Field, JsonValue, ValidationError
+from agentia.spec.base import File
 from agentia.tools.mcp import MCP
 import agentia.spec as spec
 from agentia.utils.decorators import ToolFuncParam
 from inspect import Parameter
-from uuid import uuid4
 from pydantic.type_adapter import TypeAdapter
 
 NAME_TAG = "agentia_tool_name"
@@ -141,13 +140,9 @@ type Tool = Plugin | Callable[..., Any] | ProviderTool | MCP
 type Tools = Sequence[Tool]
 
 
-class FileResult(BaseModel):
-    id: str | None = None
-    data: spec.DataContent
-    media_type: str = Field(
-        validation_alias=AliasChoices("mediaType", "media_type"),
-        serialization_alias="mediaType",
-    )
+class ToolResult(BaseModel):
+    output: JsonValue
+    files: list[File] = Field(default_factory=list)
 
 
 class ToolSet:
@@ -241,7 +236,7 @@ class ToolSet:
     def is_empty(self) -> bool:
         return len(self.__tools) == 0
 
-    def get_schema(self) -> Sequence[spec.ProviderDefinedTool | spec.FunctionTool]:
+    def get_schema(self) -> Sequence[spec.ToolSchema]:
         functions = [
             spec.FunctionTool(
                 name=v.name,
@@ -262,108 +257,72 @@ class ToolSet:
         tool: _PythonFunctionTool,
         agent: "Agent",
         args: dict[str, JsonValue],
-    ) -> tuple[spec.ToolResult, FileResult | None]:
+    ) -> spec.ToolCallResponse:
         p_args, kw_args = tool.process_json_args(agent, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
             output = await output
-        # if output is a FileResult, transform the result
-        file = None
-        tool_vision = os.getenv("AGENTIA_EXPERIMENTAL_TOOL_FILES", None)
-        if tool_vision and tool_vision != "0" and tool_vision.lower() != "false":
-            if isinstance(output, FileResult):
-                file = output
-                if not file.id:
-                    file.id = str(uuid4())
-                output: Any = {
-                    "file_id": file.id,
-                    "media_type": file.media_type,
-                    "hint": "The tool outputed a file with the given file_id. The file is attached below.",
-                }
-                d = file.data
-                if isinstance(d, str) and (d.startswith(("http://", "https://"))):
-                    output["url"] = d
-        else:
-            if isinstance(output, FileResult):
-                output = output.model_dump()
-                if isinstance(output["data"], str) and output["data"].startswith(
-                    "data:"
-                ):
-                    del output["data"]
-                output["hint"] = "The tool outputed a file with the given file_id."
-
-        tr = spec.ToolResult(
-            tool_call_id=id, tool_name=tool.name, input=args, output=output
+        files: list[File] = []
+        if isinstance(output, ToolResult):
+            files = output.files
+            output = output.output
+        return spec.ToolCallResponse(
+            tool_call_id=id,
+            tool_name=tool.name,
+            input=args,
+            output=output,
+            output_files=files,
         )
-        return tr, file
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: dict[str, JsonValue]
-    ) -> spec.ToolResult:
+    ) -> spec.ToolCallResponse:
         result = await tool.server.run(tool.name, args)
-        tr = spec.ToolResult(
+        return spec.ToolCallResponse(
             tool_call_id=id, tool_name=tool.name, input=args, output=result
         )
-        return tr
 
     async def __run_one(
         self, agent: "Agent", c: spec.ToolCall
-    ) -> tuple[spec.ToolResult, FileResult | None]:
+    ) -> spec.ToolCallResponse:
         tool = self.__tools.get(c.tool_name, None)
         if not tool:
             raise ValueError(f"Tool {c.tool_name} not found")
         try:
             if isinstance(tool, _PythonFunctionTool):
-                result, file = await self.__run_python_tool(
+                return await self.__run_python_tool(
                     id=c.tool_call_id,
                     tool=tool,
                     agent=agent,
                     args=c.input,
                 )
-                return result, file
             elif isinstance(tool, _MCPTool):
-                result = await self.__run_mcp_tool(
+                return await self.__run_mcp_tool(
                     id=c.tool_call_id,
                     tool=tool,
                     args=c.input,
                 )
-                return result, None
             else:
                 raise ValueError(f"Tool {c.tool_name} is of unknown type")
         except Exception as e:
             output: JsonValue = {"error": str(e)}
-            r = spec.ToolResult(
+            r = spec.ToolCallResponse(
                 tool_call_id=c.tool_call_id,
                 tool_name=c.tool_name,
                 input=c.input,
                 output=output,
             )
-            return r, None
+            return r
 
     async def run(
         self, agent: "Agent", tool_calls: list[spec.ToolCall], parallel: bool
-    ) -> tuple[spec.ToolMessage, list[spec.ToolResult], list[FileResult]]:
+    ) -> list[spec.ToolCallResponse]:
         if parallel:
             results = await asyncio.gather(
                 *[self.__run_one(agent, c) for c in tool_calls]
             )
         else:
-            results = []
+            results: list[spec.ToolCallResponse] = []
             for c in tool_calls:
                 results.append(await self.__run_one(agent, c))
-        parts: list[spec.MessagePartToolResult] = []
-        tool_results: list[spec.ToolResult] = []
-        files: list[FileResult] = []
-        for r, f in results:
-            tool_results.append(r)
-            parts.append(
-                spec.MessagePartToolResult(
-                    tool_call_id=r.tool_call_id,
-                    tool_name=r.tool_name,
-                    input=r.input,
-                    output=r.output,
-                )
-            )
-            if f:
-                files.append(f)
-        return spec.ToolMessage(content=parts), tool_results, files
+        return results

@@ -1,4 +1,3 @@
-import base64
 from collections.abc import AsyncGenerator
 from datetime import datetime
 import json
@@ -7,10 +6,8 @@ from typing import Any, Literal, Sequence, override
 from uuid import uuid4
 import httpx
 from pydantic import HttpUrl
-
 from agentia.tools.tools import ToolSet
 from . import LLMOptions, GenerationResult, Provider
-
 from ...spec import *
 from openai.types.chat import (
     ChatCompletionMessageParam,
@@ -82,24 +79,7 @@ class OpenAIAPIProvider(Provider):
                 return ChatCompletionContentPartTextParam(type="text", text=p.text)
             case "file":
                 if p.media_type.startswith("image/"):
-                    if isinstance(p.data, str):
-                        if p.data.startswith("data:"):
-                            # this is a data URL
-                            url = p.data
-                        elif p.data.startswith("http://") or p.data.startswith(
-                            "https://"
-                        ):
-                            # this is a URL
-                            url = p.data
-                        else:
-                            # this is a base64 encoded string
-                            url = f"data:{p.media_type};base64,{p.data}"
-                    elif isinstance(p.data, HttpUrl):
-                        url = str(p.data)
-                    else:
-                        assert isinstance(p.data, bytes)
-                        base64_data = base64.b64encode(p.data).decode(encoding="utf-8")
-                        url = f"data:{p.media_type};base64,{base64_data}"
+                    url = p.to_url()
                     detail = (p.provider_options or {}).get("imageDetail", None)
                     if detail not in ["auto", "low", "high"]:
                         detail = "auto"
@@ -108,24 +88,7 @@ class OpenAIAPIProvider(Provider):
                         image_url={"url": url, "detail": detail},  # type: ignore
                     )
                 if p.media_type.startswith("video/"):
-                    if isinstance(p.data, str):
-                        if p.data.startswith("data:"):
-                            # this is a data URL
-                            url = p.data
-                        elif p.data.startswith("http://") or p.data.startswith(
-                            "https://"
-                        ):
-                            # this is a URL
-                            url = p.data
-                        else:
-                            # this is a base64 encoded string
-                            url = f"data:{p.media_type};base64,{p.data}"
-                    elif isinstance(p.data, HttpUrl):
-                        url = str(p.data)
-                    else:
-                        assert isinstance(p.data, bytes)
-                        base64_data = base64.b64encode(p.data).decode(encoding="utf-8")
-                        url = f"data:{p.media_type};base64,{base64_data}"
+                    url = p.to_url()
                     return {"type": "video_url", "video_url": {"url": url}}  # type: ignore
                 elif p.media_type.startswith("audio/"):
                     if isinstance(p.data, HttpUrl) or (
@@ -158,21 +121,7 @@ class OpenAIAPIProvider(Provider):
                         # this is a file ID
                         return {"type": "file", "file": {"file_id": p.data}}
                     else:
-                        url = None
-                        if isinstance(p.data, str):
-                            if p.data.startswith("data:"):
-                                url = p.data
-                            else:
-                                # this is a base64 encoded string
-                                url = f"data:{p.media_type};base64,{p.data}"
-                        elif isinstance(p.data, HttpUrl):
-                            url = str(p.data)
-                        else:
-                            assert isinstance(p.data, bytes)
-                            base64_data = base64.b64encode(p.data).decode(
-                                encoding="utf-8"
-                            )
-                            url = f"data:{p.media_type};base64,{base64_data}"
+                        url = p.to_url()
                         return {
                             "type": "file",
                             "file": {
@@ -246,13 +195,34 @@ class OpenAIAPIProvider(Provider):
                     p["images"] = images  # type: ignore
                 r.append(p)
             elif m.role == "tool":
+                files: list[File] = []
                 for p in m.content:
+                    if p.output_files:
+                        p.output = {
+                            "output": p.output,
+                            "files_hint": f"The tool output includes {len(p.output_files)} file(s).",
+                            "files": [f.model_dump() for f in p.output_files],
+                        }
+                        files.extend(p.output_files)
                     val = p.serialize_output()
                     r.append(
                         ChatCompletionToolMessageParam(
                             role="tool", tool_call_id=p.tool_call_id, content=val
                         )
                     )
+                if files:
+                    user_msg = UserMessage(
+                        content=[
+                            MessagePartText(text="[[TOOL_OUTPUT_FILES]]"),
+                            *[
+                                MessagePartFile(
+                                    media_type=f.media_type, data=f.to_url()
+                                )
+                                for f in files
+                            ],
+                        ]
+                    )
+                    r.extend(self._to_oai_messages([user_msg]))
             else:
                 raise ValueError(f"Unsupported message role {m.role}")
         return r
@@ -277,7 +247,7 @@ class OpenAIAPIProvider(Provider):
 
     def _prepare_tools(
         self,
-        tools: Sequence[Tool] | None,
+        tools: Sequence[ToolSchema] | None,
         tool_choice: ToolChoice | None,
     ) -> tuple[
         list[ChatCompletionToolParam] | None, ChatCompletionToolChoiceOptionParam | None

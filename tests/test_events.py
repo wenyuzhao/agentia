@@ -1,4 +1,4 @@
-from agentia import Agent, ToolCall, ToolResult
+from agentia import Agent, ToolCall, ToolCallResponse
 from typing import Annotated
 import pytest
 import dotenv
@@ -21,10 +21,10 @@ async def test_events():
         print(e)
         if isinstance(e, ToolCall):
             tool_call_part = e
-        elif isinstance(e, ToolResult):
+        elif isinstance(e, ToolCallResponse):
             tool_result_part = e
     assert tool_call_part is not None
     assert tool_result_part is not None
     assert tool_call_part.tool_name == "calc"
     assert tool_result_part.tool_name == "calc"
-    assert tool_result_part.result == 2
+    assert tool_result_part.output == 2

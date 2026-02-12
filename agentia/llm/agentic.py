@@ -12,22 +12,21 @@ if TYPE_CHECKING:
 
 async def __process_tool_calls(
     agent: "Agent", tool_calls: list[ToolCall], tools: ToolSet, parallel: bool
-) -> tuple[ToolMessage, list[ToolResult], UserMessage | None]:
+) -> tuple[ToolMessage, list[ToolCallResponse]]:
     assert tools is not None, "No tools provided"
-    tool_msg, tool_results, files = await tools.run(agent, tool_calls, parallel)
-    if files:
-        msg = UserMessage(
-            content=[
-                MessagePartText(text="[[TOOL_OUTPUT_FILES]]"),
-                *(
-                    MessagePartFile(filename=f.id, media_type=f.media_type, data=f.data)
-                    for f in files
-                ),
-            ]
+    tool_responses = await tools.run(agent, tool_calls, parallel)
+    tool_msg_parts: list[MessagePartToolResult] = []
+    for tr in tool_responses:
+        mptr = MessagePartToolResult(
+            tool_call_id=tr.tool_call_id,
+            tool_name=tr.tool_name,
+            input=tr.input,
+            output=tr.output,
+            output_files=tr.output_files,
         )
-    else:
-        msg = None
-    return tool_msg, tool_results, msg
+        tool_msg_parts.append(mptr)
+    tool_msg = ToolMessage(content=tool_msg_parts)
+    return tool_msg, tool_responses
 
 
 def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
@@ -50,7 +49,7 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
                 if result.finish_reason != "tool-calls":
                     break
                 # Call tools and continue
-                tool_msg, _, extra_msg = await __process_tool_calls(
+                tool_msg, _ = await __process_tool_calls(
                     agent,
                     tool_calls,
                     tools=tools,
@@ -59,9 +58,6 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
                 yield tool_msg
                 messages.append(tool_msg)
                 c._add_new_message(tool_msg)
-                if extra_msg:
-                    messages.append(extra_msg)
-                    c._add_new_message(extra_msg)
 
         agent.history.add(*c.new_messages)
 
@@ -138,19 +134,16 @@ def run_agent_loop_streamed(
                 if not tool_calls:
                     break
                 # Call tools and continue
-                tool_msg, tool_results, extra_msg = await __process_tool_calls(
+                tool_msg, tool_responses = await __process_tool_calls(
                     agent,
                     tool_calls,
                     tools,
                     options.parallel_tool_calls or False,
                 )
-                for tr in tool_results:
+                for tr in tool_responses:
                     yield tr
                 messages.append(tool_msg)
                 s._add_new_message(tool_msg)
-                if extra_msg:
-                    messages.append(extra_msg)
-                    s._add_new_message(extra_msg)
         s.finish_reason = last_finish_reason
         yield StreamPartStreamEnd(usage=s.usage, finish_reason=last_finish_reason)
 

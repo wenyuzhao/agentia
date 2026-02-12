@@ -127,6 +127,11 @@ class MessagePartToolResult(MessagePartBase):
     )
     input: dict[str, JsonValue]
     output: JsonValue
+    output_files: list[File] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("outputFiles", "output_files"),
+        serialization_alias="outputFiles",
+    )
     provider_options: ProviderOptions | None = Field(
         default=None,
         validation_alias=AliasChoices("providerOptions", "provider_options"),

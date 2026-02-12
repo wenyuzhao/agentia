@@ -107,7 +107,7 @@ type StreamPart = Annotated[
     | StreamPartReasoningDelta
     | StreamPartReasoningEnd
     | ToolCall
-    | ToolResult
+    | ToolCallResponse
     | Annotation
     | StreamPartStreamStart
     | StreamPartStreamEnd,
