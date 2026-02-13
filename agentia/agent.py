@@ -6,7 +6,7 @@ import uuid
 from agentia.history import History
 from agentia.llm import LLMOptions, LLMOptionsUnion, get_provider
 from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
-from agentia.llm.completion import ChatCompletion, Listeners
+from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
@@ -19,11 +19,16 @@ from agentia.spec import (
 )
 from dataclasses import asdict
 from agentia.tools.mcp import MCPContext
+from agentia.utils.event_emitter import EventEmitter
 
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
 
-type Events = Literal["finish", "user-consent"]
+
+class AgentEvents:
+    def __init__(self):
+        self.end_of_turn = EventEmitter[Callable[[], Any]]()
+        self.user_consent = EventEmitter[Callable[[UserConsent], bool | None]]()
 
 
 class Agent:
@@ -66,8 +71,7 @@ class Agent:
         self.log = logging.getLogger(f"agentia.agent")
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
-        self.__on_finish = Listeners()
-        self.__on_user_consent = Listeners()
+        self.events = AgentEvents()
 
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.history.add_instructions(instructions)
@@ -163,63 +167,20 @@ class Agent:
         await self._mcp_context.__aexit__(exc_type, exc_val, exc_tb)
         self._mcp_context = None
 
-    async def _emit(self, event: Events, *args, **kwargs):
-        match event:
-            case "finish":
-                await self.__on_finish.emit(*args, **kwargs)
-
-    @overload
-    def on(
-        self, event: Literal["finish"], listener: Callable[[], Any] | None = None
-    ): ...
-
-    @overload
-    def on(
-        self,
-        event: Literal["user-consent"],
-        listener: Callable[[UserConsent], bool | None] | None = None,
-    ): ...
-
-    def on(self, event: Events, listener=None):
-        if not listener:
-
-            def decorator(func):
-                self.on(event, func)
-                return func
-
-            return decorator
-        match event:
-            case "finish":
-                self.__on_finish.on(listener)
-
-    @overload
-    def off(
-        self, event: Literal["finish"], listener: Callable[[], Any] | None = None
-    ): ...
-
-    @overload
-    def off(
-        self,
-        event: Literal["user-consent"],
-        listener: Callable[[UserConsent], bool | None] | None = None,
-    ): ...
-
-    def off(self, event: Events, listener=None):
-        if not listener:
-
-            def decorator(func):
-                self.off(event, func)
-                return func
-
-            return decorator
-        match event:
-            case "finish":
-                self.__on_finish.off(listener)
-
-    async def user_consent(self, consent: UserConsent) -> bool | None:
-        if len(self.__on_user_consent) > 0:
-            results = await self.__on_user_consent.emit(consent)
-            if results[0] is None or isinstance(results[0], bool):
-                return results[0]
-            return not not results[0]
+    async def user_consent(
+        self, message: str | UserConsent, details: str | None = None
+    ) -> bool | None:
+        if isinstance(message, str):
+            consent = UserConsent(message=message, details=details)
+        else:
+            assert details is None
+            consent = message
+        if len(self.events.user_consent) > 0:
+            results = await self.events.user_consent.emit(consent)
+            # All handlers must return True to allow the action
+            for r in results:
+                if not isinstance(r, bool) or r is False:
+                    return False
+            return True
+        # Allow any requests by default
         return True

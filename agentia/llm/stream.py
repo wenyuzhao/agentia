@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Literal, TYPE_CHECKING
 
-from agentia.llm.completion import Listeners, async_gen_to_sync
+from agentia.llm.completion import async_gen_to_sync
 from agentia.spec import *
 
 if TYPE_CHECKING:
@@ -45,13 +45,10 @@ class ChatCompletionStreamBase:
         self.usage = Usage()
         self.finish_reason: FinishReason | None = None
         self.new_messages: list[NonSystemMessage] = []
-        self.on_finish = Listeners()
         self.agent = agent
 
     async def _on_finish(self):
-        await self.on_finish.emit()
-        if self.agent:
-            await self.agent._emit("finish")
+        await self.agent.events.end_of_turn.emit()
 
     def _add_new_message(self, msg: NonSystemMessage):
         self.new_messages.append(msg)
