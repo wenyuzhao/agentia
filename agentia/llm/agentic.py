@@ -30,11 +30,11 @@ async def __process_tool_calls(
 
 
 def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
-    messages = agent.history.get()
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         await tools.init()
+        messages = agent.history.get()
         async with httpx.AsyncClient() as client:
             while True:
                 result = await agent.provider.generate(
@@ -79,11 +79,11 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
 def run_agent_loop_streamed(
     agent: "Agent", events: bool, options: LLMOptions
 ) -> ChatCompletionStream | ChatCompletionEvents:
-    messages = agent.history.get()
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[StreamPart, None]:
         await tools.init()
+        messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
 
         async with httpx.AsyncClient() as client:

@@ -37,7 +37,12 @@ class Agent:
         model: str | None = None,
         tools: Sequence[Tool] | None = None,
         id: str | None = None,
-        instructions: str | Callable[[], str | None] | None = None,
+        instructions: (
+            str
+            | Callable[[], str | None]
+            | Sequence[str | Callable[[], str | None]]
+            | None
+        ) = None,
         options: LLMOptionsUnion | None = None,
         skills: Sequence[Path | str] | "Skills" | bool = False,
     ) -> None:
@@ -66,7 +71,11 @@ class Agent:
         self.provider = get_provider(model)
         self.history = History()
         if instructions:
-            self.history.add_instructions(instructions)
+            if isinstance(instructions, (str, Callable)):
+                self.history.add_instructions(instructions)
+            else:
+                for i in instructions:
+                    self.history.add_instructions(i)
         self.add_instructions(self.tools.get_instructions)
         self.log = logging.getLogger(f"agentia.agent")
         self._mcp_context: Optional[MCPContext] = None

@@ -18,7 +18,6 @@ from typing import (
     get_args,
     get_origin,
     Annotated,
-    Generator,
     TYPE_CHECKING,
 )
 from pydantic import BaseModel, TypeAdapter
