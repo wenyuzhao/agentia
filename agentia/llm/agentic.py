@@ -123,7 +123,7 @@ def run_agent_loop_streamed(
                             if not part.provider_executed:
                                 tool_calls.append(part)
 
-                    if part.type == "finish":
+                    if part.type == "stream-end":
                         s.usage += part.usage
                         last_finish_reason = part.finish_reason
                     else:

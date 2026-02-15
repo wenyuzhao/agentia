@@ -450,11 +450,7 @@ class OpenAIAPIProvider(Provider):
                 continue
             if not started:
                 started = True
-                yield StreamPartStreamStart(
-                    id=_gen_id(),
-                    timestamp=datetime.fromtimestamp(chunk.created),
-                    model_id=self.model,
-                )
+                yield StreamPartStreamStart(id=_gen_id(), model_id=self.model)
             if not chunk.choices:
                 yield StreamPartStreamEnd(
                     usage=self._get_usage(chunk.usage), finish_reason="stop"

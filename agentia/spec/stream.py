@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Annotated, Literal, Sequence
 from pydantic import BaseModel, Field
 from .base import *
@@ -45,12 +44,11 @@ class StreamPartReasoningEnd(BaseModel):
 class StreamPartStreamStart(BaseModel):
     type: Literal["stream-start"] = "stream-start"
     id: str | None = None
-    timestamp: datetime | None = None
     model_id: str | None = None
 
 
 class StreamPartStreamEnd(BaseModel):
-    type: Literal["finish"] = "finish"
+    type: Literal["stream-end"] = "stream-end"
     usage: Usage
     finish_reason: FinishReason
 
