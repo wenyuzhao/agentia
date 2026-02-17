@@ -11,10 +11,7 @@ from agentia import (
 from agentia.plugins.skills import Skill
 from pydantic import BaseModel, Field
 from tavily import AsyncTavilyClient
-from dotenv import load_dotenv
 import frontmatter
-
-load_dotenv()
 
 
 class SkillScript(BaseModel):
