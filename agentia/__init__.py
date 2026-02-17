@@ -34,10 +34,6 @@ from .llm.stream import (
     ChatCompletionEvents,
 )
 
-if os.environ.get("AGENTIA_PATCH", "true").lower() in ("true", "1", "yes"):
-    from .utils.patches import patch_all
-
-    patch_all()
 
 __all__ = [
     # submodules

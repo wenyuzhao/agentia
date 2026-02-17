@@ -1,5 +1,7 @@
 from typing import Annotated, Literal, Sequence
 from pydantic import BaseModel, Field
+
+from agentia.spec.chat import AssistantMessage, ToolMessage
 from .base import *
 
 
@@ -41,6 +43,17 @@ class StreamPartReasoningEnd(BaseModel):
     provider_metadata: ProviderMetadata | None = None
 
 
+class StreamPartMessageStart(BaseModel):
+    type: Literal["message-start"] = "message-start"
+    role: Literal["assistant", "tool"]
+
+
+class StreamPartMessageEnd(BaseModel):
+    type: Literal["message-end"] = "message-end"
+    role: Literal["assistant", "tool"]
+    message: Annotated[AssistantMessage | ToolMessage, Field(discriminator="role")]
+
+
 class StreamPartStreamStart(BaseModel):
     type: Literal["stream-start"] = "stream-start"
     id: str | None = None
@@ -77,7 +90,9 @@ type StreamPart = Annotated[
     | ToolCallResponse
     | Annotation
     | StreamPartStreamStart
-    | StreamPartStreamEnd,
+    | StreamPartStreamEnd
+    | StreamPartMessageStart
+    | StreamPartMessageEnd,
     Field(discriminator="type"),
 ]
 
@@ -88,6 +103,8 @@ __all__ = [
     "StreamPartReasoningStart",
     "StreamPartReasoningDelta",
     "StreamPartReasoningEnd",
+    "StreamPartMessageStart",
+    "StreamPartMessageEnd",
     "StreamPartStreamStart",
     "StreamPartStreamEnd",
     "StreamPart",

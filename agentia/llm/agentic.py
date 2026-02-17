@@ -87,6 +87,7 @@ def run_agent_loop_streamed(
         last_finish_reason: FinishReason = "unknown"
 
         async with httpx.AsyncClient() as client:
+            stream_started = False
             while True:
                 tool_calls: list[ToolCall] = []
                 parts: list[AssistantMessagePart] = []
@@ -98,7 +99,10 @@ def run_agent_loop_streamed(
 
                     match part.type:
                         case "stream-start":
-                            ...
+                            if not stream_started:
+                                stream_started = True
+                                yield part
+                            yield StreamPartMessageStart(role="assistant")
                         case "text-start":
                             last_msg = ""
                         case "text-delta":
@@ -126,14 +130,16 @@ def run_agent_loop_streamed(
                     if part.type == "stream-end":
                         s.usage += part.usage
                         last_finish_reason = part.finish_reason
-                    else:
+                    elif part.type != "stream-start":
                         yield part
                 msg = AssistantMessage(content=parts)
+                yield StreamPartMessageEnd(role="assistant", message=msg)
                 messages.append(msg)
                 s._add_new_message(msg)
                 if not tool_calls:
                     break
                 # Call tools and continue
+                yield StreamPartMessageStart(role="tool")
                 tool_msg, tool_responses = await __process_tool_calls(
                     agent,
                     tool_calls,
@@ -142,6 +148,7 @@ def run_agent_loop_streamed(
                 )
                 for tr in tool_responses:
                     yield tr
+                yield StreamPartMessageEnd(role="tool", message=tool_msg)
                 messages.append(tool_msg)
                 s._add_new_message(tool_msg)
         s.finish_reason = last_finish_reason
