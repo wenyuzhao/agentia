@@ -55,11 +55,18 @@ class Skill(BaseModel):
         if rel_path not in self.script_paths:
             raise ValueError(f"Script '{rel_path}' not found in skill '{self.name}'")
         script_path = self.path / rel_path
-        cmd = ["python", str(script_path), *args]
-        # if script has a sheband and is executable, run it directly
-        if script_path.read_text(encoding="utf-8").startswith("#!"):
-            if os.access(script_path, os.X_OK):
-                cmd.pop(0)
+        if os.access(script_path, os.X_OK):
+            cmd = [str(script_path), *args]
+        elif script_path.suffix == ".py":
+            cmd = ["python", str(script_path), *args]
+        elif script_path.suffix in [".sh", ".bash"]:
+            cmd = ["bash", str(script_path), *args]
+        elif script_path.suffix == ".js":
+            cmd = ["node", str(script_path), *args]
+        else:
+            raise ValueError(
+                f"Unsupported script type '{script_path.suffix}' in skill '{self.name}'"
+            )
         # run the script with the given arguments and return the output and stderr
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.getcwd())
         return result.returncode, result.stdout, result.stderr
