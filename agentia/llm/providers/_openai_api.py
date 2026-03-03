@@ -1,25 +1,13 @@
 from collections.abc import AsyncGenerator
-from datetime import datetime
 import json
 import os
 from typing import Any, Literal, Sequence, override
 from uuid import uuid4
 import httpx
-from pydantic import HttpUrl
 from agentia.tools.tools import ToolSet
 from . import LLMOptions, GenerationResult, Provider
 from ...spec import *
 from openai.types.chat import (
-    ChatCompletionMessageParam,
-    ChatCompletionToolMessageParam,
-    ChatCompletionUserMessageParam,
-    ChatCompletionSystemMessageParam,
-    ChatCompletionAssistantMessageParam,
-    ChatCompletionMessageToolCallParam,
-    ChatCompletionContentPartParam,
-    ChatCompletionContentPartTextParam,
-    ChatCompletionContentPartImageParam,
-    ChatCompletionContentPartInputAudioParam,
     ChatCompletionToolParam,
     ChatCompletionToolChoiceOptionParam,
 )
@@ -204,6 +192,7 @@ class OpenAIAPIProvider(Provider):
 
     def _get_extra_body(self, options: LLMOptions) -> dict[str, Any]:
         body: dict[str, Any] = {}
+        body.update(self.extra_body)
         if options.provider_options:
             body.update(options.provider_options)
         return body
