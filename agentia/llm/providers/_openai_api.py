@@ -155,6 +155,8 @@ class OpenAIAPIProvider(Provider):
     ) -> dict[str, Any]:
         msgs = self._to_oai_messages(messages)
         rf = options.response_format
+        if rf and not isinstance(rf, (ResponseFormatJson, ResponseFormatText)):
+            rf = ResponseFormatJson.from_model(rf)
         if not rf or rf.type == "text":
             response_format = None
         elif not rf.json_schema:

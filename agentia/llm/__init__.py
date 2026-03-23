@@ -1,6 +1,7 @@
 import os
 import re
 from typing import TYPE_CHECKING, Sequence, TypedDict
+from openai import BaseModel
 from pydantic import AnyUrl
 from agentia import spec
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ class LLMOptionsDict(TypedDict, total=False):
     seed: int | None
     tool_choice: spec.ToolChoice | None
     provider_options: spec.ProviderOptions | None
-    response_format: spec.ResponseFormat | None
+    response_format: spec.ResponseFormat | type[BaseModel] | None
     parallel_tool_calls: bool | None
 
 
@@ -36,7 +37,7 @@ class LLMOptions:
     seed: int | None = None
     tool_choice: spec.ToolChoice | None = None
     provider_options: spec.ProviderOptions | None = None
-    response_format: spec.ResponseFormat | None = None
+    response_format: spec.ResponseFormat | type[BaseModel] | None = None
     parallel_tool_calls: bool | None = True
 
 
