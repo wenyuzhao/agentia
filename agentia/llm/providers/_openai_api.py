@@ -56,8 +56,14 @@ class OpenAIAPIProvider(Provider):
     def enable_reasoning(self) -> None:
         self.extra_body["reasoning"] = {
             "enabled": True,
-            "effort": "high",
+            "effort": os.environ.get("AGENTIA_REASONING_EFFORT", "high"),
         }
+        if os.environ.get("AGENTIA_REASONING_EXCLUDE", "").lower() in {
+            "true",
+            "1",
+            "yes",
+        }:
+            self.extra_body["reasoning"]["exclude"] = True
 
     def _to_oai_messages(self, messages: list[Message]) -> list[Any]:
         r: list[Any] = []
