@@ -290,6 +290,8 @@ class OpenAIAPIProvider(Provider):
         tool_calls: list[ToolCall | None] = []
         tool_call_partial_inputs: dict[str, str] = {}
         finished = False
+        first_chunk = True
+
         async for chunk in response:
             if finished:
                 continue
@@ -304,6 +306,16 @@ class OpenAIAPIProvider(Provider):
 
             choice = chunk.choices[0]
             delta = choice.delta
+
+            # For anthropic/claude-opus-4.6 on openrouter, there is an extra chunk before reasoning with content == '\n'.
+            # Filter this out.
+            if (
+                first_chunk
+                and not hasattr(delta, "reasoning")
+                and (delta.content == "\n" or not delta.content)
+            ):
+                first_chunk = False
+                continue
 
             if rd := getattr(delta, "reasoning", None):
                 if not self.reasoning:
