@@ -64,10 +64,14 @@ def get_provider(selector: str) -> "Provider":
             from .providers.openai import OpenAI
 
             return OpenAI(model=model)
-        case "gateway":
-            from .providers.gateway import Gateway
+        case "vercel":
+            from .providers.vercel import Vercel
 
-            return Gateway(model=model)
+            return Vercel(model=model)
+        case "cloudflare":
+            from .providers.cloudflare import Cloudflare
+
+            return Cloudflare(model=model)
         case "openrouter":
             from .providers.openrouter import OpenRouter
 
