@@ -42,30 +42,62 @@ class OpenAIAPIProvider(Provider):
         self.base_url = base_url
         self.extra_headers: dict[str, str] = {}
         self.extra_body: dict[str, Any] = {}
-        if think:
-            self.reasoning = True
-            self.enable_reasoning()
-        else:
-            self.reasoning = False
+        self.__think_in_model_string = think
 
     def client(self, client: httpx.AsyncClient) -> openai.AsyncOpenAI:
         return openai.AsyncOpenAI(
             api_key=self.api_key, base_url=self.base_url, http_client=client
         )
 
-    def enable_reasoning(self) -> None:
+    def reasoning_enabled(self, options: LLMOptions) -> bool:
+        if r := options.reasoning:
+            if r.enabled is not None:
+                return r.enabled
+
+        return self.__think_in_model_string or os.environ.get(
+            "AGENTIA_REASONING_ENABLED", ""
+        ).lower() in {"true", "1", "yes"}
+
+    def get_reasoning_args(
+        self,
+        enabled: bool | None,
+        effort: str | None,
+        exclude: bool | None,
+        max_tokens: int | None,
+    ) -> dict[str, Any] | None:
+        if not enabled:
+            return None
         reasoning: dict[str, Any] = {"enabled": True}
-        if effort := os.environ.get("AGENTIA_REASONING_EFFORT"):
+        if effort is not None:
             reasoning["effort"] = effort
-        if os.environ.get("AGENTIA_REASONING_EXCLUDE", "").lower() in {
+        if exclude is not None:
+            reasoning["exclude"] = exclude
+        if max_tokens is not None:
+            reasoning["max_tokens"] = max_tokens
+        return reasoning
+
+    def get_reasoning_args_from_options(
+        self, options: LLMOptions
+    ) -> dict[str, Any] | None:
+        enabled = self.reasoning_enabled(options)
+        effort = os.environ.get("AGENTIA_REASONING_EFFORT")
+        exclude = os.environ.get("AGENTIA_REASONING_EXCLUDE", "").lower() in {
             "true",
             "1",
             "yes",
-        }:
-            reasoning["exclude"] = True
-        if max_tokens := os.environ.get("AGENTIA_REASONING_MAX_TOKENS"):
-            reasoning["max_tokens"] = int(max_tokens)
-        self.extra_body["reasoning"] = reasoning
+        }
+        if x := os.environ.get("AGENTIA_REASONING_MAX_TOKENS"):
+            max_tokens = int(x)
+        else:
+            max_tokens = None
+        if (r := options.reasoning) and r.enabled:
+            if r.effort is not None:
+                effort = r.effort
+            if r.exclude is not None:
+                exclude = r.exclude
+            if r.max_tokens is not None:
+                max_tokens = r.max_tokens
+        return self.get_reasoning_args(enabled, effort, exclude, max_tokens)
 
     def _to_oai_messages(self, messages: list[Message]) -> list[Any]:
         r: list[Any] = []
@@ -203,6 +235,8 @@ class OpenAIAPIProvider(Provider):
     def _get_extra_body(self, options: LLMOptions) -> dict[str, Any]:
         body: dict[str, Any] = {}
         body.update(self.extra_body)
+        if reasoning_args := self.get_reasoning_args_from_options(options):
+            body.update({"reasoning": reasoning_args})
         if options.provider_options:
             body.update(options.provider_options)
         return body
@@ -230,7 +264,7 @@ class OpenAIAPIProvider(Provider):
         choice = response.choices[0]
         parts: Sequence[AssistantMessagePart] = []
 
-        if self.reasoning and hasattr(choice.message, "reasoning"):
+        if self.reasoning_enabled(options) and hasattr(choice.message, "reasoning"):
             reasoning_text: str = choice.message.reasoning  # type: ignore
             if reasoning_text and reasoning_text.strip() != "":
                 parts.append(MessagePartReasoning(text=reasoning_text))
@@ -326,7 +360,7 @@ class OpenAIAPIProvider(Provider):
                 continue
 
             if rd := getattr(delta, "reasoning", None):
-                if not self.reasoning:
+                if not self.reasoning_enabled(options):
                     continue
                 if not streaming_reasoning:
                     streaming_reasoning = True

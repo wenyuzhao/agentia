@@ -1,3 +1,4 @@
+from typing import Any, override
 from ._openai_api import OpenAIAPIProvider
 import os
 
@@ -11,10 +12,20 @@ class Ollama(OpenAIAPIProvider):
             os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1"),
         )
         api_key = api_key or os.environ.get("OLLAMA_API_KEY", "dummy")
-        think = model.endswith(":think")
-        if think:
-            model = model[:-6]
         super().__init__(
             provider="ollama", model=model, api_key=api_key, base_url=base_url
         )
-        self.extra_body["think"] = think
+
+    @override
+    def get_reasoning_args(
+        self,
+        enabled: bool | None,
+        effort: str | None,
+        exclude: bool | None,
+        max_tokens: int | None,
+    ) -> dict[str, Any]:
+        if not enabled:
+            return {}
+        return {
+            "think": enabled,
+        }

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 LOGGER = logging.getLogger("agentia")
 
@@ -24,7 +23,7 @@ from .plugins.skills import Skills, Skill
 from . import plugins
 from .tools import ProviderTool, Tool, Tools, MCP, MCPContext, ToolResult
 from .history import History
-from .llm import LLMOptions
+from .llm import LLMOptions, ReasoningOptions
 from .llm.completion import ChatCompletion
 from .llm.stream import (
     TextStream,
@@ -49,6 +48,7 @@ __all__ = [
     "ChatCompletionStream",
     "ChatCompletionEvents",
     "LLMOptions",
+    "ReasoningOptions",
     # spec
     "ProviderOptions",
     "ProviderMetadata",

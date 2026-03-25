@@ -1,32 +1,22 @@
 import os
 import re
-from typing import TYPE_CHECKING, Sequence, TypedDict
+from typing import TYPE_CHECKING, Sequence
 from openai import BaseModel
 from pydantic import AnyUrl
 from agentia import spec
-from dataclasses import dataclass
 
 if TYPE_CHECKING:
     from agentia.llm.providers import Provider
 
 
-class LLMOptionsDict(TypedDict, total=False):
-    max_output_tokens: int | None
-    temperature: float | None
-    stop_sequences: Sequence[str] | None
-    top_p: float | None
-    top_k: int | None
-    presence_penalty: float | None
-    frequency_penalty: float | None
-    seed: int | None
-    tool_choice: spec.ToolChoice | None
-    provider_options: spec.ProviderOptions | None
-    response_format: spec.ResponseFormat | type[BaseModel] | None
-    parallel_tool_calls: bool | None
+class ReasoningOptions(BaseModel):
+    enabled: bool | None = None
+    effort: str | None = None
+    exclude: bool | None = None
+    max_tokens: int | None = None
 
 
-@dataclass
-class LLMOptions:
+class LLMOptions(BaseModel):
     max_output_tokens: int | None = None
     temperature: float | None = None
     stop_sequences: Sequence[str] | None = None
@@ -39,9 +29,7 @@ class LLMOptions:
     provider_options: spec.ProviderOptions | None = None
     response_format: spec.ResponseFormat | type[BaseModel] | None = None
     parallel_tool_calls: bool | None = True
-
-
-type LLMOptionsUnion = LLMOptions | LLMOptionsDict
+    reasoning: ReasoningOptions | None = None
 
 
 def get_provider(selector: str) -> "Provider":

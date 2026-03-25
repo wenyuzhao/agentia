@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Callable, Literal, Optional, Sequence, overloa
 import logging
 import uuid
 from agentia.history import History
-from agentia.llm import LLMOptions, LLMOptionsUnion, get_provider
+from agentia.llm import LLMOptions, get_provider
 from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
@@ -17,7 +17,6 @@ from agentia.spec import (
     ObjectType,
     UserConsent,
 )
-from dataclasses import asdict
 from agentia.tools.mcp import MCPContext
 from agentia.utils.event_emitter import EventEmitter
 
@@ -43,7 +42,7 @@ class Agent:
             | Sequence[str | Callable[[], str | None]]
             | None
         ) = None,
-        options: LLMOptionsUnion | None = None,
+        options: LLMOptions | None = None,
         skills: Sequence[Path | str] | "Skills" | bool = False,
     ) -> None:
         from agentia.plugins.skills import Skills
@@ -95,17 +94,14 @@ class Agent:
         else:
             self.history.add(*prompt)
 
-    def __merge_options(self, options: LLMOptionsUnion | None) -> LLMOptions:
-        options_merged = LLMOptions()
-        for k, v in asdict(self.options).items():
-            setattr(options_merged, k, v)
+    def __merge_options(self, options: LLMOptions | None) -> LLMOptions:
+        options_merged = {}
+        for k, v in self.options.model_dump().items():
+            options_merged[k] = v
         if options:
-            options_dict = (
-                asdict(options) if isinstance(options, LLMOptions) else options
-            )
-            for k, v in options_dict.items():
-                setattr(options_merged, k, v)
-        return options_merged
+            for k, v in options.model_dump().items():
+                options_merged[k] = v
+        return LLMOptions(**options_merged)
 
     @overload
     def run(
@@ -114,7 +110,7 @@ class Agent:
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
-        options: LLMOptionsUnion | None = None,
+        options: LLMOptions | None = None,
     ) -> ChatCompletion: ...
 
     @overload
@@ -124,7 +120,7 @@ class Agent:
         *,
         stream: Literal[True],
         events: Literal[False] = False,
-        options: LLMOptionsUnion | None = None,
+        options: LLMOptions | None = None,
     ) -> ChatCompletionStream: ...
 
     @overload
@@ -134,7 +130,7 @@ class Agent:
         *,
         stream: Literal[True],
         events: Literal[True],
-        options: LLMOptionsUnion | None = None,
+        options: LLMOptions | None = None,
     ) -> ChatCompletionEvents: ...
 
     def run(
@@ -143,7 +139,7 @@ class Agent:
         *,
         stream: bool = False,
         events: bool = False,
-        options: LLMOptionsUnion | None = None,
+        options: LLMOptions | None = None,
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
         self.__add_prompt(prompt)
         options_merged = self.__merge_options(options)
@@ -158,7 +154,7 @@ class Agent:
         self,
         prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
         type: type[T],
-        options: LLMOptionsUnion | None = None,
+        options: LLMOptions | None = None,
     ) -> T:
         self.__add_prompt(prompt)
         options_merged = self.__merge_options(options)
