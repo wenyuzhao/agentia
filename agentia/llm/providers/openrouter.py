@@ -9,7 +9,7 @@ class OpenRouter(OpenAIAPIProvider):
             raise ValueError("OPENROUTER_API_KEY environment variable not set")
         base_url = "https://openrouter.ai/api/v1"
         super().__init__(
-            provider="openrouter", model=model, api_key=api_key, base_url=base_url
+            name="openrouter", model=model, api_key=api_key, base_url=base_url
         )
         m = os.getenv("AGENTIA_OPENROUTER_MODALITIES", None)
         if m:

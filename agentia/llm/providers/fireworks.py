@@ -11,5 +11,5 @@ class Fireworks(OpenAIAPIProvider):
             raise ValueError("FIREWORKS_API_KEY environment variable not set")
         base_url = "https://api.fireworks.ai/inference/v1"
         super().__init__(
-            provider="fireworks", model=model, api_key=api_key, base_url=base_url
+            name="fireworks", model=model, api_key=api_key, base_url=base_url
         )

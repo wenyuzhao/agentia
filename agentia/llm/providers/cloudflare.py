@@ -18,7 +18,7 @@ class Cloudflare(OpenAIAPIProvider):
             raise ValueError("CLOUDFLARE_ACCOUNT_ID environment variable not set")
         base_url = f"https://gateway.ai.cloudflare.com/v1/{account_id}/default/compat"
         super().__init__(
-            provider="cloudflare", model=model, api_key=api_key, base_url=base_url
+            name="cloudflare", model=model, api_key=api_key, base_url=base_url
         )
         # self.extra_headers["cf-aig-authorization"] = f"Bearer {api_key}"
 

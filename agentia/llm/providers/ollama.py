@@ -12,9 +12,7 @@ class Ollama(OpenAIAPIProvider):
             os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1"),
         )
         api_key = api_key or os.environ.get("OLLAMA_API_KEY", "dummy")
-        super().__init__(
-            provider="ollama", model=model, api_key=api_key, base_url=base_url
-        )
+        super().__init__(name="ollama", model=model, api_key=api_key, base_url=base_url)
 
     @override
     def get_reasoning_args(

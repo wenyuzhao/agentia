@@ -12,6 +12,4 @@ class OpenAI(OpenAIAPIProvider):
         base_url = base_url or os.environ.get(
             "OPENAI_BASE_URL", "https://api.openai.com/v1"
         )
-        super().__init__(
-            provider="openai", model=model, api_key=api_key, base_url=base_url
-        )
+        super().__init__(name="openai", model=model, api_key=api_key, base_url=base_url)

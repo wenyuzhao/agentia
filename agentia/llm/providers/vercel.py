@@ -14,7 +14,5 @@ class Vercel(OpenAIAPIProvider):
                 "VERCEL_AI_GATEWAY_API_KEY or VERCEL_API_KEY environment variable not set"
             )
         base_url = "https://ai-gateway.vercel.sh/v1"
-        super().__init__(
-            provider="gateway", model=model, api_key=api_key, base_url=base_url
-        )
+        super().__init__(name="vercel", model=model, api_key=api_key, base_url=base_url)
         self.extra_body["modalities"] = ["text", "image"]

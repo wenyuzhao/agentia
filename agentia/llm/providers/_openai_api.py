@@ -22,7 +22,7 @@ def _gen_id() -> str:
 class OpenAIAPIProvider(Provider):
     def __init__(
         self,
-        provider: str,
+        name: str,
         model: str,
         api_key: str | None = None,
         base_url: str | None = None,
@@ -32,7 +32,7 @@ class OpenAIAPIProvider(Provider):
             think = True
         else:
             think = False
-        super().__init__(provider=provider, model=model)
+        super().__init__(name=name, model=model)
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")

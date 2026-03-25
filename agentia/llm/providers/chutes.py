@@ -16,6 +16,4 @@ class Chutes(OpenAIAPIProvider):
                 "CHUTES_API_KEY or CHUTES_API_TOKEN environment variable not set"
             )
         base_url = "https://llm.chutes.ai/v1"
-        super().__init__(
-            provider="chutes", model=model, api_key=api_key, base_url=base_url
-        )
+        super().__init__(name="chutes", model=model, api_key=api_key, base_url=base_url)

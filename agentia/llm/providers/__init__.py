@@ -19,7 +19,7 @@ class GenerationResult:
 
 
 class Provider(abc.ABC):
-    provider: str
+    name: str
     model: str
     supported_urls: dict[str, Sequence[re.Pattern | str]]
     """
@@ -33,8 +33,8 @@ class Provider(abc.ABC):
     Matched URLs are supported natively by the model and are not downloaded.
     """
 
-    def __init__(self, provider: str, model: str):
-        self.provider = provider
+    def __init__(self, name: str, model: str):
+        self.name = name
         self.model = model
         self.supported_urls = {}
 

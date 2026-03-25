@@ -16,6 +16,4 @@ class Qwen(OpenAIAPIProvider):
                 "QWEN_API_KEY or DASHSCOPE_API_KEY environment variable not set"
             )
         base_url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-        super().__init__(
-            provider="qwen", model=model, api_key=api_key, base_url=base_url
-        )
+        super().__init__(name="qwen", model=model, api_key=api_key, base_url=base_url)
