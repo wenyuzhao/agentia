@@ -330,7 +330,7 @@ class OpenAIAPIProvider(Provider):
         streaming_text = False
         streaming_reasoning = False
         tool_calls: list[ToolCall | None] = []
-        tool_call_partial_inputs: dict[str, str] = {}
+        tool_call_partial_inputs: list[str] = []
         finished = False
         first_chunk = True
 
@@ -348,16 +348,6 @@ class OpenAIAPIProvider(Provider):
 
             choice = chunk.choices[0]
             delta = choice.delta
-
-            # For anthropic/claude-opus-4.6 on openrouter, there is an extra chunk before reasoning with content == '\n'.
-            # Filter this out.
-            if (
-                first_chunk
-                and not hasattr(delta, "reasoning")
-                and (delta.content == "\n" or not delta.content)
-            ):
-                first_chunk = False
-                continue
 
             if rd := getattr(delta, "reasoning", None):
                 if not self.reasoning_enabled(options):
@@ -384,18 +374,22 @@ class OpenAIAPIProvider(Provider):
                     index = tc.index
                     if index >= len(tool_calls) or tool_calls[index] is None:
                         tool_calls.extend([None] * (index - len(tool_calls) + 1))
-                        assert tc.id and tc.function and tc.function.name
-                        tool_calls[index] = ToolCall(
-                            tool_call_id=tc.id, tool_name=tc.function.name, input={}
+                        tool_call_partial_inputs.extend(
+                            [""] * (index - len(tool_call_partial_inputs) + 1)
                         )
-                        tool_call_partial_inputs[tc.id] = ""
+                        tool_calls[index] = ToolCall(
+                            tool_call_id="", tool_name="", input={}
+                        )
+                        tool_call_partial_inputs[index] = ""
                     tc_obj = tool_calls[index]
                     assert tc_obj is not None
-                    if tc.function and tc.function.arguments:
-                        assert isinstance(
-                            tool_call_partial_inputs[tc_obj.tool_call_id], str
-                        )
-                        tool_call_partial_inputs[tc_obj.tool_call_id] += tc.function.arguments or ""  # type: ignore
+                    if tc.id:
+                        tc_obj.tool_call_id += tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tc_obj.tool_name += tc.function.name
+                        if tc.function.arguments:
+                            tool_call_partial_inputs[index] += tc.function.arguments
 
             if choice.finish_reason:
                 if streaming_text:
@@ -404,10 +398,7 @@ class OpenAIAPIProvider(Provider):
                 for i, tc in enumerate(tool_calls):
                     if not tc:
                         continue
-                    assert isinstance(tool_call_partial_inputs[tc.tool_call_id], str)
-                    tc.input = json.loads(
-                        tool_call_partial_inputs[tc.tool_call_id] or "{}"
-                    )
+                    tc.input = json.loads(tool_call_partial_inputs[i] or "{}")
                     yield tc
                 yield StreamPartStreamEnd(
                     usage=self._get_usage(chunk.usage),
