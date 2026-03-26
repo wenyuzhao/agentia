@@ -366,7 +366,7 @@ class ToolMessage(MessageBase):
                 p.output = {
                     "output": p.output,
                     "files_hint": f"The tool output includes {len(p.output_files)} file(s).",
-                    "files": [f.model_dump() for f in p.output_files],
+                    "files": [f.id for f in p.output_files],
                 }
                 files.extend(p.output_files)
             val = p.serialize_output()
