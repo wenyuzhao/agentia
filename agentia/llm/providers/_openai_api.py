@@ -349,6 +349,19 @@ class OpenAIAPIProvider(Provider):
             choice = chunk.choices[0]
             delta = choice.delta
 
+            # For anthropic/claude-opus-4.6 on openrouter, there is an extra chunk before reasoning with content == '\n'.
+            # Filter this out.
+            if first_chunk:
+                first_chunk = False
+                if (
+                    self.name == "openrouter"
+                    and self.model.startswith("anthropic/claude")
+                    and self.reasoning_enabled(options)
+                    and not hasattr(delta, "reasoning")
+                    and (not delta.content or not delta.content.strip())
+                ):
+                    continue
+
             if rd := getattr(delta, "reasoning", None):
                 if not self.reasoning_enabled(options):
                     continue
