@@ -79,7 +79,7 @@ class Skills(Plugin):
             search_paths = [
                 Path.cwd() / ".skills",
                 Path.cwd() / ".agentia" / "skills",
-                Path.home() / ".local" / "share" / "agentia" / "skills",
+                Path.home() / ".config" / "agentia" / "skills",
             ]
         self.__search_paths = [Path(p) for p in search_paths]
         # Load skills metadata from search paths
