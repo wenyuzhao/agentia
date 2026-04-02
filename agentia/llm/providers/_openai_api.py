@@ -359,6 +359,7 @@ class OpenAIAPIProvider(Provider):
                     and self.reasoning_enabled(options)
                     and not hasattr(delta, "reasoning")
                     and (not delta.content or not delta.content.strip())
+                    and not delta.tool_calls
                 ):
                     continue
 
