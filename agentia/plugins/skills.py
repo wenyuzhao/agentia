@@ -1,24 +1,16 @@
-from . import Plugin, tool
+from agentia import Plugin
 from pathlib import Path
-from typing import Any, Sequence, override
+from typing import Sequence, override
 import frontmatter
-from pydantic import BaseModel, Field
-import subprocess
-import os
+from pydantic import BaseModel
 
 INSTRUCTIONS_TEMPLATE = """\
-You have access to a set of skills, each with its own instructions, capabilities, resources, and scripts for completing tasks within its spcific domain.
+You have access to a set of skills to extend your ability.
+To use a skill, read its SKILL.md file carefully and follow the instructions.
+Load only the necessary skills to complete the tasks.
 
 # AVAILABLE SKILLS
 {skills}
-
-# SKILL USAGE GUIDELINES
-When a task falls within the domain of a skill,
-1. Use `load_skill` to get the skill instructions and other detailed information.
-2. Follow the skill instructions carefully to complete the task.
-3. You can also use the resources and scripts provided by the skill to help you complete the task.
-
-IMPORTANT: Load only the necessary skills to complete the task.
 """
 
 
@@ -26,50 +18,7 @@ class Skill(BaseModel):
     path: Path
     name: str
     description: str
-    instructions: str
-    resource_paths: list[str] = Field(default_factory=list)
-    script_paths: list[str] = Field(default_factory=list)
     loaded: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        resource_paths: list[str | dict[str, Any]] = []
-        for r in self.resource_paths:
-            if r.lower().endswith((".md", ".markdown")):
-                content = (self.path / r).read_text(encoding="utf-8")
-                post = frontmatter.loads(content)
-                resource_paths.append({"path": r, **post.metadata})
-            else:
-                resource_paths.append(r)
-        doc = self.model_dump()
-        del doc["path"]
-        doc["resource_paths"] = resource_paths
-        return doc
-
-    def load_resource(self, rel_path: str) -> str:
-        if rel_path not in self.resource_paths:
-            raise ValueError(f"Resource '{rel_path}' not found in skill '{self.name}'")
-        resource_path = self.path / rel_path
-        return resource_path.read_text(encoding="utf-8")
-
-    def run_script(self, rel_path: str, args: list[str]) -> tuple[int, str, str]:
-        if rel_path not in self.script_paths:
-            raise ValueError(f"Script '{rel_path}' not found in skill '{self.name}'")
-        script_path = self.path / rel_path
-        if os.access(script_path, os.X_OK):
-            cmd = [str(script_path), *args]
-        elif script_path.suffix == ".py":
-            cmd = ["python", str(script_path), *args]
-        elif script_path.suffix in [".sh", ".bash"]:
-            cmd = ["bash", str(script_path), *args]
-        elif script_path.suffix == ".js":
-            cmd = ["node", str(script_path), *args]
-        else:
-            raise ValueError(
-                f"Unsupported script type '{script_path.suffix}' in skill '{self.name}'"
-            )
-        # run the script with the given arguments and return the output and stderr
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.getcwd())
-        return result.returncode, result.stdout, result.stderr
 
 
 class Skills(Plugin):
@@ -81,34 +30,36 @@ class Skills(Plugin):
                 Path.cwd() / ".agentia" / "skills",
                 Path.home() / ".config" / "agentia" / "skills",
             ]
-        self.__search_paths = [Path(p) for p in search_paths]
-        # Load skills metadata from search paths
-        self.skills: dict[str, Skill] = {}
-        for path in self.__search_paths:
+        self.search_paths = [Path(p) for p in search_paths]
+
+    def load_all_skills(self) -> dict[str, Skill]:
+        skills: dict[str, Skill] = {}
+        for path in self.search_paths:
             if not path.is_dir():
                 continue
-            for skill in self.__load_skill_recursive(path, no_ignore=True):
-                # assert skill.name not in self.skills, f"Duplicate skill name '{skill.name}' found in '{skill.path}'"
-                self.skills[skill.name] = skill
+            for skill in self.discover_skills(path):
+                skills[skill.name] = skill
+        return skills
 
-    def add_skill(self, skill: Skill) -> None:
-        if skill.name in self.skills:
-            raise ValueError(f"A skill with the name '{skill.name}' already exists")
-        self.skills[skill.name] = skill
+    def is_skill(self, path: Path) -> bool:
+        if path.name.startswith(".") or path.name.startswith("_"):
+            return False
+        if not (path / "SKILL.md").is_file():
+            return False
+        return True
 
-    def __load_skill_recursive(self, path: Path, no_ignore=False) -> list[Skill]:
+    def discover_skills(self, path: Path) -> list[Skill]:
+        """Recursively discover skills from the given path."""
         assert path.is_dir(), f"'{path}' is not a directory"
-        if not no_ignore and (path.name.startswith(".") or path.name.startswith("_")):
-            return []
-        if (path / "SKILL.md").is_file():
-            return [self.__load_skill(path)]
+        if self.is_skill(path):
+            return [self.load_skill(path)]
         skills = []
         for child in path.iterdir():
             if child.is_dir():
-                skills.extend(self.__load_skill_recursive(child))
+                skills.extend(self.discover_skills(child))
         return skills
 
-    def __load_skill(self, path: Path) -> Skill:
+    def load_skill(self, path: Path) -> Skill:
         path = path.resolve()
         md = path / "SKILL.md"
         assert md.is_file(), f"Skill metadata file '{md}' does not exist"
@@ -119,123 +70,12 @@ class Skills(Plugin):
         assert isinstance(
             description, str
         ), f"Skill description must be a string in '{md}'"
-        instructions = doc.content
-        # resources
-        resources: list[str] = []
-        supported_extensions = [".md", ".json", ".yaml", ".yml", ".csv", ".xml", ".txt"]
-        excluded_files = {"SKILL.md"}
-        for ext in supported_extensions:
-            for p in (path / "resources").rglob(f"*{ext}"):
-                if p.is_file() and p.name not in excluded_files:
-                    try:
-                        p = p.resolve()
-                        rel_path = p.relative_to(path)
-                        resources.append(rel_path.as_posix())
-                    except Exception as e:
-                        ...
-        # scripts
-        scripts: list[str] = []
-        for p in (path / "scripts").rglob(f"*.py"):
-            if p.is_file() and p.name != "__init__.py":
-                try:
-                    p = p.resolve()
-                    rel_path = p.relative_to(path)
-                    scripts.append(rel_path.as_posix())
-                except Exception as e:
-                    ...
-        return Skill(
-            path=path,
-            name=name,
-            description=description,
-            instructions=instructions,
-            resource_paths=resources,
-            script_paths=scripts,
-        )
+        return Skill(path=path, name=name, description=description)
 
     @override
     def get_instructions(self) -> str:
+        skills = self.load_all_skills()
         s = ""
-        for skill in self.skills.values():
-            s += f"- **{skill.name}**:\n{skill.description}\n\n"
+        for skill in skills.values():
+            s += f"- **{skill.name}**:\n    * path: {str(skill.path/"SKILL.md")}\n    * description: {skill.description}\n\n"
         return INSTRUCTIONS_TEMPLATE.format(skills=s)
-
-    @tool(name="list_skills")
-    def list_skills(self) -> Any:
-        """
-        Get the list of available skills, their high-level descriptions, and whether they are loaded.
-        Use this tool to discover what skills are available and their descriptions.
-        Only use this tool when you need to refresh your memory.
-        """
-        skills = list(self.skills.values())
-        skill_docs = []
-        for skill in skills:
-            skill_docs.append(
-                {
-                    "name": skill.name,
-                    "description": skill.description,
-                    "loaded": skill.loaded,
-                }
-            )
-        return skill_docs
-
-    @tool(name="load_skill")
-    def load_skill(self, skill_name: str) -> Any:
-        """
-        Load the instructions and capabilities of a skill by its name.
-
-        Also lists the resources and scripts provided by the skill, if any, so that you can use them later.
-
-        Call this tool (only once) when you need to perform a task within the skill's domain.
-        """
-        if skill_name not in self.skills:
-            return {"error": f"Skill '{skill_name}' not found"}
-        skill = self.skills[skill_name]
-        return skill.to_dict()
-
-    @tool(name="load_skill_resource")
-    def load_skill_resource(self, skill_name: str, resource_path: str) -> Any:
-        """
-        Load a resource provided by a skill.
-
-        `resource_path` is the path of the resource within the skill directory.
-
-        Call this tool when you need to use a specific resource provided by a skill.
-        """
-        if skill_name not in self.skills:
-            return {"error": f"Skill '{skill_name}' not found"}
-        skill = self.skills[skill_name]
-        try:
-            content = skill.load_resource(resource_path)
-            return {"content": content}
-        except Exception as e:
-            return {"error": str(e)}
-
-    @tool(name="run_skill_script")
-    def run_skill_script(
-        self, skill_name: str, script_path: str, args: list[str]
-    ) -> Any:
-        """
-        Run a script provided by a skill with the given arguments.
-
-        `script_path` is the path of the script within the skill's `scripts` directory.
-
-        Call this tool when you need to execute a specific script provided by a skill to complete a task.
-        """
-        if skill_name not in self.skills:
-            return {"error": f"Skill '{skill_name}' not found"}
-        skill = self.skills[skill_name]
-        try:
-            code, stdout, stderr = skill.run_script(script_path, args)
-            if code != 0:
-                return {
-                    "error": f"Script exited with code {code}",
-                    "stdout": stdout,
-                    "stderr": stderr,
-                }
-            else:
-                doc = {"returncode": code, "stdout": stdout}
-                if stderr:
-                    doc["stderr"] = stderr
-                return doc
-        except Exception as e:
-            return {"error": str(e)}
