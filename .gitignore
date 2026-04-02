@@ -169,3 +169,4 @@ cython_debug/
 .DS_Store
 /.skills
 /.agentia
+/.claude
