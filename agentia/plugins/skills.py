@@ -1,4 +1,4 @@
-from agentia import Plugin
+from . import Plugin
 from pathlib import Path
 from typing import Sequence, override
 import frontmatter
