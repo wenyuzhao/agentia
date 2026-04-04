@@ -15,7 +15,7 @@ from agentia.spec import (
     UserMessage,
     MessagePartText,
     ObjectType,
-    UserConsent,
+    UserConsentRequest,
 )
 from agentia.tools.mcp import MCPContext
 from agentia.utils.event_emitter import EventEmitter
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 class AgentEvents:
     def __init__(self):
         self.end_of_turn = EventEmitter[Callable[[], Any]]()
-        self.user_consent = EventEmitter[Callable[[UserConsent], bool | None]]()
 
 
 class Agent:
@@ -172,20 +171,18 @@ class Agent:
         await self._mcp_context.__aexit__(exc_type, exc_val, exc_tb)
         self._mcp_context = None
 
-    async def user_consent(
-        self, message: str | UserConsent, details: str | None = None
-    ) -> bool | None:
-        if isinstance(message, str):
-            consent = UserConsent(message=message, details=details)
-        else:
-            assert details is None
-            consent = message
-        if len(self.events.user_consent) > 0:
-            results = await self.events.user_consent.emit(consent)
-            # All handlers must return True to allow the action
-            for r in results:
-                if not isinstance(r, bool) or r is False:
-                    return False
-            return True
-        # Allow any requests by default
+    async def user_consent(self, request: UserConsentRequest) -> bool | str | None:
         return True
+
+    async def user_consent_guard(self, request: UserConsentRequest):
+        consent = await self.user_consent(request)
+        if consent is True:
+            return
+        elif consent is False:
+            raise PermissionError("User denied consent.")
+        elif isinstance(consent, str):
+            raise PermissionError(f"User denied consent: {consent}")
+        elif consent is None:
+            raise PermissionError("User did not respond to consent request.")
+        else:
+            raise ValueError(f"Invalid consent response: {consent}")

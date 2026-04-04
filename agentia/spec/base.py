@@ -174,8 +174,8 @@ class Annotation(BaseModel):
     """The URL of the web resource."""
 
 
-class UserConsent(BaseModel):
-    type: Literal["user-consent"] = "user-consent"
+class UserConsentRequest(BaseModel):
+    type: Literal["user-consent-request"] = "user-consent-request"
     id: str = Field(default_factory=lambda: str(uuid4()))
     message: str
     details: str | None = None
@@ -198,5 +198,5 @@ __all__ = [
     "ToolCallResponse",
     "File",
     "Annotation",
-    "UserConsent",
+    "UserConsentRequest",
 ]
