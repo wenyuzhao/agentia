@@ -16,3 +16,4 @@ from .skills import Skills
 from .memory import Memory
 from .search import Search
 from .web import Web
+from .bash import Bash

@@ -1,13 +1,16 @@
 from agentia import Agent
 import pytest
 import dotenv
+from agentia.plugins.bash import Bash
 
 dotenv.load_dotenv()
 
 
 @pytest.mark.asyncio
 async def test_skills():
-    agent = Agent(model="openai/gpt-5-nano", skills=["./examples"])
+    agent = Agent(
+        model="anthropic/claude-sonnet-4.6", skills=["./examples"], tools=[Bash()]
+    )
     run = agent.run("What is the weather and temperature like in boston?")
     all_assistant_content: str = ""
     async for msg in run:

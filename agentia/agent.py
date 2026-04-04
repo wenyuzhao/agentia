@@ -174,7 +174,9 @@ class Agent:
     async def user_consent(self, request: UserConsentRequest) -> bool | str | None:
         return True
 
-    async def user_consent_guard(self, request: UserConsentRequest):
+    async def user_consent_guard(self, request: str | UserConsentRequest):
+        if isinstance(request, str):
+            request = UserConsentRequest(message=request)
         consent = await self.user_consent(request)
         if consent is True:
             return
