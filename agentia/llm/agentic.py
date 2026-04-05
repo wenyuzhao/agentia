@@ -85,6 +85,7 @@ def run_agent_loop_streamed(
         await tools.init()
         messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
+        started = False
 
         async with httpx.AsyncClient() as client:
             while True:
@@ -95,6 +96,10 @@ def run_agent_loop_streamed(
                 async for part in agent.provider.stream(
                     messages, tools, options, client
                 ):
+                    if not started:
+                        started = True
+                        yield StreamPartStart()
+
                     assert part.type not in (
                         "stream-start",
                         "stream-end",
@@ -103,7 +108,6 @@ def run_agent_loop_streamed(
                     match part.type:
                         case "turn-start":
                             yield part
-                            yield StreamPartMessageStart(role="assistant")
                         case "text-start":
                             last_msg = ""
                         case "text-delta":
@@ -134,13 +138,18 @@ def run_agent_loop_streamed(
                     elif part.type != "turn-start":
                         yield part
                 msg = AssistantMessage(content=parts)
-                yield StreamPartMessageEnd(role="assistant", message=msg)
+                yield StreamPartTurnEnd(
+                    role="assistant",
+                    message=msg,
+                    usage=s.usage,
+                    finish_reason=last_finish_reason,
+                )
                 messages.append(msg)
                 s._add_new_message(msg)
                 if not tool_calls:
                     break
                 # Call tools and continue
-                yield StreamPartMessageStart(role="tool")
+                yield StreamPartTurnStart(role="tool")
                 tool_msg, tool_responses = await __process_tool_calls(
                     agent,
                     tool_calls,
@@ -149,11 +158,11 @@ def run_agent_loop_streamed(
                 )
                 for tr in tool_responses:
                     yield tr
-                yield StreamPartMessageEnd(role="tool", message=tool_msg)
+                yield StreamPartTurnEnd(role="tool", message=tool_msg)
                 messages.append(tool_msg)
                 s._add_new_message(tool_msg)
         s.finish_reason = last_finish_reason
-        yield StreamPartTurnEnd(usage=s.usage, finish_reason=last_finish_reason)
+        yield StreamPartEnd(usage=s.usage, finish_reason=last_finish_reason)
 
         agent.history.add(*s.new_messages)
 

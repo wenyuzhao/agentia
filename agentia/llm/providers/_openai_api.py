@@ -339,10 +339,13 @@ class OpenAIAPIProvider(Provider):
                 continue
             if not started:
                 started = True
-                yield StreamPartTurnStart()
+                yield StreamPartTurnStart(role="assistant")
             if not chunk.choices:
                 yield StreamPartTurnEnd(
-                    usage=self._get_usage(chunk.usage), finish_reason="stop"
+                    usage=self._get_usage(chunk.usage),
+                    finish_reason="stop",
+                    role="assistant",
+                    message=None,
                 )
                 continue
 
@@ -417,5 +420,7 @@ class OpenAIAPIProvider(Provider):
                 yield StreamPartTurnEnd(
                     usage=self._get_usage(chunk.usage),
                     finish_reason=self._get_finish_reason(choice.finish_reason),
+                    role="assistant",
+                    message=None,
                 )
                 finished = True

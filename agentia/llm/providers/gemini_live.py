@@ -24,8 +24,6 @@ from agentia.spec.stream import (
     StreamPartAudioDelta,
     StreamPartAudioEnd,
     StreamPartAudioStart,
-    StreamPartMessageEnd,
-    StreamPartMessageStart,
     StreamPartTextDelta,
     StreamPartTextEnd,
     StreamPartTextStart,
@@ -130,9 +128,7 @@ def _build_config(
     realtime_input_config: types.RealtimeInputConfig | None = None
     if not options.vad_enabled:
         realtime_input_config = types.RealtimeInputConfig(
-            automatic_activity_detection=types.AutomaticActivityDetection(
-                disabled=True
-            )
+            automatic_activity_detection=types.AutomaticActivityDetection(disabled=True)
         )
 
     genai_tools: Any = _convert_tools_to_genai(tools)
@@ -212,9 +208,7 @@ class GeminiLive(Provider):
         )
 
     @override
-    async def send_video(
-        self, data: bytes, mime_type: str = "image/jpeg"
-    ) -> None:
+    async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
         session = self._assert_session()
         await session.send_realtime_input(
             video=types.Blob(data=data, mime_type=mime_type)
@@ -258,7 +252,7 @@ class GeminiLive(Provider):
                 if content:
                     if content.model_turn and content.model_turn.parts:
                         if not turn_started:
-                            yield StreamPartTurnStart()
+                            yield StreamPartTurnStart(role="assistant")
                             turn_started = True
                         for part in content.model_turn.parts:
                             if part.inline_data and part.inline_data.data:
@@ -282,7 +276,10 @@ class GeminiLive(Provider):
                             id=input_tx_id,
                             delta=content.input_transcription.text,
                         )
-                    if content.output_transcription and content.output_transcription.text:
+                    if (
+                        content.output_transcription
+                        and content.output_transcription.text
+                    ):
                         if not output_tx_started:
                             yield StreamPartOutputTranscriptionStart(id=output_tx_id)
                             output_tx_started = True
@@ -306,6 +303,8 @@ class GeminiLive(Provider):
                         yield StreamPartTurnEnd(
                             usage=_get_usage(response.usage_metadata),
                             finish_reason="interrupted",
+                            role="assistant",
+                            message=None,
                         )
                         turn_started = False
                     if content.turn_complete is True:
@@ -328,6 +327,8 @@ class GeminiLive(Provider):
                         yield StreamPartTurnEnd(
                             usage=_get_usage(response.usage_metadata),
                             finish_reason="stop",
+                            role="assistant",
+                            message=None,
                         )
                         turn_started = False
 
@@ -419,8 +420,7 @@ class GeminiLive(Provider):
                 last_text = msg.content
                 break
 
-        yield StreamPartTurnStart()
-        yield StreamPartMessageStart(role="assistant")
+        yield StreamPartTurnStart(role="assistant")
 
         if last_text:
             await session.send_realtime_input(text=last_text)
@@ -444,8 +444,6 @@ class GeminiLive(Provider):
         if text_started:
             yield StreamPartTextEnd(id=text_id)
 
-        yield StreamPartMessageEnd(
-            role="assistant",
-            message=AssistantMessage(content=[MessagePartText(text="")]),
+        yield StreamPartTurnEnd(
+            usage=Usage(), finish_reason="stop", role="assistant", message=None
         )
-        yield StreamPartTurnEnd(usage=Usage(), finish_reason="stop")

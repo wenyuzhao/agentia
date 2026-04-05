@@ -43,18 +43,6 @@ class StreamPartReasoningEnd(BaseModel):
     provider_metadata: ProviderMetadata | None = None
 
 
-class StreamPartMessageStart(BaseModel):
-    type: Literal["message-start"] = "message-start"
-    role: Literal["assistant", "tool"]
-
-
-class StreamPartMessageEnd(BaseModel):
-    type: Literal["message-end"] = "message-end"
-    role: Literal["assistant", "tool"]
-    message: Annotated[AssistantMessage | ToolMessage, Field(discriminator="role")]
-
-
-
 class StreamPartAudioStart(BaseModel):
     type: Literal["audio-start"] = "audio-start"
     id: str
@@ -104,13 +92,27 @@ class StreamPartOutputTranscriptionEnd(BaseModel):
     id: str
 
 
-
 class StreamPartTurnStart(BaseModel):
     type: Literal["turn-start"] = "turn-start"
+    role: Literal["assistant", "tool"]
 
 
 class StreamPartTurnEnd(BaseModel):
     type: Literal["turn-end"] = "turn-end"
+    usage: Usage = Usage()
+    finish_reason: FinishReason = "stop"
+    role: Literal["assistant", "tool"]
+    message: Annotated[
+        AssistantMessage | ToolMessage | None, Field(discriminator="role")
+    ]
+
+
+class StreamPartStart(BaseModel):
+    type: Literal["start"] = "start"
+
+
+class StreamPartEnd(BaseModel):
+    type: Literal["end"] = "end"
     usage: Usage = Usage()
     finish_reason: FinishReason = "stop"
 
@@ -138,8 +140,6 @@ type StreamPart = Annotated[
     | ToolCall
     | ToolCallResponse
     | Annotation
-    | StreamPartMessageStart
-    | StreamPartMessageEnd
     | StreamPartAudioStart
     | StreamPartAudioDelta
     | StreamPartAudioEnd
@@ -150,7 +150,9 @@ type StreamPart = Annotated[
     | StreamPartOutputTranscriptionDelta
     | StreamPartOutputTranscriptionEnd
     | StreamPartTurnStart
-    | StreamPartTurnEnd,
+    | StreamPartTurnEnd
+    | StreamPartStart
+    | StreamPartEnd,
     Field(discriminator="type"),
 ]
 
@@ -161,8 +163,6 @@ __all__ = [
     "StreamPartReasoningStart",
     "StreamPartReasoningDelta",
     "StreamPartReasoningEnd",
-    "StreamPartMessageStart",
-    "StreamPartMessageEnd",
     "StreamPartAudioStart",
     "StreamPartAudioDelta",
     "StreamPartAudioEnd",
@@ -174,5 +174,7 @@ __all__ = [
     "StreamPartOutputTranscriptionEnd",
     "StreamPartTurnStart",
     "StreamPartTurnEnd",
+    "StreamPartStart",
+    "StreamPartEnd",
     "StreamPart",
 ]
