@@ -46,7 +46,7 @@ class Live:
         await self.agent.tools.init()
         instructions = self.agent.history.get_instructions() or None
         await self.agent.provider.connect_live(
-            self.options, self.agent.tools, instructions
+            self.options, self.agent.tools, instructions, history=self.agent.history
         )
         return self
 

@@ -1,5 +1,6 @@
-from typing import TYPE_CHECKING, AsyncGenerator
+from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 import httpx
+from agentia.history import History
 from agentia.live import LiveOptions
 from agentia.llm import LLMOptions
 from agentia.llm.completion import ChatCompletion
@@ -30,12 +31,27 @@ async def __process_tool_calls(
     return tool_msg, tool_responses
 
 
+def __add_prompt(
+    history: History, prompt: str | NonSystemMessage | Sequence[NonSystemMessage]
+) -> None:
+    if isinstance(prompt, str):
+        history.add(UserMessage(content=[MessagePartText(text=prompt)]))
+    elif not isinstance(prompt, (list, Sequence)):
+        history.add(prompt)
+    else:
+        history.add(*prompt)
+
+
 def run_agent_loop(
-    agent: "Agent", options: LLMOptions, live_options: LiveOptions | None
+    agent: "Agent",
+    prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+    options: LLMOptions,
+    live_options: LiveOptions | None,
 ) -> ChatCompletion:
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
+        __add_prompt(agent.history, prompt)
         messages = agent.history.get()
         async with httpx.AsyncClient() as client:
             while True:
@@ -70,7 +86,10 @@ def run_agent_loop(
 
         if agent.provider.supports_live:
             await agent.provider.connect_live(
-                live_options or LiveOptions(), tools, agent.history.get_instructions()
+                live_options or LiveOptions(),
+                tools,
+                agent.history.get_instructions(),
+                history=agent.history,
             )
 
         async with MCPContext() as _ctx:
@@ -87,11 +106,16 @@ def run_agent_loop(
 
 
 def run_agent_loop_streamed(
-    agent: "Agent", events: bool, options: LLMOptions, live_options: LiveOptions | None
+    agent: "Agent",
+    prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+    events: bool,
+    options: LLMOptions,
+    live_options: LiveOptions | None,
 ) -> ChatCompletionStream | ChatCompletionEvents:
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[StreamPart, None]:
+        __add_prompt(agent.history, prompt)
         messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
         started = False
@@ -182,7 +206,10 @@ def run_agent_loop_streamed(
 
         if agent.provider.supports_live:
             await agent.provider.connect_live(
-                live_options or LiveOptions(), tools, agent.history.get_instructions()
+                live_options or LiveOptions(),
+                tools,
+                agent.history.get_instructions(),
+                history=agent.history,
             )
 
         async with MCPContext() as _ctx:

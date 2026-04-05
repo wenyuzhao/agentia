@@ -93,16 +93,6 @@ class Agent:
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.history.add_instructions(instructions)
 
-    def __add_prompt(
-        self, prompt: str | NonSystemMessage | Sequence[NonSystemMessage]
-    ) -> None:
-        if isinstance(prompt, str):
-            self.history.add(UserMessage(content=[MessagePartText(text=prompt)]))
-        elif not isinstance(prompt, (list, Sequence)):
-            self.history.add(prompt)
-        else:
-            self.history.add(*prompt)
-
     def __merge_options(self, options: LLMOptions | None) -> LLMOptions:
         options_merged = {}
         for k, v in self.options.model_dump().items():
@@ -150,13 +140,12 @@ class Agent:
         events: bool = False,
         options: LLMOptions | None = None,
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
-        self.__add_prompt(prompt)
         options_merged = self.__merge_options(options)
         if stream:
-            x = run_agent_loop_streamed(self, events, options_merged, None)
+            x = run_agent_loop_streamed(self, prompt, events, options_merged, None)
         else:
             assert not events, "events=True is only supported with stream=True"
-            x = run_agent_loop(self, options_merged, None)
+            x = run_agent_loop(self, prompt, options_merged, None)
         return x
 
     async def generate_object[T: ObjectType](
@@ -165,10 +154,9 @@ class Agent:
         type: type[T],
         options: LLMOptions | None = None,
     ) -> T:
-        self.__add_prompt(prompt)
         options_merged = self.__merge_options(options)
         options_merged.response_format = ResponseFormatJson.from_model(type)
-        result_msg = await run_agent_loop(self, options_merged, None)
+        result_msg = await run_agent_loop(self, prompt, options_merged, None)
         return result_msg.parse(type)
 
     async def __aenter__(self):

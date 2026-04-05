@@ -1,12 +1,15 @@
+import base64
 import os
-from typing import TYPE_CHECKING, Any, AsyncGenerator, override
+from typing import TYPE_CHECKING, Any, AsyncGenerator, cast, override, Optional
 from uuid import uuid4
 
 import httpx
 from google import genai
 from google.genai import types
+from pydantic import HttpUrl
 
 if TYPE_CHECKING:
+    from agentia.history import History
     from google.genai.live import AsyncSession
 
 from agentia.live import LiveOptions
@@ -16,7 +19,14 @@ from agentia.spec.base import FunctionTool, Usage
 from agentia.spec.chat import (
     AssistantMessage,
     Message,
+    MessagePartFile,
+    MessagePartReasoning,
     MessagePartText,
+    MessagePartToolCall,
+    MessagePartToolResult,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
 )
 from agentia.spec.base import ToolCall
 from agentia.spec.stream import (
@@ -68,6 +78,119 @@ def _convert_tools_to_genai(tools: ToolSet) -> list[types.Tool] | None:
     if not declarations:
         return None
     return [types.Tool(function_declarations=declarations)]
+
+
+def _file_part_to_blob(part: MessagePartFile) -> types.Blob:
+    """Convert a MessagePartFile's data to a Gemini Blob."""
+    data = part.data
+    if isinstance(data, bytes):
+        return types.Blob(data=data, mime_type=part.media_type)
+    elif isinstance(data, HttpUrl) or (
+        isinstance(data, str) and data.startswith(("http://", "https://"))
+    ):
+        raise ValueError(
+            "URL-based file parts are not supported for Gemini Live; provide raw bytes or base64 data."
+        )
+    elif isinstance(data, str):
+        if data.startswith("data:"):
+            # data URL: extract base64 payload
+            _, payload = data.split(",", 1)
+            return types.Blob(data=base64.b64decode(payload), mime_type=part.media_type)
+        else:
+            # Treat as base64 string
+            return types.Blob(data=base64.b64decode(data), mime_type=part.media_type)
+    raise ValueError(f"Unsupported file data type: {type(data)}")
+
+
+def _convert_message_to_content(msg: Message) -> types.Content | None:
+    """Convert an agentia Message to a google.genai types.Content for history seeding."""
+    if isinstance(msg, SystemMessage):
+        return None  # system instructions handled separately
+
+    if isinstance(msg, UserMessage):
+        parts: list[types.Part] = []
+        if isinstance(msg.content, str):
+            parts.append(types.Part(text=msg.content))
+        else:
+            for p in msg.content:
+                if isinstance(p, MessagePartText):
+                    parts.append(types.Part(text=p.text))
+                elif isinstance(p, MessagePartFile):
+                    blob = _file_part_to_blob(p)
+                    parts.append(types.Part(inline_data=blob))
+        return types.Content(role="user", parts=parts) if parts else None
+
+    if isinstance(msg, AssistantMessage):
+        parts = []
+        if isinstance(msg.content, str):
+            parts.append(types.Part(text=msg.content))
+        else:
+            for p in msg.content:
+                if isinstance(p, MessagePartText):
+                    parts.append(types.Part(text=p.text))
+                elif isinstance(p, MessagePartReasoning):
+                    parts.append(types.Part(thought=True, text=p.text))
+                elif isinstance(p, MessagePartToolCall):
+                    parts.append(
+                        types.Part(
+                            function_call=types.FunctionCall(
+                                name=p.tool_name, args=p.input
+                            )
+                        )
+                    )
+        return types.Content(role="model", parts=parts) if parts else None
+
+    if isinstance(msg, ToolMessage):
+        parts = []
+        for p in msg.content:
+            if isinstance(p, MessagePartToolResult):
+                output = p.output
+                if not isinstance(output, dict):
+                    output = {"result": output}
+                parts.append(
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            name=p.tool_name, response=output
+                        )
+                    )
+                )
+        return types.Content(role="user", parts=parts) if parts else None
+
+    return None
+
+
+def _convert_messages_to_contents(
+    messages: list[Message],
+) -> list[types.Content]:
+    """Convert a list of agentia Messages to Gemini Content objects."""
+    contents: list[types.Content] = []
+    for msg in messages:
+        content = _convert_message_to_content(msg)
+        if content:
+            contents.append(content)
+    return contents
+
+
+async def _send_user_message_realtime(
+    session: "AsyncSession", msg: UserMessage
+) -> None:
+    """Send a UserMessage via send_realtime_input, supporting all part types."""
+    if isinstance(msg.content, str):
+        await session.send_realtime_input(text=msg.content)
+        return
+
+    for p in msg.content:
+        if isinstance(p, MessagePartText):
+            await session.send_realtime_input(text=p.text)
+        elif isinstance(p, MessagePartFile):
+            blob = _file_part_to_blob(p)
+            if p.media_type.startswith("audio/"):
+                await session.send_realtime_input(audio=blob)
+            elif p.media_type.startswith(("image/", "video/")):
+                await session.send_realtime_input(video=blob)
+            else:
+                # Fallback: send as video for other binary types
+                await session.send_realtime_input(video=blob)
 
 
 def _build_config(
@@ -125,6 +248,8 @@ def _build_config(
 
     genai_tools: Any = _convert_tools_to_genai(tools)
 
+    history_config = types.HistoryConfig(initial_history_in_client_content=True)
+
     return types.LiveConnectConfig(
         response_modalities=modalities,
         speech_config=speech_config,
@@ -136,6 +261,7 @@ def _build_config(
         context_window_compression=context_window_compression,
         session_resumption=session_resumption,
         realtime_input_config=realtime_input_config,
+        history_config=history_config,
     )
 
 
@@ -144,9 +270,10 @@ class GeminiLive(Provider):
 
     def __init__(self, model: str):
         super().__init__(name="gemini-live", model=model)
-        self._session: "AsyncSession | None" = None
+        self._session: Optional["AsyncSession"] = None
         self._session_cm: Any = None  # The async context manager from connect()
         self._client: genai.Client | None = None
+        self._history: Optional["History"] = None
 
     def _get_client(self) -> genai.Client:
         api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
@@ -167,13 +294,32 @@ class GeminiLive(Provider):
         options: LiveOptions,
         tools: ToolSet,
         instructions: str | None,
+        history: "History",
     ) -> None:
         self._client = self._get_client()
+        self._history = history
         config = _build_config(options, tools, instructions)
         self._session_cm = self._client.aio.live.connect(
             model=self.model, config=config
         )
         self._session = await self._session_cm.__aenter__()
+
+        # Seed initial history via send_client_content
+        if history:
+            initial_messages = history.get(include_instructions=False)
+            # Filter out system messages (already handled as system_instruction)
+            non_system: list[Message] = [
+                m for m in initial_messages if not isinstance(m, SystemMessage)
+            ]
+            if non_system:
+                contents = _convert_messages_to_contents(non_system)
+                if contents:
+                    contents = cast(list[types.Content | types.ContentDict], contents)
+                    assert self._session is not None
+                    await self._session.send_client_content(
+                        turns=contents, turn_complete=False
+                    )
+            history.advance_cursor()
 
     @override
     async def disconnect_live(self) -> None:
@@ -182,6 +328,7 @@ class GeminiLive(Provider):
             self._session_cm = None
             self._session = None
         self._client = None
+        self._history = None
 
     def _assert_session(self) -> "AsyncSession":
         if self._session is None:
@@ -336,6 +483,46 @@ class GeminiLive(Provider):
 
     # --- Request/response emulation over live session ---
 
+    async def _send_new_messages(self, new_messages: list[Message]) -> None:
+        """Send new messages that the live session hasn't seen yet."""
+        if not new_messages:
+            return
+        session = self._assert_session()
+
+        for msg in new_messages:
+            # Send the message via realtime input (triggers model response)
+            if isinstance(msg, UserMessage):
+                await _send_user_message_realtime(session, msg)
+            elif isinstance(msg, ToolMessage):
+                # ToolMessage is user-originated content, send via realtime input
+                for part in msg.content:
+                    if isinstance(part, MessagePartToolResult):
+                        response_data = (
+                            part.output
+                            if isinstance(part.output, dict)
+                            else {"result": part.output}
+                        )
+                        await session.send_tool_response(
+                            function_responses={
+                                "id": part.tool_call_id,
+                                "name": part.tool_name,
+                                "response": response_data,
+                            }
+                        )
+            else:
+                raise NotImplementedError(
+                    f"Unsupported message type for live input: {type(msg)}"
+                )
+
+    def _get_new_messages(self, messages: list[Message]) -> list[Message]:
+        """Get messages the live session hasn't seen, using History cursor if available."""
+        if self._history:
+            new = self._history.get_new()
+            self._history.advance_cursor()
+            return list(new)
+        # Fallback: treat all messages as new
+        return messages
+
     @override
     async def generate(
         self,
@@ -345,26 +532,9 @@ class GeminiLive(Provider):
         client: httpx.AsyncClient,
     ) -> GenerationResult:
         session = self._assert_session()
-        # Send the last user message as text
-        last_text = ""
-        for msg in reversed(messages):
-            if msg.role == "user":
-                if isinstance(msg.content, str):
-                    last_text = msg.content
-                else:
-                    parts = []
-                    for p in msg.content:
-                        if isinstance(p, MessagePartText):
-                            parts.append(p.text)
-                    last_text = " ".join(parts)
-                break
-            elif msg.role == "system":
-                last_text = msg.content
-                break
 
-        if last_text:
-            await session.send_realtime_input(text=last_text)
-            await session.send_realtime_input(activity_end={})
+        await self._send_new_messages(self._get_new_messages(messages))
+        await session.send_realtime_input(activity_end={})
 
         # Collect response
         text_parts: list[str] = []
@@ -402,24 +572,8 @@ class GeminiLive(Provider):
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
         session = self._assert_session()
-        # Send the last user message as text
-        last_text = ""
-        for msg in reversed(messages):
-            if msg.role == "user":
-                if isinstance(msg.content, str):
-                    last_text = msg.content
-                else:
-                    parts = []
-                    for p in msg.content:
-                        if isinstance(p, MessagePartText):
-                            parts.append(p.text)
-                    last_text = " ".join(parts)
-                break
-            elif msg.role == "system":
-                last_text = msg.content
-                break
 
-        await session.send_realtime_input(text=last_text)
+        await self._send_new_messages(self._get_new_messages(messages))
         await session.send_realtime_input(activity_end={})
 
         text_started = False

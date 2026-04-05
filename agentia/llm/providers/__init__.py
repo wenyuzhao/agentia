@@ -10,6 +10,7 @@ import agentia.spec as spec
 from agentia.spec.stream import StreamPart
 
 if TYPE_CHECKING:
+    from agentia.history import History
     from agentia.live import LiveOptions
 
 
@@ -70,6 +71,7 @@ class Provider(abc.ABC):
         options: "LiveOptions",
         tools: ToolSet,
         instructions: str | None,
+        history: "History",
     ) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 

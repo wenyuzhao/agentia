@@ -8,6 +8,7 @@ class History:
         self.__non_instruction_messages: list[
             UserMessage | AssistantMessage | ToolMessage
         ] = []
+        self.__live_cursor: int = 0
 
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.__instruction_generators.append(instructions)
@@ -38,10 +39,19 @@ class History:
         messages.extend(self.__non_instruction_messages)
         return messages
 
+    def get_new(self) -> Sequence[Message]:
+        """Return only messages added since the last cursor advance."""
+        return self.__non_instruction_messages[self.__live_cursor :]
+
+    def advance_cursor(self) -> None:
+        """Move cursor to the end of the current message list."""
+        self.__live_cursor = len(self.__non_instruction_messages)
+
     def clear(self, clear_instructions: bool = False) -> None:
         self.__non_instruction_messages = []
         if clear_instructions:
             self.__instruction_generators = []
+        self.__live_cursor = 0
 
     def load(
         self, messages: Sequence[Message], include_instructions: bool = False
