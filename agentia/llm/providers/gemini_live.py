@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 from agentia.live import LiveOptions
 from agentia.llm import LLMOptions
 from agentia.llm.providers import GenerationResult, Provider
-from agentia.spec.base import FunctionTool, Usage
+from agentia.spec.base import FunctionTool, ToolCallResponse, Usage
 from agentia.spec.chat import (
     AssistantMessage,
     Message,
@@ -364,14 +364,19 @@ class GeminiLive(Provider):
         await session.send_realtime_input(audio_stream_end=True)
 
     @override
-    async def send_tool_response(self, tool_call_id: str, output: object) -> None:
+    async def send_tool_responses(self, responses: list[ToolCallResponse]) -> None:
         session = self._assert_session()
-        response_data = output if isinstance(output, dict) else {"result": output}
-        await session.send_tool_response(
-            function_responses=[
-                types.FunctionResponse(id=tool_call_id, response=response_data)
-            ]
-        )
+        function_responses = [
+            types.FunctionResponse(
+                id=r.tool_call_id,
+                name=r.tool_name,
+                response=(
+                    r.output if isinstance(r.output, dict) else {"result": r.output}
+                ),
+            )
+            for r in responses
+        ]
+        await session.send_tool_response(function_responses=function_responses)
 
     @override
     async def receive(self) -> AsyncGenerator[StreamPart, None]:
@@ -446,7 +451,7 @@ class GeminiLive(Provider):
                             message=None,
                         )
                         turn_started = False
-                    if content.turn_complete is True:
+                    if content.turn_complete or content.generation_complete:
                         if audio_started:
                             yield StreamPartAudioEnd(id=audio_id)
                             audio_started = False

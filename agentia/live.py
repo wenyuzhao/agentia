@@ -1,5 +1,6 @@
 from typing import AsyncGenerator, Literal, TYPE_CHECKING
 from pydantic import BaseModel, Field
+from agentia.llm.agentic import run_agent_loop_live
 from agentia.spec import ToolCall, StreamPart
 from typing import (
     TYPE_CHECKING,
@@ -26,9 +27,6 @@ class LiveOptions(BaseModel):
 
     thinking_level: Literal["minimal", "low", "medium", "high"] | None = None
     """Thinking level for native audio models. Default is "minimal" for lowest latency."""
-
-    auto_tool_execution: bool = True
-    """Automatically execute tool calls and send responses back."""
 
     vad_enabled: bool = True
     """Enable voice activity detection for automatic interruption handling."""
@@ -74,26 +72,9 @@ class Live:
         await self.agent.provider.send_audio_stream_end()
 
     async def receive(self) -> AsyncGenerator[StreamPart, None]:
-        """Receive stream parts from the live session.
-
-        When auto_tool_execution is enabled (default), tool calls are
-        automatically executed and responses sent back to the model.
-        """
-        async for event in self.agent.provider.receive():
-            if isinstance(event, ToolCall) and self.options.auto_tool_execution:
-                yield event
-                # Auto-execute the tool
-                responses = await self.agent.tools.run(
-                    self.agent, [event], parallel=False
-                )
-                for resp in responses:
-                    # Send response back to the model
-                    await self.agent.provider.send_tool_response(
-                        resp.tool_call_id, resp.output
-                    )
-                    yield resp
-            else:
-                yield event
+        """Receive stream parts from the live session."""
+        async for event in run_agent_loop_live(self.agent):
+            yield event
 
 
 __all__ = ["LiveOptions", "Live"]

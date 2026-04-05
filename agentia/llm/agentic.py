@@ -1,7 +1,6 @@
-from typing import TYPE_CHECKING, AsyncGenerator, Sequence
+from typing import TYPE_CHECKING, AsyncGenerator, Optional, Sequence
 import httpx
 from agentia.history import History
-from agentia.live import LiveOptions
 from agentia.llm import LLMOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
@@ -10,6 +9,7 @@ from agentia.tools.tools import ToolSet
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
+    from agentia.live import LiveOptions
 
 
 async def __process_tool_calls(
@@ -46,7 +46,7 @@ def run_agent_loop(
     agent: "Agent",
     prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
     options: LLMOptions,
-    live_options: LiveOptions | None,
+    live_options: Optional["LiveOptions"],
 ) -> ChatCompletion:
     tools = agent.tools
 
@@ -81,6 +81,7 @@ def run_agent_loop(
 
     async def gen_wrapper() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         from agentia.tools.mcp import MCPContext
+        from agentia.live import LiveOptions
 
         await tools.init()
 
@@ -110,7 +111,7 @@ def run_agent_loop_streamed(
     prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
     events: bool,
     options: LLMOptions,
-    live_options: LiveOptions | None,
+    live_options: Optional["LiveOptions"],
 ) -> ChatCompletionStream | ChatCompletionEvents:
     tools = agent.tools
 
@@ -139,8 +140,6 @@ def run_agent_loop_streamed(
                     ), f"Provider must not yield {part.type}"
 
                     match part.type:
-                        case "turn-start":
-                            yield part
                         case "text-start":
                             last_msg = ""
                         case "text-delta":
@@ -168,7 +167,7 @@ def run_agent_loop_streamed(
                     if part.type == "turn-end":
                         s.usage += part.usage
                         last_finish_reason = part.finish_reason
-                    elif part.type != "turn-start":
+                    else:
                         yield part
                 msg = AssistantMessage(content=parts)
                 yield StreamPartTurnEnd(
@@ -201,6 +200,7 @@ def run_agent_loop_streamed(
 
     async def gen_wrapper() -> AsyncGenerator[StreamPart, None]:
         from agentia.tools.mcp import MCPContext
+        from agentia.live import LiveOptions
 
         await tools.init()
 
@@ -226,3 +226,69 @@ def run_agent_loop_streamed(
     else:
         s = ChatCompletionStream(gen_wrapper(), agent)
     return s
+
+
+async def run_agent_loop_live(agent: "Agent") -> AsyncGenerator[StreamPart, None]:
+    started = False
+    parts: list[AssistantMessagePart] = []
+    tool_calls: list[ToolCall] = []
+    last_msg = ""
+    last_reasoning = ""
+
+    async for part in agent.provider.receive():
+        if not started:
+            started = True
+            yield StreamPartStart()
+        assert part.type not in (
+            "stream-start",
+            "stream-end",
+        ), f"Provider must not yield {part.type}"
+
+        match part.type:
+            case "turn-start":
+                yield part
+            case "text-start":
+                last_msg = ""
+            case "text-delta":
+                last_msg += part.delta
+            case "text-end":
+                parts.append(MessagePartText(text=last_msg))
+            case "reasoning-start":
+                last_reasoning = ""
+            case "reasoning-delta":
+                last_reasoning += part.delta
+            case "reasoning-end":
+                parts.append(MessagePartReasoning(text=last_reasoning))
+            case "tool-call":
+                parts.append(
+                    MessagePartToolCall(
+                        tool_call_id=part.tool_call_id,
+                        tool_name=part.tool_name,
+                        input=part.input,
+                        provider_executed=part.provider_executed,
+                    )
+                )
+                if not part.provider_executed:
+                    tool_calls.append(part)
+        yield part
+
+        if part.type == "turn-end" or part.type == "tool-call":
+            # append the assistant message to history
+            msg = AssistantMessage(content=parts)
+            agent.history.add(msg)
+            # run tool calls if any
+            if tool_calls:
+                yield StreamPartTurnStart(role="tool")
+                tool_msg, tool_responses = await __process_tool_calls(
+                    agent, tool_calls, agent.tools, False
+                )
+                for tr in tool_responses:
+                    yield tr
+                agent.history.add(tool_msg)
+                yield StreamPartTurnEnd(role="tool", message=tool_msg)
+                await agent.provider.send_tool_responses(tool_responses)
+            # reset for next turn
+            parts = []
+            tool_calls = []
+            last_msg = ""
+            last_reasoning = ""

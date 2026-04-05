@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 import httpx
 from agentia.llm import LLMOptions
+from agentia.spec.base import ToolCallResponse
 from agentia.spec.chat import Message
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
@@ -92,7 +93,7 @@ class Provider(abc.ABC):
     async def send_audio_stream_end(self) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
-    async def send_tool_response(self, tool_call_id: str, output: object) -> None:
+    async def send_tool_responses(self, responses: list[ToolCallResponse]) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
     async def receive(self) -> AsyncGenerator[StreamPart, None]:
