@@ -84,6 +84,9 @@ class Provider(abc.ABC):
     ) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
+    async def send_image(self, data: bytes, mime_type: str = "image/jpeg") -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
     async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
         raise NotImplementedError("This provider does not support live sessions")
 

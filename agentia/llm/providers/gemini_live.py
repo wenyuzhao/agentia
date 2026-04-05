@@ -241,7 +241,7 @@ def _build_config(
     # session_resumption = types.SessionResumptionConfig(transparent=True)
 
     realtime_input_config: types.RealtimeInputConfig | None = None
-    if not options.vad_enabled:
+    if not options.vad:
         realtime_input_config = types.RealtimeInputConfig(
             automatic_activity_detection=types.AutomaticActivityDetection(disabled=True)
         )
@@ -354,6 +354,13 @@ class GeminiLive(Provider):
         )
 
     @override
+    async def send_image(self, data: bytes, mime_type: str = "image/jpeg") -> None:
+        session = self._assert_session()
+        await session.send_realtime_input(
+            media=types.Blob(data=data, mime_type=mime_type)
+        )
+
+    @override
     async def send_text_live(self, text: str) -> None:
         session = self._assert_session()
         await session.send_realtime_input(text=text)
@@ -451,7 +458,7 @@ class GeminiLive(Provider):
                             message=None,
                         )
                         turn_started = False
-                    if content.turn_complete or content.generation_complete:
+                    elif content.turn_complete or content.generation_complete:
                         if audio_started:
                             yield StreamPartAudioEnd(id=audio_id)
                             audio_started = False
