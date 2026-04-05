@@ -1,11 +1,21 @@
-from typing import Literal
-from pydantic import BaseModel
+from typing import AsyncGenerator, Literal, TYPE_CHECKING
+from pydantic import BaseModel, Field
+from agentia.spec import ToolCall, StreamPart
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+)
+
+if TYPE_CHECKING:
+    from agentia.agent import Agent
 
 
 class LiveOptions(BaseModel):
     """Configuration for a Gemini Live session."""
 
-    modalities: list[Literal["text", "audio"]] = ["audio"]
+    modalities: list[Literal["text", "audio"]] = Field(
+        default_factory=lambda: ["audio"]
+    )
     """Response modalities. Currently only AUDIO is reliably supported by Gemini Live API."""
 
     voice: str | None = None
@@ -20,20 +30,70 @@ class LiveOptions(BaseModel):
     auto_tool_execution: bool = True
     """Automatically execute tool calls and send responses back."""
 
-    enable_input_transcription: bool = False
-    """Enable transcription of user audio input."""
-
-    enable_output_transcription: bool = False
-    """Enable transcription of model audio output."""
-
-    context_window_compression: bool = False
-    """Enable context window compression for longer sessions."""
-
     vad_enabled: bool = True
     """Enable voice activity detection for automatic interruption handling."""
 
-    session_resumption: bool = False
-    """Enable session resumption for handling connection resets."""
+
+class Live:
+    def __init__(self, agent: "Agent", options: LiveOptions | None = None):
+        self.agent = agent
+        self.options = options or LiveOptions()
+
+    async def __aenter__(self):
+        await self.agent.__aenter__()
+        # Connect live session if provider supports it
+        assert self.agent.provider.supports_live
+        await self.agent.tools.init()
+        instructions = self.agent.history.get_instructions() or None
+        await self.agent.provider.connect_live(
+            self.options, self.agent.tools, instructions
+        )
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        # Disconnect live session if provider supports it
+        await self.agent.provider.disconnect_live()
+        await self.agent.__aexit__(exc_type, exc_val, exc_tb)
+
+    async def send_audio(
+        self, data: bytes, mime_type: str = "audio/pcm;rate=16000"
+    ) -> None:
+        """Send an audio chunk to the live session. Default: PCM 16kHz 16-bit mono."""
+        await self.agent.provider.send_audio(data, mime_type)
+
+    async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
+        """Send a video frame to the live session."""
+        await self.agent.provider.send_video(data, mime_type)
+
+    async def send_text(self, text: str) -> None:
+        """Send text input to the live session."""
+        await self.agent.provider.send_text_live(text)
+
+    async def send_audio_stream_end(self) -> None:
+        """Signal end of audio stream to flush cached audio."""
+        await self.agent.provider.send_audio_stream_end()
+
+    async def receive(self) -> AsyncGenerator[StreamPart, None]:
+        """Receive stream parts from the live session.
+
+        When auto_tool_execution is enabled (default), tool calls are
+        automatically executed and responses sent back to the model.
+        """
+        async for event in self.agent.provider.receive():
+            if isinstance(event, ToolCall) and self.options.auto_tool_execution:
+                yield event
+                # Auto-execute the tool
+                responses = await self.agent.tools.run(
+                    self.agent, [event], parallel=False
+                )
+                for resp in responses:
+                    # Send response back to the model
+                    await self.agent.provider.send_tool_response(
+                        resp.tool_call_id, resp.output
+                    )
+                    yield resp
+            else:
+                yield event
 
 
-__all__ = ["LiveOptions"]
+__all__ = ["LiveOptions", "Live"]

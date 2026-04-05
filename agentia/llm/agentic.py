@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, AsyncGenerator
 import httpx
+from agentia.live import LiveOptions
 from agentia.llm import LLMOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
@@ -29,11 +30,12 @@ async def __process_tool_calls(
     return tool_msg, tool_responses
 
 
-def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
+def run_agent_loop(
+    agent: "Agent", options: LLMOptions, live_options: LiveOptions | None
+) -> ChatCompletion:
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
-        await tools.init()
         messages = agent.history.get()
         async with httpx.AsyncClient() as client:
             while True:
@@ -61,10 +63,15 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
 
         agent.history.add(*c.new_messages)
 
-    async def gen_with_mcp_context() -> (
-        AsyncGenerator[AssistantMessage | ToolMessage, None]
-    ):
+    async def gen_wrapper() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         from agentia.tools.mcp import MCPContext
+
+        await tools.init()
+
+        if agent.provider.supports_live:
+            await agent.provider.connect_live(
+                live_options or LiveOptions(), tools, agent.history.get_instructions()
+            )
 
         async with MCPContext() as _ctx:
             agent._temp_mcp_context = _ctx
@@ -72,17 +79,19 @@ def run_agent_loop(agent: "Agent", options: LLMOptions) -> ChatCompletion:
                 yield msg
             agent._temp_mcp_context = None
 
-    c = ChatCompletion(gen_with_mcp_context(), agent)
+        if agent.provider.supports_live:
+            await agent.provider.disconnect_live()
+
+    c = ChatCompletion(gen_wrapper(), agent)
     return c
 
 
 def run_agent_loop_streamed(
-    agent: "Agent", events: bool, options: LLMOptions
+    agent: "Agent", events: bool, options: LLMOptions, live_options: LiveOptions | None
 ) -> ChatCompletionStream | ChatCompletionEvents:
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[StreamPart, None]:
-        await tools.init()
         messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
         started = False
@@ -166,8 +175,15 @@ def run_agent_loop_streamed(
 
         agent.history.add(*s.new_messages)
 
-    async def gen_with_mcp_context() -> AsyncGenerator[StreamPart, None]:
+    async def gen_wrapper() -> AsyncGenerator[StreamPart, None]:
         from agentia.tools.mcp import MCPContext
+
+        await tools.init()
+
+        if agent.provider.supports_live:
+            await agent.provider.connect_live(
+                live_options or LiveOptions(), tools, agent.history.get_instructions()
+            )
 
         async with MCPContext() as _ctx:
             agent._temp_mcp_context = _ctx
@@ -175,8 +191,11 @@ def run_agent_loop_streamed(
                 yield part
             agent._temp_mcp_context = None
 
+        if agent.provider.supports_live:
+            await agent.provider.disconnect_live()
+
     if events:
-        s = ChatCompletionEvents(gen_with_mcp_context(), agent)
+        s = ChatCompletionEvents(gen_wrapper(), agent)
     else:
-        s = ChatCompletionStream(gen_with_mcp_context(), agent)
+        s = ChatCompletionStream(gen_wrapper(), agent)
     return s

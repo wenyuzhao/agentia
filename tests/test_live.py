@@ -14,16 +14,12 @@ async def test_live_text():
     agent = Agent(
         model=LIVE_MODEL,
         instructions="You are a helpful assistant. Keep your responses very short.",
-        live_options=LiveOptions(
-            modalities=["audio"],
-            enable_output_transcription=True,
-        ),
     )
     received_transcription = ""
     received_audio = False
-    async with agent:
-        await agent.send_text("What is 2 + 2? Reply with just the number.")
-        async for event in agent.receive():
+    async with agent.live() as live:
+        await live.send_text("What is 2 + 2? Reply with just the number.")
+        async for event in live.receive():
             if event.type == "audio-delta":
                 received_audio = True
             elif event.type == "output-transcription-delta":
@@ -50,15 +46,11 @@ async def test_live_tool_calling():
         model=LIVE_MODEL,
         instructions="You are a helpful assistant. Use tools when needed. Keep responses short.",
         tools=[get_weather],
-        live_options=LiveOptions(
-            modalities=["audio"],
-            enable_output_transcription=True,
-        ),
     )
     received_transcription = ""
-    async with agent:
-        await agent.send_text("What is the weather in Boston?")
-        async for event in agent.receive():
+    async with agent.live() as live:
+        await live.send_text("What is the weather in Boston?")
+        async for event in live.receive():
             if event.type == "output-transcription-delta":
                 received_transcription += event.delta
             elif event.type == "tool-call":
@@ -76,7 +68,6 @@ async def test_live_run_emulation():
     agent = Agent(
         model=LIVE_MODEL,
         instructions="You are a helpful assistant. Keep responses short.",
-        live_options=LiveOptions(modalities=["audio"]),
     )
     async with agent:
         result = await agent.run("What is 3 + 5? Reply with just the number.")
@@ -91,10 +82,6 @@ async def test_live_parallel_send_receive():
     agent = Agent(
         model=LIVE_MODEL,
         instructions="You are a helpful assistant. Keep your responses very short. Reply to each question independently.",
-        live_options=LiveOptions(
-            modalities=["audio"],
-            enable_output_transcription=True,
-        ),
     )
     questions = [
         "What is 10 + 20? Reply with just the number.",
@@ -105,7 +92,7 @@ async def test_live_parallel_send_receive():
     turns_completed = 0
     turn_complete_event = asyncio.Event()
 
-    async with agent:
+    async with agent.live() as live:
 
         async def sender():
             for i, q in enumerate(questions):
@@ -113,11 +100,11 @@ async def test_live_parallel_send_receive():
                     # Wait for previous turn to complete before sending next
                     await turn_complete_event.wait()
                     turn_complete_event.clear()
-                await agent.send_text(q)
+                await live.send_text(q)
 
         async def receiver():
             nonlocal received_transcription, received_audio, turns_completed
-            async for event in agent.receive():
+            async for event in live.receive():
                 if event.type == "audio-delta":
                     received_audio = True
                 elif event.type == "output-transcription-delta":

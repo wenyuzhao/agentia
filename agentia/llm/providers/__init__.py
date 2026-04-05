@@ -81,9 +81,7 @@ class Provider(abc.ABC):
     ) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
-    async def send_video(
-        self, data: bytes, mime_type: str = "image/jpeg"
-    ) -> None:
+    async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
     async def send_text_live(self, text: str) -> None:
@@ -92,9 +90,7 @@ class Provider(abc.ABC):
     async def send_audio_stream_end(self) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
-    async def send_tool_response(
-        self, tool_call_id: str, output: object
-    ) -> None:
+    async def send_tool_response(self, tool_call_id: str, output: object) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
     async def receive(self) -> AsyncGenerator[StreamPart, None]:

@@ -107,23 +107,15 @@ def _build_config(
             thinking_level=level_map[options.thinking_level]
         )
 
-    input_audio_transcription: types.AudioTranscriptionConfig | None = None
-    if options.enable_input_transcription:
-        input_audio_transcription = types.AudioTranscriptionConfig()
+    input_audio_transcription = types.AudioTranscriptionConfig()
+    output_audio_transcription = types.AudioTranscriptionConfig()
 
-    output_audio_transcription: types.AudioTranscriptionConfig | None = None
-    if options.enable_output_transcription:
-        output_audio_transcription = types.AudioTranscriptionConfig()
+    context_window_compression = types.ContextWindowCompressionConfig(
+        sliding_window=types.SlidingWindow()
+    )
 
-    context_window_compression: types.ContextWindowCompressionConfig | None = None
-    if options.context_window_compression:
-        context_window_compression = types.ContextWindowCompressionConfig(
-            sliding_window=types.SlidingWindow()
-        )
-
-    session_resumption: types.SessionResumptionConfig | None = None
-    if options.session_resumption:
-        session_resumption = types.SessionResumptionConfig(transparent=True)
+    session_resumption = None
+    # session_resumption = types.SessionResumptionConfig(transparent=True)
 
     realtime_input_config: types.RealtimeInputConfig | None = None
     if not options.vad_enabled:
@@ -194,7 +186,7 @@ class GeminiLive(Provider):
     def _assert_session(self) -> "AsyncSession":
         if self._session is None:
             raise RuntimeError(
-                "No active live session. Use 'async with agent:' to start a session."
+                "No active live session. Use 'async with agent.live()' to start a live session."
             )
         return self._session
 
@@ -372,6 +364,7 @@ class GeminiLive(Provider):
 
         if last_text:
             await session.send_realtime_input(text=last_text)
+            await session.send_realtime_input(activity_end={})
 
         # Collect response
         text_parts: list[str] = []
@@ -382,7 +375,13 @@ class GeminiLive(Provider):
                     for part in content.model_turn.parts:
                         if part.text:
                             text_parts.append(part.text)
-                if content.turn_complete is True:
+                if content.output_transcription and content.output_transcription.text:
+                    text_parts.append(content.output_transcription.text)
+                if (
+                    content.turn_complete
+                    or content.interrupted
+                    or content.generation_complete
+                ):
                     break
 
         full_text = "".join(text_parts)
@@ -420,15 +419,18 @@ class GeminiLive(Provider):
                 last_text = msg.content
                 break
 
-        yield StreamPartTurnStart(role="assistant")
-
-        if last_text:
-            await session.send_realtime_input(text=last_text)
+        await session.send_realtime_input(text=last_text)
+        await session.send_realtime_input(activity_end={})
 
         text_started = False
         text_id = str(uuid4())
+        started = False
 
         async for response in session.receive():
+            if not started:
+                started = True
+                yield StreamPartTurnStart(role="assistant")
+
             content = response.server_content
             if content:
                 if content.model_turn and content.model_turn.parts:
@@ -438,7 +440,21 @@ class GeminiLive(Provider):
                                 yield StreamPartTextStart(id=text_id)
                                 text_started = True
                             yield StreamPartTextDelta(id=text_id, delta=part.text)
-                if content.turn_complete is True:
+                    if (
+                        content.output_transcription
+                        and content.output_transcription.text
+                    ):
+                        if not text_started:
+                            yield StreamPartTextStart(id=text_id)
+                            text_started = True
+                        yield StreamPartTextDelta(
+                            id=text_id, delta=content.output_transcription.text
+                        )
+                if (
+                    content.turn_complete
+                    or content.interrupted
+                    or content.generation_complete
+                ):
                     break
 
         if text_started:
