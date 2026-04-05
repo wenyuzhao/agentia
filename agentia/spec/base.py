@@ -11,7 +11,7 @@ type ProviderMetadata = dict[str, dict[str, JsonValue]]
 type DataContent = bytes | str | HttpUrl
 
 type FinishReason = Literal[
-    "stop", "length", "content-filter", "tool-calls", "error", "other", "unknown"
+    "stop", "length", "content-filter", "tool-calls", "interrupted", "error", "other", "unknown"
 ]
 
 

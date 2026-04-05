@@ -18,28 +18,39 @@ from agentia.spec.chat import (
     Message,
     MessagePartText,
 )
-from agentia.spec.live import (
-    LiveEvent,
-    LiveEventAudio,
-    LiveEventInputTranscription,
-    LiveEventInterrupted,
-    LiveEventOutputTranscription,
-    LiveEventText,
-    LiveEventToolCall,
-    LiveEventToolCallResponse,
-    LiveEventTurnComplete,
-)
+from agentia.spec.base import ToolCall
 from agentia.spec.stream import (
     StreamPart,
+    StreamPartAudioDelta,
+    StreamPartAudioEnd,
+    StreamPartAudioStart,
     StreamPartMessageEnd,
     StreamPartMessageStart,
-    StreamPartStreamEnd,
-    StreamPartStreamStart,
     StreamPartTextDelta,
     StreamPartTextEnd,
     StreamPartTextStart,
+    StreamPartInputTranscriptionDelta,
+    StreamPartInputTranscriptionEnd,
+    StreamPartInputTranscriptionStart,
+    StreamPartOutputTranscriptionDelta,
+    StreamPartOutputTranscriptionEnd,
+    StreamPartOutputTranscriptionStart,
+    StreamPartTurnEnd,
+    StreamPartTurnStart,
 )
 from agentia.tools.tools import ToolSet
+
+
+def _get_usage(u: types.UsageMetadata | None) -> Usage:
+    if not u:
+        return Usage()
+    return Usage(
+        input_tokens=u.prompt_token_count,
+        output_tokens=u.response_token_count,
+        total_tokens=u.total_token_count,
+        reasoning_tokens=u.thoughts_token_count,
+        cached_input_tokens=u.cached_content_token_count,
+    )
 
 
 def _convert_tools_to_genai(tools: ToolSet) -> list[types.Tool] | None:
@@ -230,36 +241,101 @@ class GeminiLive(Provider):
         )
 
     @override
-    async def receive(self) -> AsyncGenerator[LiveEvent, None]:
+    async def receive(self) -> AsyncGenerator[StreamPart, None]:
         session = self._assert_session()
+        turn_started = False
+        text_started = False
+        text_id = str(uuid4())
+        audio_started = False
+        audio_id = str(uuid4())
+        input_tx_started = False
+        input_tx_id = str(uuid4())
+        output_tx_started = False
+        output_tx_id = str(uuid4())
         while True:
             async for response in session.receive():
                 content = response.server_content
                 if content:
                     if content.model_turn and content.model_turn.parts:
+                        if not turn_started:
+                            yield StreamPartTurnStart()
+                            turn_started = True
                         for part in content.model_turn.parts:
                             if part.inline_data and part.inline_data.data:
-                                yield LiveEventAudio(data=part.inline_data.data)
+                                if not audio_started:
+                                    yield StreamPartAudioStart(id=audio_id)
+                                    audio_started = True
+                                yield StreamPartAudioDelta(
+                                    id=audio_id,
+                                    delta=part.inline_data.data,
+                                )
                             if part.text:
-                                yield LiveEventText(text=part.text)
+                                if not text_started:
+                                    yield StreamPartTextStart(id=text_id)
+                                    text_started = True
+                                yield StreamPartTextDelta(id=text_id, delta=part.text)
                     if content.input_transcription and content.input_transcription.text:
-                        yield LiveEventInputTranscription(
-                            text=content.input_transcription.text
+                        if not input_tx_started:
+                            yield StreamPartInputTranscriptionStart(id=input_tx_id)
+                            input_tx_started = True
+                        yield StreamPartInputTranscriptionDelta(
+                            id=input_tx_id,
+                            delta=content.input_transcription.text,
                         )
                     if content.output_transcription and content.output_transcription.text:
-                        yield LiveEventOutputTranscription(
-                            text=content.output_transcription.text
+                        if not output_tx_started:
+                            yield StreamPartOutputTranscriptionStart(id=output_tx_id)
+                            output_tx_started = True
+                        yield StreamPartOutputTranscriptionDelta(
+                            id=output_tx_id,
+                            delta=content.output_transcription.text,
                         )
                     if content.interrupted is True:
-                        yield LiveEventInterrupted()
+                        if audio_started:
+                            yield StreamPartAudioEnd(id=audio_id)
+                            audio_started = False
+                            audio_id = str(uuid4())
+                        if text_started:
+                            yield StreamPartTextEnd(id=text_id)
+                            text_started = False
+                            text_id = str(uuid4())
+                        if output_tx_started:
+                            yield StreamPartOutputTranscriptionEnd(id=output_tx_id)
+                            output_tx_started = False
+                            output_tx_id = str(uuid4())
+                        yield StreamPartTurnEnd(
+                            usage=_get_usage(response.usage_metadata),
+                            finish_reason="interrupted",
+                        )
+                        turn_started = False
                     if content.turn_complete is True:
-                        yield LiveEventTurnComplete()
+                        if audio_started:
+                            yield StreamPartAudioEnd(id=audio_id)
+                            audio_started = False
+                            audio_id = str(uuid4())
+                        if text_started:
+                            yield StreamPartTextEnd(id=text_id)
+                            text_started = False
+                            text_id = str(uuid4())
+                        if input_tx_started:
+                            yield StreamPartInputTranscriptionEnd(id=input_tx_id)
+                            input_tx_started = False
+                            input_tx_id = str(uuid4())
+                        if output_tx_started:
+                            yield StreamPartOutputTranscriptionEnd(id=output_tx_id)
+                            output_tx_started = False
+                            output_tx_id = str(uuid4())
+                        yield StreamPartTurnEnd(
+                            usage=_get_usage(response.usage_metadata),
+                            finish_reason="stop",
+                        )
+                        turn_started = False
 
-                tool_call = response.tool_call
-                if tool_call and tool_call.function_calls:
-                    for fc in tool_call.function_calls:
+                tool_call_resp = response.tool_call
+                if tool_call_resp and tool_call_resp.function_calls:
+                    for fc in tool_call_resp.function_calls:
                         tc_id = fc.id or str(uuid4())
-                        yield LiveEventToolCall(
+                        yield ToolCall(
                             tool_call_id=tc_id,
                             tool_name=fc.name or "",
                             input=dict(fc.args) if fc.args else {},
@@ -343,8 +419,7 @@ class GeminiLive(Provider):
                 last_text = msg.content
                 break
 
-        stream_id = str(uuid4())
-        yield StreamPartStreamStart(id=stream_id, model_id=self.model)
+        yield StreamPartTurnStart()
         yield StreamPartMessageStart(role="assistant")
 
         if last_text:
@@ -373,4 +448,4 @@ class GeminiLive(Provider):
             role="assistant",
             message=AssistantMessage(content=[MessagePartText(text="")]),
         )
-        yield StreamPartStreamEnd(usage=Usage(), finish_reason="stop")
+        yield StreamPartTurnEnd(usage=Usage(), finish_reason="stop")

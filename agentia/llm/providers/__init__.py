@@ -8,7 +8,6 @@ from agentia.spec.chat import Message
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
 from agentia.spec.stream import StreamPart
-from agentia.spec.live import LiveEvent
 
 if TYPE_CHECKING:
     from agentia.live import LiveOptions
@@ -98,7 +97,7 @@ class Provider(abc.ABC):
     ) -> None:
         raise NotImplementedError("This provider does not support live sessions")
 
-    async def receive(self) -> AsyncGenerator[LiveEvent, None]:
+    async def receive(self) -> AsyncGenerator[StreamPart, None]:
         raise NotImplementedError("This provider does not support live sessions")
         # Make this a valid async generator
         yield  # type: ignore[misc]

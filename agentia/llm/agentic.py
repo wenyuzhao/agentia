@@ -87,7 +87,6 @@ def run_agent_loop_streamed(
         last_finish_reason: FinishReason = "unknown"
 
         async with httpx.AsyncClient() as client:
-            stream_started = False
             while True:
                 tool_calls: list[ToolCall] = []
                 parts: list[AssistantMessagePart] = []
@@ -96,12 +95,14 @@ def run_agent_loop_streamed(
                 async for part in agent.provider.stream(
                     messages, tools, options, client
                 ):
+                    assert part.type not in (
+                        "stream-start",
+                        "stream-end",
+                    ), f"Provider must not yield {part.type}"
 
                     match part.type:
-                        case "stream-start":
-                            if not stream_started:
-                                stream_started = True
-                                yield part
+                        case "turn-start":
+                            yield part
                             yield StreamPartMessageStart(role="assistant")
                         case "text-start":
                             last_msg = ""
@@ -127,10 +128,10 @@ def run_agent_loop_streamed(
                             if not part.provider_executed:
                                 tool_calls.append(part)
 
-                    if part.type == "stream-end":
+                    if part.type == "turn-end":
                         s.usage += part.usage
                         last_finish_reason = part.finish_reason
-                    elif part.type != "stream-start":
+                    elif part.type != "turn-start":
                         yield part
                 msg = AssistantMessage(content=parts)
                 yield StreamPartMessageEnd(role="assistant", message=msg)
@@ -152,7 +153,7 @@ def run_agent_loop_streamed(
                 messages.append(tool_msg)
                 s._add_new_message(tool_msg)
         s.finish_reason = last_finish_reason
-        yield StreamPartStreamEnd(usage=s.usage, finish_reason=last_finish_reason)
+        yield StreamPartTurnEnd(usage=s.usage, finish_reason=last_finish_reason)
 
         agent.history.add(*s.new_messages)
 

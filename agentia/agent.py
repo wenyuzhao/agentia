@@ -18,11 +18,7 @@ from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import ResponseFormatJson
-from agentia.spec.live import (
-    LiveEvent,
-    LiveEventToolCall,
-    LiveEventToolCallResponse,
-)
+from agentia.spec.stream import StreamPart
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import (
     NonSystemMessage,
@@ -239,34 +235,25 @@ class Agent:
         """Signal end of audio stream to flush cached audio."""
         await self.provider.send_audio_stream_end()
 
-    async def receive(self) -> AsyncGenerator[LiveEvent, None]:
-        """Receive live events from the session.
+    async def receive(self) -> AsyncGenerator[StreamPart, None]:
+        """Receive stream parts from the live session.
 
         When auto_tool_execution is enabled (default), tool calls are
         automatically executed and responses sent back to the model.
         """
         async for event in self.provider.receive():
             if (
-                isinstance(event, LiveEventToolCall)
+                isinstance(event, ToolCall)
                 and self.live_options.auto_tool_execution
             ):
                 yield event
                 # Auto-execute the tool
-                tc = ToolCall(
-                    tool_call_id=event.tool_call_id,
-                    tool_name=event.tool_name,
-                    input=event.input,
-                )
-                responses = await self.tools.run(self, [tc], parallel=False)
+                responses = await self.tools.run(self, [event], parallel=False)
                 for resp in responses:
                     # Send response back to the model
                     await self.provider.send_tool_response(
                         resp.tool_call_id, resp.output
                     )
-                    yield LiveEventToolCallResponse(
-                        tool_call_id=resp.tool_call_id,
-                        tool_name=resp.tool_name,
-                        output=resp.output,
-                    )
+                    yield resp
             else:
                 yield event

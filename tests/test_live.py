@@ -24,11 +24,11 @@ async def test_live_text():
     async with agent:
         await agent.send_text("What is 2 + 2? Reply with just the number.")
         async for event in agent.receive():
-            if event.type == "audio":
+            if event.type == "audio-delta":
                 received_audio = True
-            elif event.type == "output_transcription":
-                received_transcription += event.text
-            elif event.type == "turn_complete":
+            elif event.type == "output-transcription-delta":
+                received_transcription += event.delta
+            elif event.type == "turn-end":
                 break
     assert received_audio or received_transcription
     if received_transcription:
@@ -59,13 +59,13 @@ async def test_live_tool_calling():
     async with agent:
         await agent.send_text("What is the weather in Boston?")
         async for event in agent.receive():
-            if event.type == "output_transcription":
-                received_transcription += event.text
-            elif event.type == "tool_call":
+            if event.type == "output-transcription-delta":
+                received_transcription += event.delta
+            elif event.type == "tool-call":
                 assert event.tool_name == "get_weather"
-            elif event.type == "tool_call_response":
+            elif event.type == "tool-result":
                 assert "Sunny" in str(event.output)
-            elif event.type == "turn_complete":
+            elif event.type == "turn-end":
                 break
     assert tool_called
 
@@ -118,11 +118,11 @@ async def test_live_parallel_send_receive():
         async def receiver():
             nonlocal received_transcription, received_audio, turns_completed
             async for event in agent.receive():
-                if event.type == "audio":
+                if event.type == "audio-delta":
                     received_audio = True
-                elif event.type == "output_transcription":
-                    received_transcription += event.text
-                elif event.type == "turn_complete":
+                elif event.type == "output-transcription-delta":
+                    received_transcription += event.delta
+                elif event.type == "turn-end":
                     turns_completed += 1
                     turn_complete_event.set()
                     if turns_completed >= len(questions):

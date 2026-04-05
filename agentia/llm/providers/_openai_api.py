@@ -339,9 +339,9 @@ class OpenAIAPIProvider(Provider):
                 continue
             if not started:
                 started = True
-                yield StreamPartStreamStart(id=_gen_id(), model_id=self.model)
+                yield StreamPartTurnStart()
             if not chunk.choices:
-                yield StreamPartStreamEnd(
+                yield StreamPartTurnEnd(
                     usage=self._get_usage(chunk.usage), finish_reason="stop"
                 )
                 continue
@@ -414,7 +414,7 @@ class OpenAIAPIProvider(Provider):
                         continue
                     tc.input = json.loads(tool_call_partial_inputs[i] or "{}")
                     yield tc
-                yield StreamPartStreamEnd(
+                yield StreamPartTurnEnd(
                     usage=self._get_usage(chunk.usage),
                     finish_reason=self._get_finish_reason(choice.finish_reason),
                 )

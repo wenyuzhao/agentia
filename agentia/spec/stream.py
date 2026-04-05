@@ -54,16 +54,65 @@ class StreamPartMessageEnd(BaseModel):
     message: Annotated[AssistantMessage | ToolMessage, Field(discriminator="role")]
 
 
-class StreamPartStreamStart(BaseModel):
-    type: Literal["stream-start"] = "stream-start"
-    id: str | None = None
-    model_id: str | None = None
+
+class StreamPartAudioStart(BaseModel):
+    type: Literal["audio-start"] = "audio-start"
+    id: str
 
 
-class StreamPartStreamEnd(BaseModel):
-    type: Literal["stream-end"] = "stream-end"
-    usage: Usage
-    finish_reason: FinishReason
+class StreamPartAudioDelta(BaseModel):
+    type: Literal["audio-delta"] = "audio-delta"
+    id: str
+    delta: bytes
+    """PCM audio data. Output is 24kHz, 16-bit, mono, little-endian."""
+
+
+class StreamPartAudioEnd(BaseModel):
+    type: Literal["audio-end"] = "audio-end"
+    id: str
+
+
+class StreamPartInputTranscriptionStart(BaseModel):
+    type: Literal["input-transcription-start"] = "input-transcription-start"
+    id: str
+
+
+class StreamPartInputTranscriptionDelta(BaseModel):
+    type: Literal["input-transcription-delta"] = "input-transcription-delta"
+    id: str
+    delta: str
+
+
+class StreamPartInputTranscriptionEnd(BaseModel):
+    type: Literal["input-transcription-end"] = "input-transcription-end"
+    id: str
+
+
+class StreamPartOutputTranscriptionStart(BaseModel):
+    type: Literal["output-transcription-start"] = "output-transcription-start"
+    id: str
+
+
+class StreamPartOutputTranscriptionDelta(BaseModel):
+    type: Literal["output-transcription-delta"] = "output-transcription-delta"
+    id: str
+    delta: str
+
+
+class StreamPartOutputTranscriptionEnd(BaseModel):
+    type: Literal["output-transcription-end"] = "output-transcription-end"
+    id: str
+
+
+
+class StreamPartTurnStart(BaseModel):
+    type: Literal["turn-start"] = "turn-start"
+
+
+class StreamPartTurnEnd(BaseModel):
+    type: Literal["turn-end"] = "turn-end"
+    usage: Usage = Usage()
+    finish_reason: FinishReason = "stop"
 
 
 class Annotations(BaseModel):
@@ -89,10 +138,19 @@ type StreamPart = Annotated[
     | ToolCall
     | ToolCallResponse
     | Annotation
-    | StreamPartStreamStart
-    | StreamPartStreamEnd
     | StreamPartMessageStart
-    | StreamPartMessageEnd,
+    | StreamPartMessageEnd
+    | StreamPartAudioStart
+    | StreamPartAudioDelta
+    | StreamPartAudioEnd
+    | StreamPartInputTranscriptionStart
+    | StreamPartInputTranscriptionDelta
+    | StreamPartInputTranscriptionEnd
+    | StreamPartOutputTranscriptionStart
+    | StreamPartOutputTranscriptionDelta
+    | StreamPartOutputTranscriptionEnd
+    | StreamPartTurnStart
+    | StreamPartTurnEnd,
     Field(discriminator="type"),
 ]
 
@@ -105,7 +163,16 @@ __all__ = [
     "StreamPartReasoningEnd",
     "StreamPartMessageStart",
     "StreamPartMessageEnd",
-    "StreamPartStreamStart",
-    "StreamPartStreamEnd",
+    "StreamPartAudioStart",
+    "StreamPartAudioDelta",
+    "StreamPartAudioEnd",
+    "StreamPartInputTranscriptionStart",
+    "StreamPartInputTranscriptionDelta",
+    "StreamPartInputTranscriptionEnd",
+    "StreamPartOutputTranscriptionStart",
+    "StreamPartOutputTranscriptionDelta",
+    "StreamPartOutputTranscriptionEnd",
+    "StreamPartTurnStart",
+    "StreamPartTurnEnd",
     "StreamPart",
 ]
