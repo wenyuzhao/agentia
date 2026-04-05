@@ -6,6 +6,7 @@ from agentia.llm.agentic import run_agent_loop_live
 from agentia.spec import StreamPart
 from typing import TYPE_CHECKING, Literal
 from dataclasses import dataclass
+from io import BytesIO
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -68,7 +69,8 @@ class InputStream(abc.ABC):
     def __init__(self):
         self._live: Optional["Live"] = None
 
-    def deinit(self): ...
+    async def init(self): ...
+    async def deinit(self): ...
 
     async def send(self, chunk: LiveChunk) -> None:
         """Send a chunk to the input stream."""
@@ -83,7 +85,8 @@ class OutputStream(abc.ABC):
     def __init__(self):
         self._live: Optional["Live"] = None
 
-    def deinit(self): ...
+    async def init(self): ...
+    async def deinit(self): ...
 
     @overload
     async def receive(self, kind: Literal["audio"]) -> LiveChunkAudio | None: ...
@@ -109,6 +112,63 @@ class OutputStream(abc.ABC):
     async def run(self): ...
 
 
+class VideoInput(InputStream):
+    def __init__(
+        self,
+        kind: Literal["camera", "screen"],
+        device: int | None = None,
+        fps: float = 1,
+    ):
+        super().__init__()
+        self.kind = kind
+        self.fps = fps
+        self.device = device
+        self.cap = None
+
+    async def init(self):
+        if self.kind == "camera":
+            import cv2
+
+            self.cap = cv2.VideoCapture(self.device or 0)
+            self.grab_camera_frame()
+        else:
+            self.grab_screenshot()
+
+    async def deinit(self):
+        if self.cap is not None:
+            self.cap.release()
+
+    def grab_screenshot(self) -> bytes:
+        import pyscreenshot
+
+        img = pyscreenshot.grab()
+        buf = BytesIO()
+        img.convert("RGB").save(buf, format="JPEG")  # type: ignore
+        return buf.getvalue()
+
+    def grab_camera_frame(self) -> bytes:
+        import cv2
+        from PIL import Image
+
+        assert self.cap is not None, "Camera capture not initialized"
+        ret, frame = self.cap.read()
+        if not ret:
+            raise RuntimeError("Failed to grab camera frame")
+        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        buf = BytesIO()
+        img.save(buf, format="JPEG")  # type: ignore
+        return buf.getvalue()
+
+    async def run(self):
+        while True:
+            await asyncio.sleep(1.0 / float(self.fps))
+            if self.kind == "screen":
+                data = await asyncio.to_thread(self.grab_screenshot)
+            else:
+                data = await asyncio.to_thread(self.grab_camera_frame)
+            await self.send(LiveChunkVideo(data=data, mime_type="image/jpeg"))
+
+
 class AudioInput(InputStream):
     def __init__(
         self,
@@ -128,12 +188,7 @@ class AudioInput(InputStream):
         self.stream = None
         self.device = device
 
-    def deinit(self):
-        if self.stream is not None:
-            self.stream.close()
-        self.pya.terminate()
-
-    async def run(self):
+    async def init(self):
         self.stream = await asyncio.to_thread(
             self.pya.open,
             format=self.format,
@@ -144,6 +199,13 @@ class AudioInput(InputStream):
             input_device_index=self.device,
         )
 
+    async def deinit(self):
+        if self.stream is not None:
+            self.stream.close()
+        self.pya.terminate()
+
+    async def run(self):
+        assert self.stream is not None, "Audio stream not initialized"
         while True:
             data = await asyncio.to_thread(self.stream.read, self.chunk_size)
             await self.send(LiveChunkAudio(data=data, mime_type="audio/pcm;rate=16000"))
@@ -162,13 +224,7 @@ class AudioOutput(OutputStream):
         self.stream = None
         self.device = device
 
-    def deinit(self):
-        if self.stream is not None:
-            self.stream.close()
-        self.pya.terminate()
-
-    async def run(self):
-
+    async def init(self):
         self.stream = await asyncio.to_thread(
             self.pya.open,
             format=self.format,
@@ -178,6 +234,13 @@ class AudioOutput(OutputStream):
             output_device_index=self.device,
         )
 
+    async def deinit(self):
+        if self.stream is not None:
+            self.stream.close()
+        self.pya.terminate()
+
+    async def run(self):
+        assert self.stream is not None, "Audio stream not initialized"
         while True:
             chunk = await self.receive("audio")
             if chunk is None:
@@ -330,17 +393,27 @@ class Live:
 
     async def start(
         self,
-        inputs: Sequence[InputStream | Literal["audio", "video"]] | None = None,
+        inputs: (
+            Sequence[InputStream | Literal["audio", "camera", "screen"]] | None
+        ) = None,
         outputs: (
             Sequence[OutputStream | Literal["text", "audio", "transcription"]] | None
         ) = None,
+        camera: Optional[int] = None,
+        screen: Optional[int] = None,
+        mic: Optional[int] = None,
+        speaker: Optional[int] = None,
     ):
         """Start the live session in multithread mode, allowing concurrent send/receive."""
         self.__multithread_mode = True
 
-        def create_istream(kind: Literal["audio", "video"]) -> InputStream:
+        def create_istream(kind: Literal["audio", "camera", "screen"]) -> InputStream:
             if kind == "audio":
-                return AudioInput()
+                return AudioInput(device=mic)
+            elif kind == "camera":
+                return VideoInput(kind="camera", device=camera)
+            elif kind == "screen":
+                return VideoInput(kind="screen", device=screen)
             else:
                 raise NotImplementedError(
                     f"Input stream for {kind} not implemented yet"
@@ -350,7 +423,7 @@ class Live:
             kind: Literal["text", "audio", "transcription"],
         ) -> OutputStream:
             if kind == "audio":
-                return AudioOutput()
+                return AudioOutput(device=speaker)
             elif kind == "text":
                 return TextOutput()
             elif kind == "transcription":
@@ -368,6 +441,11 @@ class Live:
             for o in outputs or []
         ]
 
+        for o in outputs:
+            await o.init()
+        for i in inputs:
+            await i.init()
+
         try:
             async with self:
                 async with asyncio.TaskGroup() as tg:
@@ -384,9 +462,9 @@ class Live:
                     tg.create_task(self.__send_task())
         finally:
             for o in outputs:
-                o.deinit()
+                await o.deinit()
             for i in inputs:
-                i.deinit()
+                await i.deinit()
 
 
 __all__ = ["LiveOptions", "Live"]
