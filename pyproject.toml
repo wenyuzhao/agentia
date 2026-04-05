@@ -29,6 +29,7 @@ dependencies = [
     "markdownify>=1.2.2",
     "tavily-python>=0.7.21",
     "pillow>=12.1.0",
+    "google-genai>=1.70.0",
 ]
 
 [project.urls]

@@ -23,6 +23,7 @@ from .plugins.skills import Skills, Skill
 from . import plugins
 from .tools import ProviderTool, Tool, Tools, MCP, MCPContext, ToolResult
 from .history import History
+from .live import LiveOptions
 from .llm import LLMOptions, ReasoningOptions
 from .llm.completion import ChatCompletion
 from .llm.stream import (
@@ -104,6 +105,17 @@ __all__ = [
     "ToolResult",
     "MCP",
     "MCPContext",
+    # live
+    "LiveOptions",
+    "LiveEventAudio",
+    "LiveEventText",
+    "LiveEventInputTranscription",
+    "LiveEventOutputTranscription",
+    "LiveEventInterrupted",
+    "LiveEventToolCall",
+    "LiveEventToolCallResponse",
+    "LiveEventTurnComplete",
+    "LiveEvent",
     # utils
     "init_logging",
     "load_dotenv",

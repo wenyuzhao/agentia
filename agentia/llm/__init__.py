@@ -34,7 +34,7 @@ class LLMOptions(BaseModel):
 
 def get_provider(selector: str) -> "Provider":
     # Parse selector
-    if re.match(r"^\w+:", selector) is None:
+    if re.match(r"^[\w-]+:", selector) is None:
         # Default to openrouter if no provider specified
         default_provider = os.environ.get("AGENTIA_DEFAULT_PROVIDER", "openrouter")
         selector = f"{default_provider.strip().lower()}:{selector}"
@@ -80,5 +80,9 @@ def get_provider(selector: str) -> "Provider":
             from .providers.ollama import Ollama
 
             return Ollama(model=model)
+        case "gemini-live":
+            from .providers.gemini_live import GeminiLive
+
+            return GeminiLive(model=model)
         case _:
             raise ValueError(f"Unknown provider: {provider}")

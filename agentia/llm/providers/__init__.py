@@ -1,13 +1,17 @@
 import abc
 import re
 from dataclasses import dataclass
-from typing import AsyncGenerator, Sequence
+from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 import httpx
 from agentia.llm import LLMOptions
 from agentia.spec.chat import Message
 from agentia.tools.tools import ToolSet
 import agentia.spec as spec
 from agentia.spec.stream import StreamPart
+from agentia.spec.live import LiveEvent
+
+if TYPE_CHECKING:
+    from agentia.live import LiveOptions
 
 
 @dataclass
@@ -55,3 +59,46 @@ class Provider(abc.ABC):
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]: ...
+
+    # --- Live session methods (optional, for bidirectional providers) ---
+
+    @property
+    def supports_live(self) -> bool:
+        return False
+
+    async def connect_live(
+        self,
+        options: "LiveOptions",
+        tools: ToolSet,
+        instructions: str | None,
+    ) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def disconnect_live(self) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def send_audio(
+        self, data: bytes, mime_type: str = "audio/pcm;rate=16000"
+    ) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def send_video(
+        self, data: bytes, mime_type: str = "image/jpeg"
+    ) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def send_text_live(self, text: str) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def send_audio_stream_end(self) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def send_tool_response(
+        self, tool_call_id: str, output: object
+    ) -> None:
+        raise NotImplementedError("This provider does not support live sessions")
+
+    async def receive(self) -> AsyncGenerator[LiveEvent, None]:
+        raise NotImplementedError("This provider does not support live sessions")
+        # Make this a valid async generator
+        yield  # type: ignore[misc]

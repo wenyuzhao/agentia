@@ -12,6 +12,9 @@ class History:
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.__instruction_generators.append(instructions)
 
+    def get_instructions(self) -> str:
+        return self.__get_instructions()
+
     def __get_instructions(self) -> str:
         instructions = []
         for gen in self.__instruction_generators:

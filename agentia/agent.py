@@ -1,24 +1,40 @@
 import os
-from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Sequence, overload, Any
+from typing import (
+    TYPE_CHECKING,
+    AsyncGenerator,
+    Callable,
+    Literal,
+    Optional,
+    Sequence,
+    overload,
+    Any,
+)
 import logging
 import uuid
 from agentia.history import History
+from agentia.live import LiveOptions
 from agentia.llm import LLMOptions, get_provider
 from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.spec.chat import ResponseFormatJson
+from agentia.spec.live import (
+    LiveEvent,
+    LiveEventToolCall,
+    LiveEventToolCallResponse,
+)
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import (
     NonSystemMessage,
     UserMessage,
     MessagePartText,
     ObjectType,
+    ToolCall,
     UserConsentRequest,
 )
 from agentia.tools.mcp import MCPContext
 from agentia.utils.event_emitter import EventEmitter
+from pathlib import Path
 
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
@@ -43,6 +59,7 @@ class Agent:
         ) = None,
         options: LLMOptions | None = None,
         skills: Sequence[Path | str] | "Skills" | bool = False,
+        live_options: LiveOptions | None = None,
     ) -> None:
         from agentia.plugins.skills import Skills
 
@@ -67,6 +84,7 @@ class Agent:
             model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
         self.model = model
         self.provider = get_provider(model)
+        self.live_options = live_options or LiveOptions()
         self.history = History()
         if instructions:
             if isinstance(instructions, (str, Callable)):
@@ -164,9 +182,19 @@ class Agent:
     async def __aenter__(self):
         self._mcp_context = MCPContext()
         await self._mcp_context.__aenter__()
+        # Connect live session if provider supports it
+        if self.provider.supports_live:
+            await self.tools.init()
+            instructions = self.history.get_instructions() or None
+            await self.provider.connect_live(
+                self.live_options, self.tools, instructions
+            )
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        # Disconnect live session if provider supports it
+        if self.provider.supports_live:
+            await self.provider.disconnect_live()
         assert self._mcp_context is not None
         await self._mcp_context.__aexit__(exc_type, exc_val, exc_tb)
         self._mcp_context = None
@@ -188,3 +216,57 @@ class Agent:
             raise PermissionError("User did not respond to consent request.")
         else:
             raise ValueError(f"Invalid consent response: {consent}")
+
+    # --- Live session methods ---
+
+    async def send_audio(
+        self, data: bytes, mime_type: str = "audio/pcm;rate=16000"
+    ) -> None:
+        """Send an audio chunk to the live session. Default: PCM 16kHz 16-bit mono."""
+        await self.provider.send_audio(data, mime_type)
+
+    async def send_video(
+        self, data: bytes, mime_type: str = "image/jpeg"
+    ) -> None:
+        """Send a video frame to the live session."""
+        await self.provider.send_video(data, mime_type)
+
+    async def send_text(self, text: str) -> None:
+        """Send text input to the live session."""
+        await self.provider.send_text_live(text)
+
+    async def send_audio_stream_end(self) -> None:
+        """Signal end of audio stream to flush cached audio."""
+        await self.provider.send_audio_stream_end()
+
+    async def receive(self) -> AsyncGenerator[LiveEvent, None]:
+        """Receive live events from the session.
+
+        When auto_tool_execution is enabled (default), tool calls are
+        automatically executed and responses sent back to the model.
+        """
+        async for event in self.provider.receive():
+            if (
+                isinstance(event, LiveEventToolCall)
+                and self.live_options.auto_tool_execution
+            ):
+                yield event
+                # Auto-execute the tool
+                tc = ToolCall(
+                    tool_call_id=event.tool_call_id,
+                    tool_name=event.tool_name,
+                    input=event.input,
+                )
+                responses = await self.tools.run(self, [tc], parallel=False)
+                for resp in responses:
+                    # Send response back to the model
+                    await self.provider.send_tool_response(
+                        resp.tool_call_id, resp.output
+                    )
+                    yield LiveEventToolCallResponse(
+                        tool_call_id=resp.tool_call_id,
+                        tool_name=resp.tool_name,
+                        output=resp.output,
+                    )
+            else:
+                yield event
