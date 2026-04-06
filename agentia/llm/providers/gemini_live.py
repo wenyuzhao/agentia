@@ -278,6 +278,10 @@ class GeminiLive(Provider):
 
     def __init__(self, model: str):
         super().__init__(name="gemini-live", model=model)
+        if model != "gemini-3.1-flash-live-preview":
+            raise ValueError(
+                "Unsupported Gemini Live model. Currently only 'gemini-3.1-flash-live-preview' is supported."
+            )
         self._session: Optional["AsyncSession"] = None
         self._session_cm: Any = None  # The async context manager from connect()
         self._client: genai.Client | None = None

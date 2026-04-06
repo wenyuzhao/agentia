@@ -1,6 +1,8 @@
 from ._openai_api import OpenAIAPIProvider
 import os
 
+# Model list: https://openrouter.ai/models
+
 
 class OpenRouter(OpenAIAPIProvider):
     def __init__(self, model: str, api_key: str | None = None):

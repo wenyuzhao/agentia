@@ -1,6 +1,8 @@
 from ._openai_api import OpenAIAPIProvider
 import os
 
+# Model list: https://developers.cloudflare.com/ai-gateway/usage/providers/
+
 
 class Cloudflare(OpenAIAPIProvider):
     def __init__(self, model: str, api_key: str | None = None):

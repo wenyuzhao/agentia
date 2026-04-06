@@ -1,7 +1,7 @@
 from ._openai_api import OpenAIAPIProvider
 import os
 
-# Model list: https://www.alibabacloud.com/help/en/model-studio/getting-started/models
+# Model list: https://chutes.ai/app?type=llm
 
 
 class Chutes(OpenAIAPIProvider):

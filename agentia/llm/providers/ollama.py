@@ -2,6 +2,8 @@ from typing import Any, override
 from ._openai_api import OpenAIAPIProvider
 import os
 
+# Model list: https://ollama.com/library
+
 
 class Ollama(OpenAIAPIProvider):
     def __init__(

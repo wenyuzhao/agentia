@@ -1,6 +1,8 @@
 from ._openai_api import OpenAIAPIProvider
 import os
 
+# Model list: https://developers.openai.com/api/docs/models
+
 
 class OpenAI(OpenAIAPIProvider):
     def __init__(

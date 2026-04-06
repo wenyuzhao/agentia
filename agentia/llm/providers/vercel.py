@@ -1,6 +1,8 @@
 from ._openai_api import OpenAIAPIProvider
 import os
 
+# Model list: https://vercel.com/ai-gateway/models
+
 
 class Vercel(OpenAIAPIProvider):
     def __init__(self, model: str, api_key: str | None = None):
