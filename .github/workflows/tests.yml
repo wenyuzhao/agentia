@@ -13,7 +13,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install Packages
         run: |
-          sudo apt-get install -y libomp-dev libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 ffmpeg libav-tools
+          sudo apt-get install -y libomp-dev libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0 ffmpeg
           uv venv
           uv sync --all-extras --all-groups --all-packages --frozen
       - name: Run PyTest
