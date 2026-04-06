@@ -207,7 +207,9 @@ class AudioInput(InputStream):
     async def run(self):
         assert self.stream is not None, "Audio stream not initialized"
         while True:
-            data = await asyncio.to_thread(self.stream.read, self.chunk_size)
+            data = await asyncio.to_thread(
+                self.stream.read, self.chunk_size, exception_on_overflow=False
+            )
             await self.send(LiveChunkAudio(data=data, mime_type="audio/pcm;rate=16000"))
 
 

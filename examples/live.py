@@ -21,7 +21,7 @@ class TextInput(InputStream):
 async def main():
     agent = Agent("gemini-live:gemini-3.1-flash-live-preview")
     await agent.live(options=LiveOptions(voice="Zephyr")).start(
-        inputs=[TextInput(), "screen"], outputs=["audio"]
+        inputs=["audio", "screen"], outputs=["audio"]
     )
 
 
