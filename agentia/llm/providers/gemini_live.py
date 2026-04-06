@@ -47,6 +47,14 @@ from agentia.spec.stream import (
     StreamPartTurnStart,
 )
 from agentia.tools.tools import ToolSet
+from agentia.spec.live import (
+    LiveChunk,
+    LiveChunkAudio,
+    LiveChunkText,
+    LiveChunkImage,
+    LiveChunkVideo,
+    LiveChunkEnd,
+)
 
 
 def _get_usage(u: types.UsageMetadata | None) -> Usage:
@@ -338,37 +346,25 @@ class GeminiLive(Provider):
         return self._session
 
     @override
-    async def send_audio(
-        self, data: bytes, mime_type: str = "audio/pcm;rate=16000"
-    ) -> None:
+    async def send_live_chunk(self, chunk: LiveChunk):
         session = self._assert_session()
-        await session.send_realtime_input(
-            audio=types.Blob(data=data, mime_type=mime_type)
-        )
-
-    @override
-    async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(
-            video=types.Blob(data=data, mime_type=mime_type)
-        )
-
-    @override
-    async def send_image(self, data: bytes, mime_type: str = "image/jpeg") -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(
-            media=types.Blob(data=data, mime_type=mime_type)
-        )
-
-    @override
-    async def send_text_live(self, text: str) -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(text=text)
-
-    @override
-    async def send_audio_stream_end(self) -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(audio_stream_end=True)
+        match chunk:
+            case LiveChunkAudio(data=data, mime_type=mime):
+                await session.send_realtime_input(
+                    audio=types.Blob(data=data, mime_type=mime)
+                )
+            case LiveChunkVideo(data=data, mime_type=mime):
+                await session.send_realtime_input(
+                    video=types.Blob(data=data, mime_type=mime)
+                )
+            case LiveChunkImage(data=data, mime_type=mime):
+                await session.send_realtime_input(
+                    video=types.Blob(data=data, mime_type=mime)
+                )
+            case LiveChunkText(text=text):
+                await session.send_realtime_input(text=text)
+            case LiveChunkEnd():
+                await session.send_realtime_input(activity_end={})
 
     @override
     async def send_tool_responses(self, responses: list[ToolCallResponse]) -> None:

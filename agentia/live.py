@@ -5,9 +5,16 @@ from pydantic import BaseModel, Field
 from agentia.llm.agentic import run_agent_loop_live
 from agentia.spec import StreamPart
 from typing import TYPE_CHECKING, Literal
-from dataclasses import dataclass
 from io import BytesIO
-import threading
+from agentia.utils.aec import EchoCanceller
+from agentia.spec.live import (
+    LiveChunk,
+    LiveChunkAudio,
+    LiveChunkText,
+    LiveChunkImage,
+    LiveChunkVideo,
+    LiveChunkEnd,
+)
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -35,184 +42,6 @@ class LiveOptions(BaseModel):
 
     aec: bool = False
     """Enable acoustic echo cancellation to suppress speaker-to-mic feedback."""
-
-
-class EchoCanceller:
-    """Acoustic echo canceller using frequency-domain adaptive filtering (FDAF/NLMS).
-
-    Removes speaker output (reference) from microphone input to prevent echo feedback.
-    Handles sample rate mismatch between input (16kHz) and output (24kHz) automatically.
-    """
-
-    def __init__(
-        self,
-        block_size: int = 256,
-        num_blocks: int = 12,
-        mu: float = 0.5,
-        delta: float = 1e-2,
-        input_rate: int = 16000,
-        output_rate: int = 24000,
-    ):
-        import numpy as np
-
-        self._np = np
-        N = block_size
-        M = num_blocks
-        F = N + 1  # rfft output length for 2N-point FFT
-
-        self._N = N
-        self._M = M
-        self._mu = mu
-        self._delta = delta
-        self._input_rate = input_rate
-        self._output_rate = output_rate
-
-        # Adaptive filter taps in frequency domain
-        self._W = np.zeros((M, F), dtype=np.complex128)
-        # Reference delay line in frequency domain
-        self._X_buf = np.zeros((M, F), dtype=np.complex128)
-        # Running power estimate for NLMS normalisation
-        self._P = np.ones(F, dtype=np.float64) * delta
-
-        # Overlap buffers (overlap-save needs previous block)
-        self._ref_overlap = np.zeros(N, dtype=np.float64)
-        self._mic_overlap = np.zeros(N, dtype=np.float64)
-
-        # Queues for incomplete blocks
-        self._ref_queue = np.array([], dtype=np.float64)
-        self._mic_pending = np.array([], dtype=np.float64)
-        self._out_pending = np.array([], dtype=np.float64)
-
-        self._lock = threading.Lock()
-
-    def _resample(self, data: "numpy.ndarray", from_rate: int, to_rate: int):  # type: ignore[name-defined]
-        if from_rate == to_rate:
-            return data
-        np = self._np
-        n_out = int(len(data) * to_rate / from_rate)
-        x_old = np.arange(len(data))
-        x_new = np.linspace(0, len(data) - 1, n_out)
-        return np.interp(x_new, x_old, data)
-
-    def feed_reference(self, data: bytes) -> None:
-        """Feed playback audio as the reference signal. Called by AudioOutput."""
-        np = self._np
-        samples = np.frombuffer(data, dtype=np.int16).astype(np.float64) / 32768.0
-        if self._output_rate != self._input_rate:
-            samples = self._resample(samples, self._output_rate, self._input_rate)
-        with self._lock:
-            self._ref_queue = np.concatenate([self._ref_queue, samples])
-
-    def process(self, mic_data: bytes) -> bytes:
-        """Remove echo from microphone audio. Called by AudioInput."""
-        np = self._np
-        N = self._N
-        mic = np.frombuffer(mic_data, dtype=np.int16).astype(np.float64) / 32768.0
-        n_input = len(mic)
-
-        with self._lock:
-            self._mic_pending = np.concatenate([self._mic_pending, mic])
-            output_blocks: list = []
-
-            while len(self._mic_pending) >= N:
-                mic_block = self._mic_pending[:N]
-                self._mic_pending = self._mic_pending[N:]
-
-                # Get matching reference block (zero if not available yet)
-                if len(self._ref_queue) >= N:
-                    ref_block = self._ref_queue[:N]
-                    self._ref_queue = self._ref_queue[N:]
-                else:
-                    ref_block = np.zeros(N, dtype=np.float64)
-                    if len(self._ref_queue) > 0:
-                        ref_block[: len(self._ref_queue)] = self._ref_queue
-                        self._ref_queue = np.array([], dtype=np.float64)
-
-                output_blocks.append(self._process_block(mic_block, ref_block))
-
-            if output_blocks:
-                self._out_pending = np.concatenate([self._out_pending, *output_blocks])
-
-            # Return exactly the same number of samples as input
-            if len(self._out_pending) >= n_input:
-                result = self._out_pending[:n_input]
-                self._out_pending = self._out_pending[n_input:]
-            else:
-                # Not enough processed samples yet – pass through raw input
-                return mic_data
-
-        result = np.clip(result * 32768.0, -32768, 32767).astype(np.int16)
-        return result.tobytes()
-
-    def _process_block(self, mic_block, ref_block):
-        np = self._np
-        N = self._N
-
-        # Overlap-save: build 2N segments from previous + current block
-        ref_seg = np.concatenate([self._ref_overlap, ref_block])
-        mic_seg = np.concatenate([self._mic_overlap, mic_block])
-        self._ref_overlap = ref_block.copy()
-        self._mic_overlap = mic_block.copy()
-
-        # Forward FFT
-        X = np.fft.rfft(ref_seg)
-        D = np.fft.rfft(mic_seg)
-
-        # Shift reference delay line and insert newest block
-        self._X_buf = np.roll(self._X_buf, 1, axis=0)
-        self._X_buf[0] = X
-
-        # Echo estimate: sum of filter * reference across all taps
-        Y = np.sum(self._W * self._X_buf, axis=0)
-
-        # Error = desired (mic) - echo estimate
-        E = D - Y
-
-        # Overlap-save: take last N samples from the 2N IFFT output
-        e_time = np.fft.irfft(E, n=2 * N)
-        out_block = e_time[N:]
-
-        # Update running power estimate
-        self._P = 0.9 * self._P + 0.1 * np.abs(X) ** 2
-
-        # NLMS weight update
-        step = self._mu * E / (self._P + self._delta)
-        for k in range(self._M):
-            self._W[k] += step * np.conj(self._X_buf[k])
-
-        return out_block
-
-
-@dataclass
-class LiveChunkAudio:
-    data: bytes
-    mime_type: str = "audio/pcm;rate=16000"
-
-
-@dataclass
-class LiveChunkVideo:
-    data: bytes
-    mime_type: str = "image/jpeg"
-
-
-@dataclass
-class LiveChunkImage:
-    data: bytes
-    mime_type: str = "image/jpeg"
-
-
-@dataclass
-class LiveChunkText:
-    text: str
-
-
-@dataclass
-class LiveChunkEnd: ...
-
-
-LiveChunk = (
-    LiveChunkAudio | LiveChunkVideo | LiveChunkImage | LiveChunkText | LiveChunkEnd
-)
 
 
 class InputStream(abc.ABC):
@@ -473,42 +302,69 @@ class Live:
         await self.agent.provider.disconnect_live()
         await self.agent.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def send_audio(
-        self, data: bytes, mime_type: str = "audio/pcm;rate=16000"
-    ) -> None:
-        """Send an audio chunk to the live session. Default: PCM 16kHz 16-bit mono."""
-        if self.__multithread_mode:
-            await self._input_queue.put(LiveChunkAudio(data=data, mime_type=mime_type))
-            return
-        await self.agent.provider.send_audio(data, mime_type)
+    @overload
+    async def send(self, *, chunk: LiveChunk): ...
+    @overload
+    async def send(self, *, text: str): ...
+    @overload
+    async def send(self, *, audio: bytes, mime_type: str | None = None): ...
+    @overload
+    async def send(self, *, image: bytes, mime_type: str | None = None): ...
+    @overload
+    async def send(self, *, video: bytes, mime_type: str | None = None): ...
+    @overload
+    async def send(self, *, end: Literal[True]): ...
 
-    async def send_image(self, data: bytes, mime_type: str = "image/jpeg") -> None:
-        """Send an image to the live session."""
-        if self.__multithread_mode:
-            await self._input_queue.put(LiveChunkImage(data=data, mime_type=mime_type))
-            return
-        await self.agent.provider.send_image(data, mime_type)
+    async def send(
+        self,
+        *,
+        image: bytes | None = None,
+        video: bytes | None = None,
+        audio: bytes | None = None,
+        text: str | None = None,
+        end: Literal[True] | None = None,
+        mime_type: Optional[str] = None,
+        chunk: LiveChunk | None = None,
+    ):
+        """Send a chunk to the live session."""
+        args = dict(
+            image=image, video=video, audio=audio, text=text, end=end, chunk=chunk
+        )
 
-    async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
-        """Send a video frame to the live session."""
-        if self.__multithread_mode:
-            await self._input_queue.put(LiveChunkVideo(data=data, mime_type=mime_type))
-            return
-        await self.agent.provider.send_video(data, mime_type)
+        def check_args(active: str):
+            for k, v in args.items():
+                if k != active:
+                    assert v is None, f"`{k}` should not be provided"
+            if active in ("text", "end", "chunk"):
+                assert mime_type is None, "mime_type should not be specified"
 
-    async def send_text(self, text: str) -> None:
-        """Send text input to the live session."""
-        if self.__multithread_mode:
-            await self._input_queue.put(LiveChunkText(text=text))
-            return
-        await self.agent.provider.send_text_live(text)
+        if chunk:
+            check_args("chunk")
+        else:
+            if image:
+                check_args("image")
+                chunk = LiveChunkImage(data=image, mime_type=mime_type or "image/jpeg")
+            elif video:
+                check_args("video")
+                chunk = LiveChunkVideo(data=video, mime_type=mime_type or "image/jpeg")
+            elif audio:
+                check_args("audio")
+                chunk = LiveChunkAudio(
+                    data=audio, mime_type=mime_type or "audio/pcm;rate=16000"
+                )
+            elif text:
+                check_args("text")
+                chunk = LiveChunkText(text=text)
+            elif end is True:
+                check_args("end")
+                chunk = LiveChunkEnd()
+            else:
+                raise ValueError("Invalid input: no data provided")
 
-    async def send_audio_stream_end(self) -> None:
-        """Signal end of audio stream to flush cached audio."""
         if self.__multithread_mode:
-            await self._input_queue.put(LiveChunkEnd())
+            await self._input_queue.put(chunk)
             return
-        await self.agent.provider.send_audio_stream_end()
+        await self.agent.provider.send_live_chunk(chunk)
 
     async def receive(self) -> AsyncGenerator[StreamPart, None]:
         """Receive stream parts from the live session."""
@@ -543,17 +399,7 @@ class Live:
     async def __send_task(self):
         while True:
             chunk = await self._input_queue.get()
-            match chunk:
-                case LiveChunkText(text=text):
-                    await self.agent.provider.send_text_live(text)
-                case LiveChunkAudio(data=data, mime_type=mime_type):
-                    await self.agent.provider.send_audio(data, mime_type)
-                case LiveChunkImage(data=data, mime_type=mime_type):
-                    await self.agent.provider.send_image(data, mime_type)
-                case LiveChunkVideo(data=data, mime_type=mime_type):
-                    await self.agent.provider.send_video(data, mime_type)
-                case LiveChunkEnd():
-                    await self.agent.provider.send_audio_stream_end()
+            await self.agent.provider.send_live_chunk(chunk)
 
     async def start(
         self,
