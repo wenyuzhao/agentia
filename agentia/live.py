@@ -7,6 +7,7 @@ from agentia.spec import StreamPart
 from typing import TYPE_CHECKING, Literal
 from io import BytesIO
 from agentia.utils.aec import EchoCanceller
+from agentia.utils.image_scaling import ScaleOption, downscale_jpeg
 from agentia.spec.live import (
     LiveChunk,
     LiveChunkAudio,
@@ -97,11 +98,13 @@ class VideoInput(InputStream):
         kind: Literal["camera", "screen"],
         device: int | None = None,
         fps: float = 1,
+        scale: ScaleOption = "raw",
     ):
         super().__init__()
         self.kind = kind
         self.fps = fps
         self.device = device
+        self.scale: ScaleOption = scale
         self.cap = None
 
     async def init(self):
@@ -145,6 +148,7 @@ class VideoInput(InputStream):
                 data = await asyncio.to_thread(self.grab_screenshot)
             else:
                 data = await asyncio.to_thread(self.grab_camera_frame)
+            data = await asyncio.to_thread(downscale_jpeg, data, self.scale)
             await self.send(LiveChunkVideo(data=data, mime_type="image/jpeg"))
 
 
@@ -411,6 +415,7 @@ class Live:
         ) = None,
         camera: Optional[int] = None,
         screen: Optional[int] = None,
+        scale: ScaleOption = "raw",
         mic: Optional[int] = None,
         speaker: Optional[int] = None,
     ):
@@ -434,9 +439,9 @@ class Live:
                     echo_canceller=_get_echo_canceller() if aec else None,
                 )
             elif kind == "camera":
-                return VideoInput(kind="camera", device=camera)
+                return VideoInput(kind="camera", device=camera, scale=scale)
             elif kind == "screen":
-                return VideoInput(kind="screen", device=screen)
+                return VideoInput(kind="screen", device=screen, scale=scale)
             else:
                 raise NotImplementedError(
                     f"Input stream for {kind} not implemented yet"
