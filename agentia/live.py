@@ -41,9 +41,6 @@ class LiveOptions(BaseModel):
     vad: bool = True
     """Enable voice activity detection for automatic interruption handling."""
 
-    aec: bool = False
-    """Enable acoustic echo cancellation to suppress speaker-to-mic feedback."""
-
 
 class InputStream(abc.ABC):
     def __init__(self):
@@ -418,12 +415,12 @@ class Live:
         scale: ScaleOption = "raw",
         mic: Optional[int] = None,
         speaker: Optional[int] = None,
+        aec: bool = False,
     ):
         """Start the live session in multithread mode, allowing concurrent send/receive."""
         self.__multithread_mode = True
 
         # Create shared echo canceller if AEC is enabled
-        aec = self.options.aec
         echo_canceller: EchoCanceller | None = None
 
         def _get_echo_canceller() -> EchoCanceller:

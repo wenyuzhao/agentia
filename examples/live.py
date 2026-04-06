@@ -20,8 +20,11 @@ class TextInput(InputStream):
 
 async def main():
     agent = Agent("gemini-live:gemini-3.1-flash-live-preview")
-    await agent.live(options=LiveOptions(voice="Zephyr", aec=True)).start(
-        inputs=["audio", "screen"], outputs=["audio"]
+    await agent.live(options=LiveOptions(voice="Zephyr")).start(
+        inputs=["audio", "screen"],
+        outputs=["audio"],
+        scale="720p",
+        aec=True,
     )
 
 
