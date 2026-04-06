@@ -12,8 +12,8 @@ class EchoCanceller:
         self,
         block_size: int = 256,
         num_blocks: int = 12,
-        mu: float = 0.5,
-        delta: float = 1e-2,
+        mu: float = 0.3,
+        delta: float = 1e-1,
         input_rate: int = 16000,
         output_rate: int = 24000,
     ):
@@ -26,17 +26,24 @@ class EchoCanceller:
 
         self._N = N
         self._M = M
+        self._F = F
         self._mu = mu
         self._delta = delta
         self._input_rate = input_rate
         self._output_rate = output_rate
 
+        self._init_state(np, N, M, F)
+
+        self._lock = threading.Lock()
+
+    def _init_state(self, np, N: int, M: int, F: int):
+        """Initialise (or reset) all adaptive filter state."""
         # Adaptive filter taps in frequency domain
         self._W = np.zeros((M, F), dtype=np.complex128)
         # Reference delay line in frequency domain
         self._X_buf = np.zeros((M, F), dtype=np.complex128)
         # Running power estimate for NLMS normalisation
-        self._P = np.ones(F, dtype=np.float64) * delta
+        self._P = np.ones(F, dtype=np.float64) * self._delta
 
         # Overlap buffers (overlap-save needs previous block)
         self._ref_overlap = np.zeros(N, dtype=np.float64)
@@ -46,8 +53,6 @@ class EchoCanceller:
         self._ref_queue = np.array([], dtype=np.float64)
         self._mic_pending = np.array([], dtype=np.float64)
         self._out_pending = np.array([], dtype=np.float64)
-
-        self._lock = threading.Lock()
 
     def _resample(self, data: "numpy.ndarray", from_rate: int, to_rate: int):  # type: ignore[name-defined]
         if from_rate == to_rate:
@@ -105,7 +110,8 @@ class EchoCanceller:
                 # Not enough processed samples yet – pass through raw input
                 return mic_data
 
-        result = np.clip(result * 32768.0, -32768, 32767).astype(np.int16)
+        np.clip(result, -1.0, 1.0, out=result)
+        result = (result * 32767.0).astype(np.int16)
         return result.tobytes()
 
     def _process_block(self, mic_block, ref_block):
@@ -129,19 +135,45 @@ class EchoCanceller:
         # Echo estimate: sum of filter * reference across all taps
         Y = np.sum(self._W * self._X_buf, axis=0)
 
+        # Divergence check on Y before it propagates further
+        if not np.all(np.isfinite(Y)):
+            self._init_state(np, N, self._M, self._F)
+            return mic_block.copy()
+
         # Error = desired (mic) - echo estimate
         E = D - Y
+
+        # Clamp spectral magnitude to prevent irfft overflow
+        mag = np.abs(E)
+        max_mag = mag.max()
+        if max_mag > 1e6:
+            E = E * (1e6 / max_mag)
 
         # Overlap-save: take last N samples from the 2N IFFT output
         e_time = np.fft.irfft(E, n=2 * N)
         out_block = e_time[N:]
 
+        # Clamp output to valid audio range and catch any residual non-finite values
+        if not np.all(np.isfinite(out_block)):
+            self._init_state(np, N, self._M, self._F)
+            return mic_block.copy()
+        np.clip(out_block, -1.0, 1.0, out=out_block)
+
         # Update running power estimate
         self._P = 0.9 * self._P + 0.1 * np.abs(X) ** 2
 
-        # NLMS weight update
-        step = self._mu * E / (self._P + self._delta)
+        # NLMS weight update with constrained step
+        norm = self._P + self._delta
+        step = self._mu * E / norm
         for k in range(self._M):
             self._W[k] += step * np.conj(self._X_buf[k])
+
+        # Constrained update: project weights back to time domain,
+        # zero the non-causal part, and transform back.  This prevents
+        # unbounded growth of filter energy.
+        for k in range(self._M):
+            w_time = np.fft.irfft(self._W[k], n=2 * N)
+            w_time[N:] = 0.0  # keep only the causal (first N) taps
+            self._W[k] = np.fft.rfft(w_time)
 
         return out_block
