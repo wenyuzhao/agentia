@@ -336,6 +336,13 @@ class OpenAIAPIProvider(Provider):
 
         async for chunk in response:
             if finished:
+                if not chunk.choices and chunk.usage:
+                    yield StreamPartTurnEnd(
+                        usage=self._get_usage(chunk.usage),
+                        finish_reason="stop",
+                        role="assistant",
+                        message=None,
+                    )
                 continue
             if not started:
                 started = True

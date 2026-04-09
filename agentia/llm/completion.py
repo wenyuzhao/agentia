@@ -18,11 +18,15 @@ class ChatCompletion:
 
         self.__gen = __gen()
         self.usage = Usage()
+        self.last_usage = Usage()
         self.finish_reason: FinishReason | None = None
         self.new_messages: list[NonSystemMessage] = []
         self.agent = agent
 
     async def _on_finish(self):
+        if self.last_usage.total_tokens is not None:
+            self.agent.history.current_tokens = self.last_usage.total_tokens
+        self.agent.history.usage += self.usage
         await self.agent.events.end_of_turn.emit()
 
     def _add_new_message(self, msg: NonSystemMessage):

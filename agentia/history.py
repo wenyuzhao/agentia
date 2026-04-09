@@ -9,6 +9,8 @@ class History:
             UserMessage | AssistantMessage | ToolMessage
         ] = []
         self.__live_cursor: int = 0
+        self.current_tokens: int = 0
+        self.usage: Usage = Usage()
 
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.__instruction_generators.append(instructions)
@@ -52,6 +54,8 @@ class History:
         if clear_instructions:
             self.__instruction_generators = []
         self.__live_cursor = 0
+        self.current_tokens = 0
+        self.usage = Usage()
 
     def load(
         self, messages: Sequence[Message], include_instructions: bool = False

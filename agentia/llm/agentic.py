@@ -59,6 +59,7 @@ def run_agent_loop(
                     messages=messages, tools=tools, options=options, client=client
                 )
                 c.usage += result.usage
+                c.last_usage = result.usage
                 c._add_new_message(result.message)
                 yield result.message
                 # Add new messages
@@ -167,6 +168,7 @@ def run_agent_loop_streamed(
 
                     if part.type == "turn-end":
                         s.usage += part.usage
+                        s.last_usage = part.usage
                         last_finish_reason = part.finish_reason
                     else:
                         yield part
@@ -273,6 +275,11 @@ async def run_agent_loop_live(agent: "Agent") -> AsyncGenerator[StreamPart, None
                 if not part.provider_executed:
                     tool_calls.append(part)
         yield part
+
+        if part.type == "turn-end":
+            if part.usage.total_tokens is not None:
+                agent.history.current_tokens = part.usage.total_tokens
+            agent.history.usage += part.usage
 
         if part.type == "turn-end" or part.type == "tool-call":
             # append the assistant message to history

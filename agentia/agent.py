@@ -21,6 +21,7 @@ from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import (
     NonSystemMessage,
     ObjectType,
+    Usage,
     UserConsentRequest,
 )
 from agentia.tools.mcp import MCPContext
@@ -96,6 +97,14 @@ class Agent:
     @property
     def model(self) -> str:
         return self.__model
+
+    @property
+    def current_context_length(self) -> int:
+        return self.history.current_tokens
+
+    @property
+    def usage(self) -> "Usage":
+        return self.history.usage
 
     async def get_max_context_length(self) -> int:
         """Return the context length of the model, delegating to the provider."""
