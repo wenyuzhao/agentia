@@ -24,6 +24,7 @@ from agentia.spec import (
     UserConsentRequest,
 )
 from agentia.tools.mcp import MCPContext
+from agentia.utils.compact import compact_history
 from agentia.utils.event_emitter import EventEmitter
 from pathlib import Path
 from agentia.live import Live
@@ -192,6 +193,13 @@ class Agent:
             raise PermissionError("User did not respond to consent request.")
         else:
             raise ValueError(f"Invalid consent response: {consent}")
+
+    async def compact(
+        self,
+        effort: Literal["low", "medium", "high"] = "low",
+        model: str | None = None,
+    ) -> None:
+        await compact_history(self, effort, model)
 
     def live(self, options: LiveOptions | None = None) -> Live:
         if not self.provider.supports_live:
