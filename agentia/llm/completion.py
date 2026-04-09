@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator, Generator, TYPE_CHECKING, Any
+from typing import AsyncGenerator, Generator, TYPE_CHECKING
 from agentia.spec.base import FinishReason, Usage
 from agentia.spec.chat import AssistantMessage, NonSystemMessage, ToolMessage
 

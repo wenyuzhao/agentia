@@ -1,11 +1,8 @@
 from typing import AsyncGenerator, Literal, TYPE_CHECKING
 from pydantic import BaseModel, Field
 from agentia.llm.agentic import run_agent_loop_live
-from agentia.spec import ToolCall, StreamPart
-from typing import (
-    TYPE_CHECKING,
-    Literal,
-)
+from agentia.spec import StreamPart
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from agentia.agent import Agent

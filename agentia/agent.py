@@ -20,8 +20,6 @@ from agentia.spec.chat import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
 from agentia.spec import (
     NonSystemMessage,
-    UserMessage,
-    MessagePartText,
     ObjectType,
     UserConsentRequest,
 )
