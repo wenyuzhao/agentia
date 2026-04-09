@@ -47,6 +47,14 @@ from agentia.spec.stream import (
     StreamPartTurnStart,
 )
 from agentia.tools.tools import ToolSet
+from agentia.spec.live import (
+    LiveChunk,
+    LiveChunkAudio,
+    LiveChunkText,
+    LiveChunkImage,
+    LiveChunkVideo,
+    LiveChunkEnd,
+)
 
 
 def _get_usage(u: types.UsageMetadata | None) -> Usage:
@@ -241,7 +249,7 @@ def _build_config(
     # session_resumption = types.SessionResumptionConfig(transparent=True)
 
     realtime_input_config: types.RealtimeInputConfig | None = None
-    if not options.vad_enabled:
+    if not options.vad:
         realtime_input_config = types.RealtimeInputConfig(
             automatic_activity_detection=types.AutomaticActivityDetection(disabled=True)
         )
@@ -270,6 +278,10 @@ class GeminiLive(Provider):
 
     def __init__(self, model: str):
         super().__init__(name="gemini-live", model=model)
+        if model != "gemini-3.1-flash-live-preview":
+            raise ValueError(
+                "Unsupported Gemini Live model. Currently only 'gemini-3.1-flash-live-preview' is supported."
+            )
         self._session: Optional["AsyncSession"] = None
         self._session_cm: Any = None  # The async context manager from connect()
         self._client: genai.Client | None = None
@@ -338,30 +350,25 @@ class GeminiLive(Provider):
         return self._session
 
     @override
-    async def send_audio(
-        self, data: bytes, mime_type: str = "audio/pcm;rate=16000"
-    ) -> None:
+    async def send_live_chunk(self, chunk: LiveChunk):
         session = self._assert_session()
-        await session.send_realtime_input(
-            audio=types.Blob(data=data, mime_type=mime_type)
-        )
-
-    @override
-    async def send_video(self, data: bytes, mime_type: str = "image/jpeg") -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(
-            video=types.Blob(data=data, mime_type=mime_type)
-        )
-
-    @override
-    async def send_text_live(self, text: str) -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(text=text)
-
-    @override
-    async def send_audio_stream_end(self) -> None:
-        session = self._assert_session()
-        await session.send_realtime_input(audio_stream_end=True)
+        match chunk:
+            case LiveChunkAudio(data=data, mime_type=mime):
+                await session.send_realtime_input(
+                    audio=types.Blob(data=data, mime_type=mime)
+                )
+            case LiveChunkVideo(data=data, mime_type=mime):
+                await session.send_realtime_input(
+                    video=types.Blob(data=data, mime_type=mime)
+                )
+            case LiveChunkImage(data=data, mime_type=mime):
+                await session.send_realtime_input(
+                    video=types.Blob(data=data, mime_type=mime)
+                )
+            case LiveChunkText(text=text):
+                await session.send_realtime_input(text=text)
+            case LiveChunkEnd():
+                await session.send_realtime_input(activity_end={})
 
     @override
     async def send_tool_responses(self, responses: list[ToolCallResponse]) -> None:
@@ -451,7 +458,7 @@ class GeminiLive(Provider):
                             message=None,
                         )
                         turn_started = False
-                    if content.turn_complete or content.generation_complete:
+                    elif content.turn_complete or content.generation_complete:
                         if audio_started:
                             yield StreamPartAudioEnd(id=audio_id)
                             audio_started = False
