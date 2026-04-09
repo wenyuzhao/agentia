@@ -18,7 +18,7 @@ async def test_live_text():
     received_transcription = ""
     received_audio = False
     async with agent.live() as live:
-        await live.send_text("What is 2 + 2? Reply with just the number.")
+        await live.send(text="What is 2 + 2? Reply with just the number.")
         async for event in live.receive():
             if event.type == "audio-delta":
                 received_audio = True
@@ -49,7 +49,7 @@ async def test_live_tool_calling():
     )
     received_transcription = ""
     async with agent.live() as live:
-        await live.send_text("What is the weather in Boston?")
+        await live.send(text="What is the weather in Boston?")
         async for event in live.receive():
             if event.type == "output-transcription-delta":
                 received_transcription += event.delta
@@ -100,7 +100,7 @@ async def test_live_parallel_send_receive():
                     # Wait for previous turn to complete before sending next
                     await turn_complete_event.wait()
                     turn_complete_event.clear()
-                await live.send_text(q)
+                await live.send(text=q)
 
         async def receiver():
             nonlocal received_transcription, received_audio, turns_completed
