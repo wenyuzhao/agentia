@@ -83,24 +83,25 @@ def run_agent_loop(
         from agentia.tools.mcp import MCPContext
         from agentia.live import LiveOptions
 
-        await tools.init()
-
-        if agent.provider.supports_live:
-            await agent.provider.connect_live(
-                live_options or LiveOptions(),
-                tools,
-                agent.history.get_instructions(),
-                history=agent.history,
-            )
-
         async with MCPContext() as _ctx:
             agent._temp_mcp_context = _ctx
+
+            await tools.init()
+
+            if agent.provider.supports_live:
+                await agent.provider.connect_live(
+                    live_options or LiveOptions(),
+                    tools,
+                    agent.history.get_instructions(),
+                    history=agent.history,
+                )
+
             async for msg in gen():
                 yield msg
             agent._temp_mcp_context = None
 
-        if agent.provider.supports_live:
-            await agent.provider.disconnect_live()
+            if agent.provider.supports_live:
+                await agent.provider.disconnect_live()
 
     c = ChatCompletion(gen_wrapper(), agent)
     return c
@@ -202,24 +203,25 @@ def run_agent_loop_streamed(
         from agentia.tools.mcp import MCPContext
         from agentia.live import LiveOptions
 
-        await tools.init()
-
-        if agent.provider.supports_live:
-            await agent.provider.connect_live(
-                live_options or LiveOptions(),
-                tools,
-                agent.history.get_instructions(),
-                history=agent.history,
-            )
-
         async with MCPContext() as _ctx:
             agent._temp_mcp_context = _ctx
+
+            await tools.init()
+
+            if agent.provider.supports_live:
+                await agent.provider.connect_live(
+                    live_options or LiveOptions(),
+                    tools,
+                    agent.history.get_instructions(),
+                    history=agent.history,
+                )
+
             async for part in gen():
                 yield part
             agent._temp_mcp_context = None
 
-        if agent.provider.supports_live:
-            await agent.provider.disconnect_live()
+            if agent.provider.supports_live:
+                await agent.provider.disconnect_live()
 
     if events:
         s = ChatCompletionEvents(gen_wrapper(), agent)
