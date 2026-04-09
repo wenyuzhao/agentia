@@ -73,7 +73,7 @@ class Agent:
         self.tools = ToolSet(tools or [], self)
         if not model:
             model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
-        self.model = model
+        self._model = model
         self.provider = get_provider(model)
         self.history = History()
         if instructions:
@@ -87,6 +87,14 @@ class Agent:
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    async def get_context_length(self) -> int:
+        """Return the context length of the model, delegating to the provider."""
+        return await self.provider.get_context_length()
 
     def add_instructions(self, instructions: str | Callable[[], str | None]) -> None:
         self.history.add_instructions(instructions)

@@ -1,7 +1,11 @@
+from typing import override
 from ._openai_api import OpenAIAPIProvider
 import os
+import httpx
 
 # Model list: https://openrouter.ai/models
+
+_context_length_cache: dict[str, int] = {}
 
 
 class OpenRouter(OpenAIAPIProvider):
@@ -25,3 +29,30 @@ class OpenRouter(OpenAIAPIProvider):
             self.extra_body["provider"] = {
                 "order": [x.strip().lower() for x in p.split(",") if x.strip()],
             }
+
+    @staticmethod
+    async def fetch_context_length(model: str) -> int:
+        """Fetch context length from OpenRouter's model catalog.
+
+        Caches all models from the API response. Can be used by other providers
+        that don't expose context length in their own APIs.
+        """
+        if model in _context_length_cache:
+            return _context_length_cache[model]
+        async with httpx.AsyncClient() as client:
+            resp = await client.get("https://openrouter.ai/api/v1/models")
+            resp.raise_for_status()
+            for m in resp.json().get("data", []):
+                mid = m.get("id")
+                ctx = m.get("context_length")
+                if mid and ctx is not None:
+                    _context_length_cache[mid] = int(ctx)
+            if model in _context_length_cache:
+                return _context_length_cache[model]
+            raise ValueError(
+                f"Context length not available for model '{model}' from OpenRouter API"
+            )
+
+    @override
+    async def _fetch_context_length(self) -> int:
+        return await self.fetch_context_length(self.model)

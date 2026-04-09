@@ -1,4 +1,6 @@
+from typing import override
 from ._openai_api import OpenAIAPIProvider
+from .openrouter import OpenRouter as _OpenRouter
 import os
 
 # Model list: https://developers.openai.com/api/docs/models
@@ -15,3 +17,9 @@ class OpenAI(OpenAIAPIProvider):
             "OPENAI_BASE_URL", "https://api.openai.com/v1"
         )
         super().__init__(name="openai", model=model, api_key=api_key, base_url=base_url)
+
+    @override
+    async def _fetch_context_length(self) -> int:
+        # OpenAI's models endpoint doesn't include context length,
+        # so we query OpenRouter's model catalog as a fallback.
+        return await _OpenRouter.fetch_context_length(f"openai/{self.model}")

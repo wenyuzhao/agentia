@@ -1,4 +1,6 @@
+from typing import override
 from ._openai_api import OpenAIAPIProvider
+from .openrouter import OpenRouter as _OpenRouter
 import os
 
 # Model list: https://developers.cloudflare.com/ai-gateway/usage/providers/
@@ -25,3 +27,9 @@ class Cloudflare(OpenAIAPIProvider):
         # self.extra_headers["cf-aig-authorization"] = f"Bearer {api_key}"
 
         self.extra_body["modalities"] = ["text", "image"]
+
+    @override
+    async def _fetch_context_length(self) -> int:
+        # Cloudflare AI Gateway doesn't expose context length directly,
+        # so we query OpenRouter's model catalog as a fallback.
+        return await _OpenRouter.fetch_context_length(self.model)

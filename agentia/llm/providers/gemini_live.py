@@ -273,6 +273,9 @@ def _build_config(
     )
 
 
+_context_length_cache: dict[str, int] = {}
+
+
 class GeminiLive(Provider):
     name = "gemini-live"
 
@@ -294,6 +297,19 @@ class GeminiLive(Provider):
                 "GOOGLE_API_KEY or GEMINI_API_KEY environment variable must be set"
             )
         return genai.Client(api_key=api_key)
+
+    @override
+    async def _fetch_context_length(self) -> int:
+        if self.model in _context_length_cache:
+            return _context_length_cache[self.model]
+        client = self._client or self._get_client()
+        model_info = await client.aio.models.get(model=f"models/{self.model}")
+        if model_info.input_token_limit is None:
+            raise ValueError(
+                f"Context length not available for model '{self.model}' from Gemini API"
+            )
+        _context_length_cache[self.model] = model_info.input_token_limit
+        return _context_length_cache[self.model]
 
     @property
     @override

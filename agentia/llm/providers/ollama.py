@@ -1,8 +1,11 @@
 from typing import Any, override
 from ._openai_api import OpenAIAPIProvider
 import os
+import httpx
 
 # Model list: https://ollama.com/library
+
+_context_length_cache: dict[str, int] = {}
 
 
 class Ollama(OpenAIAPIProvider):
@@ -29,3 +32,26 @@ class Ollama(OpenAIAPIProvider):
         return {
             "think": enabled,
         }
+
+    @override
+    async def _fetch_context_length(self) -> int:
+        if self.model in _context_length_cache:
+            return _context_length_cache[self.model]
+        # Ollama's base_url ends with /v1; the show endpoint is at the Ollama API root
+        assert self.base_url is not None
+        ollama_base = self.base_url.rstrip("/").removesuffix("/v1")
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{ollama_base}/api/show",
+                json={"name": self.model},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            model_info = data.get("model_info", {})
+            for key, value in model_info.items():
+                if "context_length" in key:
+                    _context_length_cache[self.model] = int(value)
+                    return _context_length_cache[self.model]
+            raise ValueError(
+                f"Context length not available for model '{self.model}' from Ollama API"
+            )

@@ -26,7 +26,6 @@ class GenerationResult:
 
 class Provider(abc.ABC):
     name: str
-    model: str
     supported_urls: dict[str, Sequence[re.Pattern | str]]
     """
     Supported URL patterns by media type for the provider.
@@ -41,8 +40,24 @@ class Provider(abc.ABC):
 
     def __init__(self, name: str, model: str):
         self.name = name
-        self.model = model
+        self._model = model
         self.supported_urls = {}
+        self._context_length: int | None = None
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    async def get_context_length(self) -> int:
+        """Return the context length of the model, fetching and caching it on first call."""
+        if self._context_length is None:
+            self._context_length = await self._fetch_context_length()
+        return self._context_length
+
+    @abc.abstractmethod
+    async def _fetch_context_length(self) -> int:
+        """Fetch the context length from the provider API. Implemented by each provider."""
+        ...
 
     @abc.abstractmethod
     async def generate(
