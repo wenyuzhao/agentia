@@ -97,7 +97,7 @@ class Agent:
     def model(self) -> str:
         return self.__model
 
-    async def get_context_length(self) -> int:
+    async def get_max_context_length(self) -> int:
         """Return the context length of the model, delegating to the provider."""
         return await self.provider.get_context_length()
 

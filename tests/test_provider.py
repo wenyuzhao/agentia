@@ -56,6 +56,6 @@ class TestGetContextLength:
     @pytest.mark.asyncio
     async def test_agent_context_length(self):
         agent = Agent(model="openai/gpt-5-nano")
-        ctx = await agent.get_context_length()
+        ctx = await agent.get_max_context_length()
         assert isinstance(ctx, int)
         assert ctx > 0
