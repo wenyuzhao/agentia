@@ -24,7 +24,7 @@ def _format_messages(messages: Sequence[Message]) -> str:
         elif isinstance(msg.content, Sequence):
             parts = []
             for part in msg.content:
-                if isinstance(part, (MessagePartText, MessagePartReasoning)):
+                if isinstance(part, MessagePartText):
                     parts.append(part.text)
             if parts:
                 lines.append(f"[{role}]: {''.join(parts)}")
@@ -41,6 +41,7 @@ async def compact_history(
     non_instruction_messages = agent.history.get(include_instructions=False)
     if not non_instruction_messages:
         return
+    length = len(non_instruction_messages)
 
     compact_instructions = (
         "Below is a conversation history. Your task is to compact it into a single concise summary "
@@ -55,11 +56,15 @@ async def compact_history(
     compact_agent = Agent(model=model or agent.model, instructions=compact_instructions)
     result = await compact_agent.run(conversation_text)
 
-    compacted_text = (
-        "[Compacted conversation history]\n\n"
-        f"{result.text}\n\n"
-        "[End of compacted conversation history. The above is a summary of prior conversation.]"
-    )
-
     agent.history.clear(clear_instructions=False)
-    agent.history.add(AssistantMessage(content=compacted_text))
+    agent.history.add(
+        AssistantMessage(
+            content=[
+                MessagePartText(
+                    text=f"[[COMPACTED CONVERSATION SUMMARY FROM {length} MESSAGES]]"
+                ),
+                MessagePartText(text=result.text),
+                MessagePartText(text="[[END OF CONVERSATION SUMMARY]]"),
+            ]
+        )
+    )
