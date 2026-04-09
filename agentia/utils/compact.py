@@ -60,9 +60,7 @@ async def compact_history(
     agent.history.add(
         AssistantMessage(
             content=[
-                MessagePartText(
-                    text=f"[[COMPACTED CONVERSATION SUMMARY FROM {length} MESSAGES]]"
-                ),
+                MessagePartText(text=f"[[COMPACTED CONVERSATION SUMMARY]]"),
                 MessagePartText(text=result.text),
                 MessagePartText(text="[[END OF CONVERSATION SUMMARY]]"),
             ]
