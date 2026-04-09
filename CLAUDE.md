@@ -74,5 +74,7 @@ WebSocket-based real-time bidirectional streaming for audio/video/text (currentl
 
 ## PRECAUTIONS
 
-* Add tests when adding new features
+* Add tests when adding new features.
+* Update docs when adding new features or changing the API design.
+* Update CLAUDE.md when necessary
 * DON'T commit, push, revert, merge, rebase unless I asked you to do so.
