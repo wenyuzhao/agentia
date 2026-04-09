@@ -55,7 +55,7 @@ class Agent:
     ) -> None:
         from agentia.plugins.skills import Skills
 
-        self.id = str(id or uuid.uuid4())
+        self.__id = str(id or uuid.uuid4())
         self.options = (
             LLMOptions(**options)
             if isinstance(options, dict)
@@ -74,7 +74,7 @@ class Agent:
         self.tools = ToolSet(tools or [], self)
         if not model:
             model = os.getenv("AGENTIA_DEFAULT_MODEL", "openai/gpt-5-mini")
-        self._model = model
+        self.__model = model
         self.provider = get_provider(model)
         self.history = History()
         if instructions:
@@ -90,8 +90,12 @@ class Agent:
         self.events = AgentEvents()
 
     @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
     def model(self) -> str:
-        return self._model
+        return self.__model
 
     async def get_context_length(self) -> int:
         """Return the context length of the model, delegating to the provider."""

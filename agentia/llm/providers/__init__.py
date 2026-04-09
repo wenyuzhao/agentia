@@ -40,19 +40,19 @@ class Provider(abc.ABC):
 
     def __init__(self, name: str, model: str):
         self.name = name
-        self._model = model
+        self.__model = model
         self.supported_urls = {}
-        self._context_length: int | None = None
+        self.__context_length: int | None = None
 
     @property
     def model(self) -> str:
-        return self._model
+        return self.__model
 
     async def get_context_length(self) -> int:
         """Return the context length of the model, fetching and caching it on first call."""
-        if self._context_length is None:
-            self._context_length = await self._fetch_context_length()
-        return self._context_length
+        if self.__context_length is None:
+            self.__context_length = await self._fetch_context_length()
+        return self.__context_length
 
     @abc.abstractmethod
     async def _fetch_context_length(self) -> int:
