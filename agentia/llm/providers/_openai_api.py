@@ -109,12 +109,7 @@ class OpenAIAPIProvider(Provider):
                 r.append(oai_m)
         return r
 
-    def _get_finish_reason(
-        self,
-        choice: Literal[
-            "stop", "length", "tool_calls", "content_filter", "function_call"
-        ],
-    ) -> FinishReason:
+    def _get_finish_reason(self, choice: str) -> FinishReason:
         match choice:
             case "stop":
                 return "stop"
@@ -333,27 +328,23 @@ class OpenAIAPIProvider(Provider):
         tool_call_partial_inputs: list[str] = []
         finished = False
         first_chunk = True
+        finish_reason: str | None = None
+        usage: Usage | None = None
 
         async for chunk in response:
+            if chunk.usage:
+                usage = self._get_usage(chunk.usage)
+            if chunk.choices and chunk.choices[0].finish_reason:
+                finish_reason = self._get_finish_reason(chunk.choices[0].finish_reason)
+
             if finished:
-                if not chunk.choices and chunk.usage:
-                    yield StreamPartTurnEnd(
-                        usage=self._get_usage(chunk.usage),
-                        finish_reason="stop",
-                        role="assistant",
-                        message=None,
-                    )
                 continue
+
             if not started:
                 started = True
                 yield StreamPartTurnStart(role="assistant")
+
             if not chunk.choices:
-                yield StreamPartTurnEnd(
-                    usage=self._get_usage(chunk.usage),
-                    finish_reason="stop",
-                    role="assistant",
-                    message=None,
-                )
                 continue
 
             choice = chunk.choices[0]
@@ -424,10 +415,11 @@ class OpenAIAPIProvider(Provider):
                         continue
                     tc.input = json.loads(tool_call_partial_inputs[i] or "{}")
                     yield tc
-                yield StreamPartTurnEnd(
-                    usage=self._get_usage(chunk.usage),
-                    finish_reason=self._get_finish_reason(choice.finish_reason),
-                    role="assistant",
-                    message=None,
-                )
                 finished = True
+
+        yield StreamPartTurnEnd(
+            usage=usage or Usage(),
+            finish_reason=self._get_finish_reason(finish_reason or "unknown"),
+            role="assistant",
+            message=None,
+        )

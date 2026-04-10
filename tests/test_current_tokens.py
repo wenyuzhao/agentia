@@ -95,7 +95,7 @@ async def test_usage_reset_on_clear():
     assert agent.usage == Usage()
 
 
-# --- streaming (OpenRouter may not provide usage in streaming mode) ---
+# --- streaming ---
 
 
 @pytest.mark.asyncio
@@ -105,8 +105,7 @@ async def test_current_tokens_after_stream():
     async for item in run:
         if isinstance(item, TextStream):
             await item
-    # OpenRouter may not provide usage in streaming; just verify no error
-    assert agent.current_context_length >= 0
+    assert agent.current_context_length > 0
 
 
 @pytest.mark.asyncio
@@ -115,4 +114,4 @@ async def test_current_tokens_after_stream_events():
     run = agent.run("Say hello", stream=True, events=True)
     async for _ in run:
         pass
-    assert agent.current_context_length >= 0
+    assert agent.current_context_length > 0
