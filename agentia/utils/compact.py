@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Sequence
 
-from agentia.spec import AssistantMessage, Message
-from agentia.spec.chat import MessagePartText, MessagePartReasoning
+from agentia.spec import CompactedMessage, Message, NonSystemMessage
+from agentia.spec.chat import MessagePartText
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -39,9 +39,9 @@ async def compact_history(
     from agentia.agent import Agent
 
     non_instruction_messages = agent.history.get(include_instructions=False)
-    if not non_instruction_messages:
-        return
     length = len(non_instruction_messages)
+    if length <= 1:
+        return
 
     compact_instructions = (
         "Below is a conversation history. Your task is to compact it into a single concise summary "
@@ -51,18 +51,16 @@ async def compact_history(
         "Output ONLY the compacted summary, nothing else."
     )
 
-    conversation_text = _format_messages(non_instruction_messages)
+    conversation_text = _format_messages(non_instruction_messages[:-1])
 
     compact_agent = Agent(model=model or agent.model, instructions=compact_instructions)
     result = await compact_agent.run(conversation_text)
 
+    last_message: NonSystemMessage = non_instruction_messages[-1]  # type: ignore[assignment]
     agent.history.clear(clear_instructions=False)
     agent.history.add(
-        AssistantMessage(
-            content=[
-                MessagePartText(text=f"[[COMPACTED CONVERSATION SUMMARY]]"),
-                MessagePartText(text=result.text),
-                MessagePartText(text="[[END OF CONVERSATION SUMMARY]]"),
-            ]
-        )
+        CompactedMessage(
+            content=result.text, original_messages=list(non_instruction_messages)
+        ),
+        last_message,
     )

@@ -1,13 +1,11 @@
-from typing import Callable, Sequence
+from typing import Callable, Literal, Sequence, overload
 from agentia.spec import *
 
 
 class History:
     def __init__(self) -> None:
         self.__instruction_generators: list[str | Callable[[], str | None]] = []
-        self.__non_instruction_messages: list[
-            UserMessage | AssistantMessage | ToolMessage
-        ] = []
+        self.__non_instruction_messages: list[NonSystemMessage] = []
         self.__live_cursor: int = 0
         self.current_tokens: int = 0
         self.usage: Usage = Usage()
@@ -30,10 +28,18 @@ class History:
                     instructions.append(gen)
         return "\n\n".join(instructions)
 
-    def add(self, *messages: UserMessage | AssistantMessage | ToolMessage) -> None:
+    def add(self, *messages: NonSystemMessage) -> None:
         self.__non_instruction_messages.extend(messages)
 
-    def get(self, include_instructions: bool = True) -> list[Message]:
+    @overload
+    def get(self, include_instructions: Literal[True] = True) -> list[Message]: ...
+
+    @overload
+    def get(self, include_instructions: Literal[False]) -> list[NonSystemMessage]: ...
+
+    def get(
+        self, include_instructions: bool = True
+    ) -> list[Message] | list[NonSystemMessage]:
         messages: list[Message] = []
         if include_instructions:
             if i := self.__get_instructions():

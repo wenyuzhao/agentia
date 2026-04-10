@@ -387,14 +387,42 @@ class ToolMessage(MessageBase):
         return msgs if len(msgs) > 1 else msgs[0]
 
 
+class CompactedMessage(MessageBase):
+    role: Literal["compacted"] = "compacted"
+    content: str
+    original_messages: list[Annotated["NonSystemMessage", Field(discriminator="role")]]
+
+    def to_openai_format(self) -> dict[str, Any]:
+        return {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "[[COMPACTED CONVERSATION SUMMARY]]"},
+                {"type": "text", "text": self.content},
+                {"type": "text", "text": "[[END OF CONVERSATION SUMMARY]]"},
+            ],
+        }
+
+    def flattern(self) -> list[UserMessage | AssistantMessage | ToolMessage]:
+        messages: list[UserMessage | AssistantMessage | ToolMessage] = []
+        for msg in self.original_messages:
+            if isinstance(msg, (UserMessage, AssistantMessage, ToolMessage)):
+                messages.append(msg)
+            elif isinstance(msg, CompactedMessage):
+                messages.extend(msg.flattern())
+        return messages
+
+
 type Message = Annotated[
-    SystemMessage | UserMessage | AssistantMessage | ToolMessage,
+    SystemMessage | UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
     Field(discriminator="role"),
 ]
 
 type NonSystemMessage = Annotated[
-    UserMessage | AssistantMessage | ToolMessage, Field(discriminator="role")
+    UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
+    Field(discriminator="role"),
 ]
+
+CompactedMessage.model_rebuild()
 
 
 class ResponseFormatText(BaseModel):
@@ -443,6 +471,7 @@ __all__ = [
     "ObjectType",
     "AssistantMessage",
     "ToolMessage",
+    "CompactedMessage",
     "Message",
     "NonSystemMessage",
     "ResponseFormatText",

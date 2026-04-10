@@ -1,5 +1,5 @@
 from agentia import Agent
-from agentia.spec import AssistantMessage, SystemMessage
+from agentia.spec import CompactedMessage, SystemMessage
 import pytest
 import dotenv
 
@@ -20,14 +20,13 @@ async def test_compact_basic():
     await agent.compact(effort="medium")
 
     messages = agent.history.get(include_instructions=True)
-    # Should have system instructions + one assistant message
-    assert len(messages) == 2
+    # Should have system instructions + compacted message + last message
+    assert len(messages) == 3
     assert isinstance(messages[0], SystemMessage)
-    assert isinstance(messages[1], AssistantMessage)
+    assert isinstance(messages[1], CompactedMessage)
     # The compacted message should contain key facts
-    text = messages[1].text.lower()
+    text = messages[1].content.lower()
     assert "alice" in text
-    assert "compacted" in text.lower() or "conversation" in text.lower()
 
 
 @pytest.mark.asyncio
@@ -65,6 +64,6 @@ async def test_compact_with_model_override():
     await agent.compact(effort="medium", model="openai/gpt-5-nano")
 
     messages = agent.history.get(include_instructions=False)
-    assert len(messages) == 1
-    assert isinstance(messages[0], AssistantMessage)
-    assert "12345" in messages[0].text
+    assert len(messages) == 2
+    assert isinstance(messages[0], CompactedMessage)
+    assert "12345" in messages[0].content
