@@ -84,6 +84,8 @@ def run_agent_loop(
         from agentia.tools.mcp import MCPContext
         from agentia.live import LiveOptions
 
+        await agent._auto_compact_if_needed(options)
+
         async with MCPContext() as _ctx:
             agent._temp_mcp_context = _ctx
 
@@ -204,6 +206,8 @@ def run_agent_loop_streamed(
     async def gen_wrapper() -> AsyncGenerator[StreamPart, None]:
         from agentia.tools.mcp import MCPContext
         from agentia.live import LiveOptions
+
+        await agent._auto_compact_if_needed(options)
 
         async with MCPContext() as _ctx:
             agent._temp_mcp_context = _ctx

@@ -119,8 +119,24 @@ class Agent:
             options_merged[k] = v
         if options:
             for k, v in options.model_dump().items():
-                options_merged[k] = v
+                if v is not None:
+                    options_merged[k] = v
         return LLMOptions(**options_merged)
+
+    async def _auto_compact_if_needed(self, options: LLMOptions) -> None:
+        DEFAULT_AUTO_COMPACT_THRESHOLD = 90
+        if options.auto_compact:
+            effort = options.auto_compact_effort or "low"
+            length_threshold_percent = float(
+                options.auto_compact_threshold or DEFAULT_AUTO_COMPACT_THRESHOLD
+            )
+            if (
+                self.current_context_length
+                / (await self.get_max_context_length())
+                * 100
+                > length_threshold_percent
+            ):
+                await self.compact(effort=effort)
 
     @overload
     def run(

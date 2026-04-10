@@ -1,6 +1,6 @@
 import os
 import re
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Literal, Sequence
 from openai import BaseModel
 from pydantic import AnyUrl
 from agentia import spec
@@ -30,6 +30,9 @@ class LLMOptions(BaseModel):
     response_format: spec.ResponseFormat | type[BaseModel] | None = None
     parallel_tool_calls: bool | None = True
     reasoning: ReasoningOptions | None = None
+    auto_compact: bool | None = None
+    auto_compact_threshold: int | None = None
+    auto_compact_effort: Literal["low", "medium", "high"] | None = None
 
 
 def get_provider(selector: str) -> "Provider":
