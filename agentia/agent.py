@@ -89,7 +89,7 @@ class Agent:
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()
-        self._enqueued_messages: list[Message] = []
+        self.__deferred_messages: list[Message] = []
 
     @property
     def id(self) -> str:
@@ -224,7 +224,7 @@ class Agent:
         else:
             raise ValueError(f"Invalid consent response: {consent}")
 
-    def enqueue(self, msg: Message) -> None:
+    def defer(self, msg: Message) -> None:
         """
         Enqueue a message to be added to the conversation history immediately after the current turn finishes.
         This can be used to add messages in the middle of a ReAct loop.
@@ -233,7 +233,15 @@ class Agent:
             raise RuntimeError(
                 "Cannot enqueue messages when using a provider that supports live sessions."
             )
-        self._enqueued_messages.append(msg)
+        self.__deferred_messages.append(msg)
+
+    def clear_deferred_messages(self) -> list[Message]:
+        """
+        Clear any messages enqueued with `defer()` and return them.
+        """
+        msgs = self.__deferred_messages
+        self.__deferred_messages = []
+        return msgs
 
     async def compact(
         self,

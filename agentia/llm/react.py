@@ -84,11 +84,10 @@ def run_react_loop(
                 messages.append(tool_msg)
                 yield tool_msg
                 # Process enqueued messages if any
-                if agent._enqueued_messages:
-                    for m in agent._enqueued_messages:
+                if msgs := agent.clear_deferred_messages():
+                    for m in msgs:
                         c._add_new_message(m)
                         messages.append(m)
-                    agent._enqueued_messages = []
 
         agent.history.add(*c.new_messages)
 
@@ -216,11 +215,10 @@ def run_react_loop_streamed(
                 messages.append(tool_msg)
                 s._add_new_message(tool_msg)
                 # Process enqueued messages if any
-                if agent._enqueued_messages:
-                    for m in agent._enqueued_messages:
+                if msgs := agent.clear_deferred_messages():
+                    for m in msgs:
                         s._add_new_message(m)
                         messages.append(m)
-                    agent._enqueued_messages = []
         s.finish_reason = last_finish_reason
         yield StreamPartEnd(usage=s.usage, finish_reason=last_finish_reason)
 

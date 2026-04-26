@@ -1,17 +1,31 @@
 from . import Plugin, tool
 import asyncio
 import os
+import signal
 import tempfile
+import weakref
 from typing import Annotated, override
 from pathlib import Path
 from ..tools import ToolResult
 from ..models.base import File
+from ..models.chat import UserMessage
 import base64
+from asyncio.subprocess import DEVNULL, PIPE, STDOUT, Process
 
 
 _DEFAULT_MAX_LINES = 1000
 _DEFAULT_MAX_BYTES = 256 * 1024
 _DEFAULT_HEAD_RATIO = 0.3
+_BACKGROUND_POLL_INTERVAL = 30.0
+
+
+def _terminate_background_pids(pids: set[int]) -> None:
+    for pid in list(pids):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
+
 
 _FILE_MIME_TYPES = {
     ".png": "image/png",
@@ -82,6 +96,11 @@ def _truncate(
 
 
 class System(Plugin):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._background_pids: set[int] = set()
+        weakref.finalize(self, _terminate_background_pids, self._background_pids)
+
     @override
     def get_instructions(self) -> str | None:
         return f"CURRENT WORKING DIRECTORY: `{str(Path.cwd())}`"
@@ -96,46 +115,71 @@ class System(Plugin):
         timeout: Annotated[int | None, "Optional timeout in seconds."] = 5 * 60,
         background: Annotated[
             bool,
-            "If true, start the command detached and return immediately with its PID. Use `TaskStop` to terminate it later.",
+            "If true, start the command detached and return immediately with its PID.",
         ] = False,
     ) -> str:
         """
         Run a bash command and return its combined stdout and stderr.
 
         **Truncation:**
-            Output is truncated to ~1000 lines or 256KB (whichever fires first), keeping the first 30% from the head and the last 70% from the tail.
-            When truncation happens, the full output is spooled to a temp file whose path is included in the result.
+            * Large output is truncated with the full output spooled to a temp file.
 
         **Non-zero exit code:**
-            When the command exits with a non-zero code, it is appended to the output.
+            * When the command exits with a non-zero code, it is appended to the output.
 
         **Background / timeout:**
-            If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to.
-            If `timeout` fires for a foreground command, the process is left running in the background.
+            * If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to.
+            * While running background tasks, any new output is polled and enqueued regularly.
+            * If `timeout` fires for a foreground command, the process is left running in the background and switched to the same periodic monitoring process as `background=True`.
             `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
+            * Use background tasks for long-running or daemon processes. Only use this when necessary.
         """
         await self.agent.user_consent_guard("Run command: " + command)
 
+        # Stream both stdout and stderr to a single temp log file so we can
+        # both return the combined output and (in background mode) tail it.
         fd, log_path = tempfile.mkstemp(prefix="agentia-bash-", suffix=".log")
         os.close(fd)
         with open(log_path, "wb") as log_write:
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=log_write,
-                stderr=asyncio.subprocess.STDOUT,
+                stderr=STDOUT,
                 cwd=cwd,
+                # Detach into a new session so timeouts/background mode leave
+                # the process alive without us having to babysit its tty.
                 start_new_session=True,
             )
 
         if background:
-            return f"[Started background process pid={proc.pid}. Output streaming to: {log_path}. Use `TaskStop` tool to terminate.]"
+            # Hand monitoring off to a fire-and-forget task and return now.
+            # The task tails `log_path` and feeds output back via agent.enqueue
+            # so the model sees progress without us blocking the tool call.
+            self._background_pids.add(proc.pid)
+            asyncio.create_task(
+                self._monitor_background(proc, log_path),
+                name=f"bash-monitor-pid={proc.pid}",
+            )
+            return (
+                f"[Started background process pid={proc.pid}. Output streaming to: {log_path}. "
+                f"New output is enqueued regularly. Use `TaskStop` tool to terminate.]"
+            )
 
         try:
             returncode = await asyncio.wait_for(proc.wait(), timeout=timeout)
         except TimeoutError:
+            # Don't kill the process — leave it running so the user/agent can
+            # decide whether to wait longer or stop it via TaskStop. Hand off
+            # to the same background monitor so the agent still sees progress
+            # and the eventual exit code instead of going dark.
+            self._background_pids.add(proc.pid)
+            asyncio.create_task(
+                self._monitor_background(proc, log_path),
+                name=f"bash-monitor-pid={proc.pid}",
+            )
             return (
                 f"[Command timed out after {timeout}s. Process is still running in background pid={proc.pid}. "
-                f"Output streaming to: {log_path}. Use `TaskStop` tool to terminate.]"
+                f"Output streaming to: {log_path}. New output is enqueued regularly. Use `TaskStop` tool to terminate]"
             )
 
         output = Path(log_path).read_text(encoding="utf-8", errors="replace")
@@ -144,6 +188,8 @@ class System(Plugin):
         except OSError:
             pass
 
+        # Head-heavy split keeps the start of the output (often the most
+        # diagnostic) while still preserving the tail where errors usually land.
         head_lines = int(_DEFAULT_MAX_LINES * _DEFAULT_HEAD_RATIO)
         body, full_path = _truncate(
             output,
@@ -159,6 +205,81 @@ class System(Plugin):
             body += f"\n\n[Command exited with code {returncode}]"
         return body
 
+    async def _monitor_background(self, proc: Process, log_path: str) -> None:
+        """
+        Poll `log_path` every `_BACKGROUND_POLL_INTERVAL` seconds while `proc`
+        is alive, enqueueing any new bytes as a user message. When the process
+        exits, enqueue a final message with the return code (and any trailing
+        output that arrived between the last poll and exit).
+        """
+        pid = proc.pid
+        # Track byte offset so each tick only reports newly-written output,
+        # avoiding repeated re-delivery of the same lines to the agent.
+        offset = 0
+
+        def _read_new() -> str:
+            nonlocal offset
+            try:
+                with open(log_path, "rb") as f:
+                    f.seek(offset)
+                    chunk = f.read()
+                offset += len(chunk)
+                return chunk.decode("utf-8", errors="replace")
+            except OSError:
+                return ""
+
+        def _read_new_and_enqueue():
+            new_output = _read_new()
+            if new_output.strip():
+                # Truncate per-tick so a chatty process can't flood the
+                # conversation history with one giant message.
+                head_lines = int(_DEFAULT_MAX_LINES * _DEFAULT_HEAD_RATIO)
+                body, _ = _truncate(
+                    new_output,
+                    max_head_lines=head_lines,
+                    max_tail_lines=_DEFAULT_MAX_LINES - head_lines,
+                )
+                try:
+                    self.agent.defer(
+                        UserMessage(
+                            f"[Background pid={pid} new output (full output at {log_path})]\n{body}"
+                        )
+                    )
+                except RuntimeError:
+                    pass
+
+        try:
+            while True:
+                # Race the poll interval against process exit so we react
+                # promptly when the command finishes, instead of waiting out
+                # the full 30s after it's already done.
+                try:
+                    await asyncio.wait_for(
+                        proc.wait(), timeout=_BACKGROUND_POLL_INTERVAL
+                    )
+                    break  # process exited; fall through to final flush below
+                except TimeoutError:
+                    pass
+                _read_new_and_enqueue()
+
+            _read_new_and_enqueue()
+            try:
+                self.agent.defer(
+                    UserMessage(
+                        f"[Background pid={pid} exited with code {proc.returncode}]"
+                    )
+                )
+            except RuntimeError:
+                pass
+        finally:
+            self._background_pids.discard(pid)
+            # Best-effort cleanup of the temp log; don't care if it's already
+            # gone or if another process holds it open.
+            try:
+                os.unlink(log_path)
+            except OSError:
+                pass
+
     @tool(name="TaskStop")
     async def task_stop(
         self,
@@ -171,13 +292,9 @@ class System(Plugin):
         """
         await self.agent.user_consent_guard(f"Kill process: {pid}")
 
-        async def _kill(signal: str) -> tuple[int, str]:
+        async def _kill(sig_flag: str) -> tuple[int, str]:
             proc = await asyncio.create_subprocess_exec(
-                "kill",
-                signal,
-                str(pid),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                "kill", sig_flag, str(pid), stdout=PIPE, stderr=PIPE
             )
             _, stderr = await proc.communicate()
             assert proc.returncode is not None
@@ -188,8 +305,8 @@ class System(Plugin):
                 "kill",
                 "-0",
                 str(pid),
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
             )
             await proc.wait()
             return proc.returncode == 0
@@ -208,6 +325,7 @@ class System(Plugin):
         if rc != 0:
             msg = err or f"kill -9 exited with code {rc}"
             return f"[SIGTERM did not stop pid={pid}; SIGKILL also failed: {msg}]"
+        self._background_pids.discard(pid)
         return f"[SIGTERM did not stop pid={pid}; sent SIGKILL]"
 
     @tool(name="Read")
@@ -254,10 +372,7 @@ class System(Plugin):
         kept = body.count("\n") + 1 if body else 0
         end = start + kept - 1
         if end < total:
-            body += (
-                f"\n\n[Showed lines {start}-{end} of {total}. "
-                f"Pass offset={end + 1} to continue.]"
-            )
+            body += f"\n\n[Showed lines {start}-{end} of {total}. Pass offset={end + 1} to continue.]"
         return body
 
     @tool(name="Write")
