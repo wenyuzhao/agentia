@@ -15,7 +15,6 @@ from asyncio.subprocess import DEVNULL, PIPE, STDOUT
 _DEFAULT_MAX_LINES = 1000
 _DEFAULT_MAX_BYTES = 256 * 1024
 _DEFAULT_HEAD_RATIO = 0.3
-_BACKGROUND_POLL_INTERVAL = 30.0
 
 
 def _terminate_background_pids(pids: set[int]) -> None:
@@ -131,10 +130,14 @@ class System(Plugin):
             * If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to.
             * While running background tasks, any new output is polled and enqueued regularly.
             * If `timeout` fires for a foreground command, the process is left running in the background. `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
+                * set timeout = 0 to disable the timeout and run indefinitely in the foreground. e.g. when running `sleep 1h`.
             * Use background tasks for long-running or daemon processes (e.g. dev servers). Only use this when necessary.
         """
         if not self.bash_enabled:
             raise RuntimeError("Bash tool is not enabled.")
+
+        if timeout is not None and timeout <= 0:
+            timeout = None
 
         await self.agent.user_consent_guard("Run command: " + command)
 
