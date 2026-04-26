@@ -63,8 +63,6 @@ __all__ = [
     "LLMOptions",
     "ReasoningOptions",
     # models
-    "ProviderOptions",
-    "ProviderMetadata",
     "DataContent",
     "FinishReason",
     "ToolChoice",

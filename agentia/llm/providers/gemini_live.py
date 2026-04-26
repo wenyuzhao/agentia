@@ -576,12 +576,7 @@ class GeminiLive(Provider):
 
         full_text = "".join(text_parts)
         message = AssistantMessage(content=[MessagePartText(text=full_text)])
-        return GenerationResult(
-            message=message,
-            finish_reason="stop",
-            usage=Usage(),
-            provider_metadata=None,
-        )
+        return GenerationResult(message=message, finish_reason="stop", usage=Usage())
 
     @override
     async def stream(

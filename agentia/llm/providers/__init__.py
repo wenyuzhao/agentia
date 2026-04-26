@@ -21,7 +21,6 @@ class GenerationResult:
     message: models.AssistantMessage
     finish_reason: models.FinishReason
     usage: models.Usage
-    provider_metadata: models.ProviderMetadata | None
 
 
 class Provider(abc.ABC):

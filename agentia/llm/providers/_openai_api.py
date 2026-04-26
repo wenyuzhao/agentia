@@ -238,8 +238,8 @@ class OpenAIAPIProvider(Provider):
         body.update(self.extra_body)
         if reasoning_args := self.get_reasoning_args_from_options(options):
             body.update({"reasoning": reasoning_args})
-        if options.provider_options:
-            body.update(options.provider_options)
+        if options.extra_body:
+            body.update(options.extra_body)
         return body
 
     @override
@@ -302,7 +302,6 @@ class OpenAIAPIProvider(Provider):
             message=AssistantMessage(content=parts, annotations=annotations),
             finish_reason=self._get_finish_reason(choice.finish_reason),
             usage=self._get_usage(response.usage),
-            provider_metadata=None,
         )
 
     @override
