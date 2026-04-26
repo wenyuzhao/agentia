@@ -1,6 +1,6 @@
 from . import Plugin, tool
+import asyncio
 import os
-import subprocess
 import tempfile
 from typing import Annotated, override
 from pathlib import Path
@@ -93,7 +93,11 @@ class System(Plugin):
         cwd: Annotated[
             str | None, "The optional working directory for the command."
         ] = None,
-        timeout: Annotated[int | None, "Optional timeout in seconds."] = None,
+        timeout: Annotated[int | None, "Optional timeout in seconds."] = 5 * 60,
+        background: Annotated[
+            bool,
+            "If true, start the command detached and return immediately with its PID. Use `TaskStop` to terminate it later.",
+        ] = False,
     ) -> str:
         """
         Run a bash command and return its combined stdout and stderr.
@@ -104,27 +108,41 @@ class System(Plugin):
 
         **Non-zero exit code:**
             When the command exits with a non-zero code, it is appended to the output.
+
+        **Background / timeout:**
+            If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to.
+            If `timeout` fires for a foreground command, the process is left running in the background.
+            `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
         """
         await self.agent.user_consent_guard("Run command: " + command)
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                cwd=cwd,
-                timeout=timeout,
-            )
-        except subprocess.TimeoutExpired:
-            return f"[Command timed out after {timeout}s: {command}]"
 
-        output: str = ""
-        if result.stdout:
-            output += result.stdout
-        if result.stderr:
-            if output:
-                output += "\n\n"
-            output += result.stderr
+        fd, log_path = tempfile.mkstemp(prefix="agentia-bash-", suffix=".log")
+        os.close(fd)
+        with open(log_path, "wb") as log_write:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=log_write,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=cwd,
+                start_new_session=True,
+            )
+
+        if background:
+            return f"[Started background process pid={proc.pid}. Output streaming to: {log_path}. Use `TaskStop` tool to terminate.]"
+
+        try:
+            returncode = await asyncio.wait_for(proc.wait(), timeout=timeout)
+        except TimeoutError:
+            return (
+                f"[Command timed out after {timeout}s. Process is still running in background pid={proc.pid}. "
+                f"Output streaming to: {log_path}. Use `TaskStop` tool to terminate.]"
+            )
+
+        output = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        try:
+            os.unlink(log_path)
+        except OSError:
+            pass
 
         head_lines = int(_DEFAULT_MAX_LINES * _DEFAULT_HEAD_RATIO)
         body, full_path = _truncate(
@@ -137,9 +155,60 @@ class System(Plugin):
             body = "(no output)"
         if full_path:
             body += f"\n\n[Output truncated. Full output saved to: {full_path}]"
-        if result.returncode != 0:
-            body += f"\n\n[Command exited with code {result.returncode}]"
+        if returncode != 0:
+            body += f"\n\n[Command exited with code {returncode}]"
         return body
+
+    @tool(name="TaskStop")
+    async def task_stop(
+        self,
+        pid: Annotated[int, "Process ID of the task to stop."],
+    ) -> str:
+        """
+        Stop a running process by PID using the `kill` command. Sends SIGTERM first;
+        if the process is still alive after a brief grace period, escalates to SIGKILL.
+        Use this to terminate background processes started by `Bash` (either via `background=True` or after a timeout).
+        """
+        await self.agent.user_consent_guard(f"Kill process: {pid}")
+
+        async def _kill(signal: str) -> tuple[int, str]:
+            proc = await asyncio.create_subprocess_exec(
+                "kill",
+                signal,
+                str(pid),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+            assert proc.returncode is not None
+            return proc.returncode, stderr.decode(errors="replace").strip()
+
+        async def _alive() -> bool:
+            proc = await asyncio.create_subprocess_exec(
+                "kill",
+                "-0",
+                str(pid),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+            return proc.returncode == 0
+
+        rc, err = await _kill("-TERM")
+        if rc != 0:
+            msg = err or f"kill exited with code {rc}"
+            return f"[Failed to kill pid={pid}: {msg}]"
+
+        for _ in range(20):
+            await asyncio.sleep(1)
+            if not await _alive():
+                return f"[Sent SIGTERM to pid={pid}]"
+
+        rc, err = await _kill("-KILL")
+        if rc != 0:
+            msg = err or f"kill -9 exited with code {rc}"
+            return f"[SIGTERM did not stop pid={pid}; SIGKILL also failed: {msg}]"
+        return f"[SIGTERM did not stop pid={pid}; sent SIGKILL]"
 
     @tool(name="Read")
     async def read_file(
