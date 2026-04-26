@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from agentia.llm.react import run_react_loop_live
 from agentia.models import StreamPart
 from io import BytesIO
+from agentia.models.chat import Message, MessagePartText
 from agentia.utils.aec import EchoCanceller
 from agentia.utils.image_scaling import ScaleOption, downscale_jpeg
 from agentia.models.live import (
@@ -365,6 +366,39 @@ class Live:
             await self._input_queue.put(chunk)
             return
         await self.agent.provider.send_live_chunk(chunk)
+
+    async def send_message(self, msg: Message):
+        """Send a chat message to the live session. Only supported by certain providers."""
+        if not self.agent.provider.supports_live:
+            raise RuntimeError("Provider does not support live sessions")
+        match msg.role:
+            case "user" | "update":
+                parts = (
+                    [MessagePartText(text=msg.content)]
+                    if isinstance(msg.content, str)
+                    else msg.content
+                )
+                for p in parts:
+                    if p.type == "text":
+                        await self.send(text=p.text)
+                    elif p.type == "file":
+                        mime = p.media_type
+                        data = p.to_bytes()
+                        match mime.split("/")[0]:
+                            case "image":
+                                await self.send(image=data, mime_type=mime)
+                            case "audio":
+                                await self.send(audio=data, mime_type=mime)
+                            case "video":
+                                await self.send(video=data, mime_type=mime)
+                            case _:
+                                raise NotImplementedError(
+                                    f"Unsupported file type for live input: {mime}"
+                                )
+            case _:
+                raise NotImplementedError(
+                    f"Unsupported message type for live input: {type(msg)}"
+                )
 
     async def receive(self) -> AsyncGenerator[StreamPart, None]:
         """Receive stream parts from the live session."""

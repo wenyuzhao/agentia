@@ -23,6 +23,8 @@ from agentia.models import (
     ObjectType,
     Usage,
     UserConsentRequest,
+    UserMessage,
+    SystemUpdateMessage,
 )
 from agentia.tools.mcp import MCPContext
 from agentia.utils.commands import Commands
@@ -91,7 +93,8 @@ class Agent:
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()
         self.commands = Commands(self)
-        self.__deferred_messages: list[Message] = []
+        self.__deferred_messages: list[UserMessage | SystemUpdateMessage] = []
+        self.__live: Optional[Live] = None
 
     @property
     def id(self) -> str:
@@ -226,18 +229,17 @@ class Agent:
         else:
             raise ValueError(f"Invalid consent response: {consent}")
 
-    def defer(self, msg: Message) -> None:
+    async def defer(self, msg: UserMessage | SystemUpdateMessage) -> None:
         """
         Enqueue a message to be added to the conversation history immediately after the current turn finishes.
         This can be used to add messages in the middle of a ReAct loop.
         """
-        if self.provider.supports_live:
-            raise RuntimeError(
-                "Cannot enqueue messages when using a provider that supports live sessions."
-            )
-        self.__deferred_messages.append(msg)
+        if self.__live is not None:
+            await self.__live.send_message(msg)
+        else:
+            self.__deferred_messages.append(msg)
 
-    def clear_deferred_messages(self) -> list[Message]:
+    def clear_deferred_messages(self) -> list[UserMessage | SystemUpdateMessage]:
         """
         Clear any messages enqueued with `defer()` and return them.
         """
@@ -255,4 +257,7 @@ class Agent:
     def live(self, options: LiveOptions | None = None) -> Live:
         if not self.provider.supports_live:
             raise NotImplementedError("This provider does not support live sessions")
-        return Live(self, options)
+        if self.__live is not None:
+            raise RuntimeError("Live session already active")
+        self.__live = Live(self, options)
+        return self.__live

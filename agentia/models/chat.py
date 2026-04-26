@@ -3,7 +3,7 @@ import inspect
 from typing import Annotated, Any, Literal, Sequence, Type
 from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
-from pydantic import BaseModel, Field, HttpUrl, JsonValue
+from pydantic import BaseModel, Field, JsonValue
 import json
 
 
@@ -48,6 +48,9 @@ class MessagePartFile(MessagePartBase):
     def to_url(self) -> str:
         return File(data=self.data, media_type=self.media_type).to_url()
 
+    def to_bytes(self) -> bytes:
+        return File(data=self.data, media_type=self.media_type).to_bytes()
+
     def to_openai_format(self) -> dict[str, Any]:
         if self.media_type.startswith("image/"):
             url = self.to_url()
@@ -56,11 +59,8 @@ class MessagePartFile(MessagePartBase):
             url = self.to_url()
             return {"type": "video_url", "video_url": {"url": url}}  # type: ignore
         elif self.media_type.startswith("audio/"):
-            if isinstance(self.data, HttpUrl) or (
-                isinstance(self.data, str)
-                and (
-                    self.data.startswith("http://") or self.data.startswith("https://")
-                )
+            if isinstance(self.data, str) and (
+                self.data.startswith(("http://", "https://"))
             ):
                 raise ValueError("audio file parts with URLs")
             if isinstance(self.data, str):

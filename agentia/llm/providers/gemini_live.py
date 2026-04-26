@@ -6,7 +6,6 @@ from uuid import uuid4
 import httpx
 from google import genai
 from google.genai import types
-from pydantic import HttpUrl
 
 if TYPE_CHECKING:
     from agentia.history import History
@@ -26,6 +25,7 @@ from agentia.models.chat import (
     MessagePartToolResult,
     ToolMessage,
     UserMessage,
+    SystemUpdateMessage,
 )
 from agentia.models.base import ToolCall
 from agentia.models.stream import (
@@ -92,9 +92,7 @@ def _file_part_to_blob(part: MessagePartFile) -> types.Blob:
     data = part.data
     if isinstance(data, bytes):
         return types.Blob(data=data, mime_type=part.media_type)
-    elif isinstance(data, HttpUrl) or (
-        isinstance(data, str) and data.startswith(("http://", "https://"))
-    ):
+    elif isinstance(data, str) and data.startswith(("http://", "https://")):
         raise ValueError(
             "URL-based file parts are not supported for Gemini Live; provide raw bytes or base64 data."
         )
@@ -176,7 +174,7 @@ def _convert_messages_to_contents(
 
 
 async def _send_user_message_realtime(
-    session: "AsyncSession", msg: UserMessage
+    session: "AsyncSession", msg: UserMessage | SystemUpdateMessage
 ) -> None:
     """Send a UserMessage via send_realtime_input, supporting all part types."""
     if isinstance(msg.content, str):
@@ -184,17 +182,18 @@ async def _send_user_message_realtime(
         return
 
     for p in msg.content:
-        if isinstance(p, MessagePartText):
-            await session.send_realtime_input(text=p.text)
-        elif isinstance(p, MessagePartFile):
-            blob = _file_part_to_blob(p)
-            if p.media_type.startswith("audio/"):
-                await session.send_realtime_input(audio=blob)
-            elif p.media_type.startswith(("image/", "video/")):
-                await session.send_realtime_input(video=blob)
-            else:
-                # Fallback: send as video for other binary types
-                await session.send_realtime_input(video=blob)
+        match p.type:
+            case "text":
+                await session.send_realtime_input(text=p.text)
+            case "file":
+                blob = _file_part_to_blob(p)
+                if p.media_type.startswith("audio/"):
+                    await session.send_realtime_input(audio=blob)
+                elif p.media_type.startswith(("image/", "video/")):
+                    await session.send_realtime_input(video=blob)
+                else:
+                    # Fallback: send as video for other binary types
+                    await session.send_realtime_input(video=blob)
 
 
 def _build_config(
@@ -370,7 +369,7 @@ class GeminiLive(Provider):
                 )
             case LiveChunkImage(data=data, mime_type=mime):
                 await session.send_realtime_input(
-                    video=types.Blob(data=data, mime_type=mime)
+                    media=types.Blob(data=data, mime_type=mime)
                 )
             case LiveChunkText(text=text):
                 await session.send_realtime_input(text=text)
@@ -510,28 +509,29 @@ class GeminiLive(Provider):
 
         for msg in new_messages:
             # Send the message via realtime input (triggers model response)
-            if isinstance(msg, UserMessage):
-                await _send_user_message_realtime(session, msg)
-            elif isinstance(msg, ToolMessage):
-                # ToolMessage is user-originated content, send via realtime input
-                for part in msg.content:
-                    if isinstance(part, MessagePartToolResult):
-                        response_data = (
-                            part.output
-                            if isinstance(part.output, dict)
-                            else {"result": part.output}
-                        )
-                        await session.send_tool_response(
-                            function_responses={
-                                "id": part.tool_call_id,
-                                "name": part.tool_name,
-                                "response": response_data,
-                            }
-                        )
-            else:
-                raise NotImplementedError(
-                    f"Unsupported message type for live input: {type(msg)}"
-                )
+            match msg.role:
+                case "user" | "update":
+                    await _send_user_message_realtime(session, msg)
+                case "tool":
+                    # ToolMessage is user-originated content, send via realtime input
+                    for part in msg.content:
+                        if isinstance(part, MessagePartToolResult):
+                            response_data = (
+                                part.output
+                                if isinstance(part.output, dict)
+                                else {"result": part.output}
+                            )
+                            await session.send_tool_response(
+                                function_responses={
+                                    "id": part.tool_call_id,
+                                    "name": part.tool_name,
+                                    "response": response_data,
+                                }
+                            )
+                case _:
+                    raise NotImplementedError(
+                        f"Unsupported message type for live input: {type(msg)}"
+                    )
 
     def _get_new_messages(self, messages: list[Message]) -> list[Message]:
         """Get messages the live session hasn't seen, using History cursor if available."""

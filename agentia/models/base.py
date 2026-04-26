@@ -1,11 +1,11 @@
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from pydantic import BaseModel, Field, JsonValue, HttpUrl
+from pydantic import BaseModel, Field, JsonValue
 from uuid import uuid4
 import base64
 
 
-type DataContent = bytes | str | HttpUrl
+type DataContent = bytes | str
 
 type FinishReason = Literal[
     "stop",
@@ -114,6 +114,23 @@ class File(BaseModel):
                 return f"data:{self.media_type};base64,{base64.b64encode(path.read_bytes()).decode()}"
         else:
             return str(self.data)
+
+    def to_bytes(self) -> bytes:
+        if isinstance(self.data, bytes):
+            return self.data
+        elif isinstance(self.data, str):
+            if self.data.startswith("data:"):
+                header, b64data = self.data.split(",", 1)
+                return base64.b64decode(b64data)
+            elif self.data.startswith(("http://", "https://")):
+                raise ValueError("Cannot convert URL data to bytes")
+            else:
+                path = Path(self.data)
+                if not path.is_file():
+                    raise ValueError(f"File path '{self.data}' does not exist")
+                return path.read_bytes()
+        else:
+            raise ValueError("Invalid data type for File")
 
 
 class ToolCallResponse(BaseModel):
