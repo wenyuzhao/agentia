@@ -31,7 +31,9 @@ async def __process_tool_calls(
     return tool_msg, tool_responses
 
 
-def __add_prompt(history: History, prompt: str | Message | Sequence[Message]) -> None:
+def __add_prompt(
+    _agent: "Agent", history: History, prompt: str | Message | Sequence[Message]
+) -> None:
     if isinstance(prompt, str):
         history.add(UserMessage(content=[MessagePartText(text=prompt)]))
     elif not isinstance(prompt, (list, Sequence)):
@@ -49,7 +51,7 @@ def run_react_loop(
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
-        __add_prompt(agent.history, prompt)
+        __add_prompt(agent, agent.history, prompt)
         messages = agent.history.get()
         instructions = agent.history.get_instructions()
 
@@ -130,7 +132,7 @@ def run_react_loop_streamed(
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[StreamPart, None]:
-        __add_prompt(agent.history, prompt)
+        __add_prompt(agent, agent.history, prompt)
         messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
         started = False

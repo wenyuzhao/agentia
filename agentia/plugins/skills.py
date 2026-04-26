@@ -131,6 +131,7 @@ class Skills(Plugin):
 
         Returns the content of the skill's SKILL.md after processing any directives with the provided arguments.
             - For file-references (`@path/to/file`, either absolute path or relative to the skill path), use the Read tool to access the file content.
+            - Always use this tool to execute skills instead of loading SKILL.md directly.
         """
         skill = self.agent_skills.get(skill_name)
         if not skill:
