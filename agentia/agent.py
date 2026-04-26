@@ -13,7 +13,7 @@ import uuid
 from agentia.history import History
 from agentia.live import LiveOptions
 from agentia.llm import LLMOptions, get_provider
-from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
+from agentia.llm.react import run_react_loop, run_react_loop_streamed
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.models.chat import ResponseFormatJson
@@ -178,10 +178,10 @@ class Agent:
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
         options_merged = self.__merge_options(options)
         if stream:
-            x = run_agent_loop_streamed(self, prompt, events, options_merged, None)
+            x = run_react_loop_streamed(self, prompt, events, options_merged, None)
         else:
             assert not events, "events=True is only supported with stream=True"
-            x = run_agent_loop(self, prompt, options_merged, None)
+            x = run_react_loop(self, prompt, options_merged, None)
         return x
 
     async def generate_object[T: ObjectType](
@@ -192,7 +192,7 @@ class Agent:
     ) -> T:
         options_merged = self.__merge_options(options)
         options_merged.response_format = ResponseFormatJson.from_model(type)
-        result_msg = await run_agent_loop(self, prompt, options_merged, None)
+        result_msg = await run_react_loop(self, prompt, options_merged, None)
         return result_msg.parse(type)
 
     async def __aenter__(self):

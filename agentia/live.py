@@ -2,7 +2,7 @@ import abc
 import asyncio
 from typing import AsyncGenerator, Literal, TYPE_CHECKING, Optional, Sequence, overload
 from pydantic import BaseModel, Field
-from agentia.llm.agentic import run_agent_loop_live
+from agentia.llm.react import run_react_loop_live
 from agentia.models import StreamPart
 from io import BytesIO
 from agentia.utils.aec import EchoCanceller
@@ -372,11 +372,11 @@ class Live:
             raise RuntimeError(
                 "Multithread mode does not support receive() - use start() instead"
             )
-        async for event in run_agent_loop_live(self.agent):
+        async for event in run_react_loop_live(self.agent):
             yield event
 
     async def __receive_task(self):
-        async for event in run_agent_loop_live(self.agent):
+        async for event in run_react_loop_live(self.agent):
             match event.type:
                 case "text-delta":
                     chunk = LiveChunkText(text=event.delta)

@@ -40,7 +40,7 @@ def __add_prompt(history: History, prompt: str | Message | Sequence[Message]) ->
         history.add(*prompt)
 
 
-def run_agent_loop(
+def run_react_loop(
     agent: "Agent",
     prompt: str | Message | Sequence[Message],
     options: LLMOptions,
@@ -114,7 +114,7 @@ def run_agent_loop(
     return c
 
 
-def run_agent_loop_streamed(
+def run_react_loop_streamed(
     agent: "Agent",
     prompt: str | Message | Sequence[Message],
     events: bool,
@@ -245,7 +245,7 @@ def run_agent_loop_streamed(
     return s
 
 
-async def run_agent_loop_live(agent: "Agent") -> AsyncGenerator[StreamPart, None]:
+async def run_react_loop_live(agent: "Agent") -> AsyncGenerator[StreamPart, None]:
     started = False
     parts: list[AssistantMessagePart] = []
     tool_calls: list[ToolCall] = []

@@ -40,7 +40,7 @@ Tests require API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
 
 ### Core Flow
 
-`Agent` (`agent.py`) is the central class. It orchestrates: model selection, tool management, conversation history, and the agentic loop (`llm/agentic.py`: generate → tool calls → execute in parallel → continue). Execution modes: `agent.run()` (returns completed response), streaming via `agent.run(stream=True)`, and event-based via `agent.run(stream=True, events=True)`. MCP-based tools require `async with agent:` context manager.
+`Agent` (`agent.py`) is the central class. It orchestrates: model selection, tool management, conversation history, and the ReAct loop (`llm/react.py`: generate → tool calls → execute in parallel → continue). Execution modes: `agent.run()` (returns completed response), streaming via `agent.run(stream=True)`, and event-based via `agent.run(stream=True, events=True)`. MCP-based tools require `async with agent:` context manager.
 
 ### LLM Providers (`agentia/llm/`)
 
