@@ -8,39 +8,33 @@ from .base import *
 class StreamPartTextStart(BaseModel):
     type: Literal["text-start"] = "text-start"
     id: str
-    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartTextDelta(BaseModel):
     type: Literal["text-delta"] = "text-delta"
     delta: str
     id: str
-    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartTextEnd(BaseModel):
     type: Literal["text-end"] = "text-end"
     id: str
-    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartReasoningStart(BaseModel):
     type: Literal["reasoning-start"] = "reasoning-start"
     id: str
-    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartReasoningDelta(BaseModel):
     type: Literal["reasoning-delta"] = "reasoning-delta"
     delta: str
     id: str
-    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartReasoningEnd(BaseModel):
     type: Literal["reasoning-end"] = "reasoning-end"
     id: str
-    provider_metadata: ProviderMetadata | None = None
 
 
 class StreamPartAudioStart(BaseModel):

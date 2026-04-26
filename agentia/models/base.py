@@ -4,9 +4,6 @@ from pydantic import BaseModel, Field, JsonValue, HttpUrl
 from uuid import uuid4
 import base64
 
-type ProviderOptions = dict[str, JsonValue]
-type ProviderMetadata = dict[str, dict[str, JsonValue]]
-
 
 type DataContent = bytes | str | HttpUrl
 
@@ -52,7 +49,6 @@ class FunctionTool(BaseModel):
     name: str
     input_schema: JsonValue
     description: str | None = None
-    provider_options: ProviderOptions | None = None
 
     def to_openai_schema(self) -> Any:
         return {
@@ -96,9 +92,6 @@ class ToolCall(BaseModel):
     Whether the tool call will be executed by the provider.
     If this flag is not set or is false, the tool call will be executed by the client.
     """
-
-    provider_metadata: ProviderMetadata | None = None
-    """Additional provider-specific metadata for the tool call."""
 
 
 class File(BaseModel):
@@ -161,9 +154,6 @@ class ToolCallResponse(BaseModel):
     If this flag is not set or is false, the tool result is not preliminary.
     """
 
-    provider_metadata: ProviderMetadata | None = None
-    """Additional provider-specific metadata for the tool result."""
-
 
 class Annotation(BaseModel):
     type: Literal["annotation"] = "annotation"
@@ -192,8 +182,6 @@ class UserConsentRequest(BaseModel):
 
 
 __all__ = [
-    "ProviderOptions",
-    "ProviderMetadata",
     "DataContent",
     "FinishReason",
     "ToolChoice",

@@ -20,16 +20,9 @@ class MessagePartBase(BaseModel):
 class MessagePartText(MessagePartBase):
     type: Literal["text"] = "text"
     text: str
-    provider_options: ProviderOptions | None = None
 
-    def __init__(
-        self,
-        text: str,
-        *,
-        type: Literal["text"] = "text",
-        provider_options: ProviderOptions | None = None,
-    ):
-        super().__init__(type=type, text=text, provider_options=provider_options)
+    def __init__(self, text: str, *, type: Literal["text"] = "text"):
+        super().__init__(type=type, text=text)
 
     def to_openai_format(self) -> dict[str, Any]:
         return {"type": self.type, "text": self.text}
@@ -38,16 +31,9 @@ class MessagePartText(MessagePartBase):
 class MessagePartReasoning(MessagePartBase):
     type: Literal["reasoning"] = "reasoning"
     text: str
-    provider_options: ProviderOptions | None = None
 
-    def __init__(
-        self,
-        text: str,
-        *,
-        type: Literal["reasoning"] = "reasoning",
-        provider_options: ProviderOptions | None = None,
-    ):
-        super().__init__(type=type, text=text, provider_options=provider_options)
+    def __init__(self, text: str, *, type: Literal["reasoning"] = "reasoning"):
+        super().__init__(type=type, text=text)
 
     def to_openai_format(self) -> dict[str, Any]:
         return {"type": self.type, "text": self.text}
@@ -58,7 +44,6 @@ class MessagePartFile(MessagePartBase):
     data: DataContent
     media_type: str
     filename: str | None = None
-    provider_options: ProviderOptions | None = None
 
     def to_url(self) -> str:
         return File(data=self.data, media_type=self.media_type).to_url()
@@ -66,10 +51,7 @@ class MessagePartFile(MessagePartBase):
     def to_openai_format(self) -> dict[str, Any]:
         if self.media_type.startswith("image/"):
             url = self.to_url()
-            detail = (self.provider_options or {}).get("imageDetail", None)
-            if detail not in ["auto", "low", "high"]:
-                detail = "auto"
-            return {"type": "image_url", "image_url": {"url": url, "detail": detail}}
+            return {"type": "image_url", "image_url": {"url": url}}
         if self.media_type.startswith("video/"):
             url = self.to_url()
             return {"type": "video_url", "video_url": {"url": url}}  # type: ignore
@@ -115,7 +97,6 @@ class MessagePartToolCall(MessagePartBase):
     tool_name: str
     input: dict[str, JsonValue]
     provider_executed: bool | None = None
-    provider_options: ProviderOptions | None = None
 
 
 class MessagePartToolResult(MessagePartBase):
@@ -125,7 +106,6 @@ class MessagePartToolResult(MessagePartBase):
     input: dict[str, JsonValue]
     output: JsonValue
     output_files: list[File] | None = None
-    provider_options: ProviderOptions | None = None
 
     def serialize_output(self) -> str:
         return (
@@ -157,16 +137,14 @@ type AssistantMessagePart = Annotated[
 class UserMessage(MessageBase):
     role: Literal["user"] = "user"
     content: Sequence[UserMessagePart] | str
-    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
         content: str | Sequence[UserMessagePart],
         *,
         role: Literal["user"] = "user",
-        provider_options: ProviderOptions | None = None,
     ):
-        super().__init__(role=role, content=content, provider_options=provider_options)
+        super().__init__(role=role, content=content)
 
     @property
     def content_list(self) -> list[UserMessagePart]:
@@ -216,7 +194,6 @@ class AssistantMessage(MessageBase):
     role: Literal["assistant"] = "assistant"
     content: Sequence[AssistantMessagePart] | str
     annotations: list[Annotation] | None = None
-    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
@@ -224,9 +201,8 @@ class AssistantMessage(MessageBase):
         *,
         role: Literal["assistant"] = "assistant",
         annotations: list[Annotation] | None = None,
-        provider_options: ProviderOptions | None = None,
     ):
-        super().__init__(role=role, content=content, provider_options=provider_options)
+        super().__init__(role=role, content=content)
 
     @property
     def content_list(self) -> list[AssistantMessagePart]:
@@ -340,16 +316,14 @@ class AssistantMessage(MessageBase):
 class ToolMessage(MessageBase):
     role: Literal["tool"] = "tool"
     content: Sequence[MessagePartToolResult]
-    provider_options: ProviderOptions | None = None
 
     def __init__(
         self,
         content: Sequence[MessagePartToolResult],
         *,
         role: Literal["tool"] = "tool",
-        provider_options: ProviderOptions | None = None,
     ):
-        super().__init__(role=role, content=content, provider_options=provider_options)
+        super().__init__(role=role, content=content)
 
     def to_openai_format(self) -> dict[str, Any] | list[dict[str, Any]]:
         files: list[File] = []
@@ -405,8 +379,20 @@ class CompactedMessage(MessageBase):
         return messages
 
 
+class SystemUpdateMessage(MessageBase):
+    role: Literal["update"] = "update"
+    content: str
+
+    def to_openai_format(self) -> dict[str, Any]:
+        return {"role": "user", "content": self.content}
+
+
 type Message = Annotated[
-    UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
+    UserMessage
+    | AssistantMessage
+    | ToolMessage
+    | CompactedMessage
+    | SystemUpdateMessage,
     Field(discriminator="role"),
 ]
 
@@ -460,6 +446,7 @@ __all__ = [
     "AssistantMessage",
     "ToolMessage",
     "CompactedMessage",
+    "SystemUpdateMessage",
     "Message",
     "ResponseFormatText",
     "ResponseFormatJson",

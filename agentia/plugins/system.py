@@ -8,7 +8,7 @@ from typing import Annotated, override
 from pathlib import Path
 from ..tools import ToolResult
 from ..models.base import File
-from ..models.chat import UserMessage
+from ..models.chat import SystemUpdateMessage
 import base64
 from asyncio.subprocess import DEVNULL, PIPE, STDOUT, Process
 
@@ -245,8 +245,8 @@ class System(Plugin):
                 )
                 try:
                     self.agent.defer(
-                        UserMessage(
-                            f"[Background pid={pid} new output (full output at {log_path})]\n{body}"
+                        SystemUpdateMessage(
+                            content=f"[Background pid={pid} new output (full output at {log_path})]\n{body}"
                         )
                     )
                 except RuntimeError:
@@ -269,8 +269,8 @@ class System(Plugin):
             _read_new_and_enqueue()
             try:
                 self.agent.defer(
-                    UserMessage(
-                        f"[Background pid={pid} exited with code {proc.returncode}]"
+                    SystemUpdateMessage(
+                        content=f"[Background pid={pid} exited with code {proc.returncode}]"
                     )
                 )
             except RuntimeError:
