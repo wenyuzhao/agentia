@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Literal, Sequence, Union
+from typing import Any, Literal, Union
 
 import frontmatter
 from pydantic import BaseModel, Field
@@ -40,7 +40,7 @@ _DOLLAR_NAME_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
 def load_markdown(
     md: str,
     *,
-    arguments: list[str] | None = None,
+    args: list[str] | None = None,
     substitutions: list[Literal["bash", "args", "file"]] | None = None,
 ) -> MarkdownDoc:
     """Load a markdown document from a path, resolving inline directives.
@@ -70,7 +70,7 @@ def load_markdown(
     metadata: dict[str, Any] = dict(fm.metadata)
     content = fm.content
 
-    args = list(arguments) if arguments is not None else []
+    args = list(args) if args is not None else []
     arg_names: list[str] = []
     raw_arg_names = metadata.get("arguments")
     if isinstance(raw_arg_names, list):
@@ -83,7 +83,7 @@ def load_markdown(
         content = _apply_substitutions(content, args, arg_names, base_dir)
     if "file" in substitutions:
         attachments = _collect_attachments(
-            content, base_dir, arguments=arguments, substitutions=substitutions
+            content, base_dir, args=args, substitutions=substitutions
         )
     else:
         attachments = {}
@@ -127,7 +127,7 @@ def _apply_substitutions(
 ) -> str:
     def brace_repl(match: re.Match[str]) -> str:
         var = match.group(1)
-        if var == "CLAUDE_SKILL_DIR":
+        if var == "CLAUDE_SKILL_DIR" or var == "SKILL_DIR":
             return str(base_dir)
         return os.environ.get(var, match.group(0))
 
@@ -168,7 +168,7 @@ def _collect_attachments(
     content: str,
     base_dir: Path,
     *,
-    arguments: list[str] | None,
+    args: list[str] | None,
     substitutions: list[Literal["bash", "args", "file"]],
 ) -> dict[str, MarkdownDoc | Path]:
     attachments: dict[str, MarkdownDoc | Path] = {}
@@ -184,7 +184,7 @@ def _collect_attachments(
         if ext in _MARKDOWN_EXTS:
             attachments[ref] = load_markdown(
                 str(resolved),
-                arguments=arguments,
+                args=args,
                 substitutions=substitutions,
             )
         elif ext in _IMAGE_EXTS or ext in _PDF_EXTS:
