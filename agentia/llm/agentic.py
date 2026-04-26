@@ -31,9 +31,7 @@ async def __process_tool_calls(
     return tool_msg, tool_responses
 
 
-def __add_prompt(
-    history: History, prompt: str | NonSystemMessage | Sequence[NonSystemMessage]
-) -> None:
+def __add_prompt(history: History, prompt: str | Message | Sequence[Message]) -> None:
     if isinstance(prompt, str):
         history.add(UserMessage(content=[MessagePartText(text=prompt)]))
     elif not isinstance(prompt, (list, Sequence)):
@@ -44,7 +42,7 @@ def __add_prompt(
 
 def run_agent_loop(
     agent: "Agent",
-    prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+    prompt: str | Message | Sequence[Message],
     options: LLMOptions,
     live_options: Optional["LiveOptions"],
 ) -> ChatCompletion:
@@ -53,10 +51,16 @@ def run_agent_loop(
     async def gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         __add_prompt(agent.history, prompt)
         messages = agent.history.get()
+        instructions = agent.history.get_instructions()
+
         async with httpx.AsyncClient() as client:
             while True:
                 result = await agent.provider.generate(
-                    messages=messages, tools=tools, options=options, client=client
+                    instructions=instructions,
+                    messages=messages,
+                    tools=tools,
+                    options=options,
+                    client=client,
                 )
                 c.usage += result.usage
                 c.last_usage = result.usage
@@ -112,7 +116,7 @@ def run_agent_loop(
 
 def run_agent_loop_streamed(
     agent: "Agent",
-    prompt: str | NonSystemMessage | Sequence[NonSystemMessage],
+    prompt: str | Message | Sequence[Message],
     events: bool,
     options: LLMOptions,
     live_options: Optional["LiveOptions"],
@@ -124,6 +128,7 @@ def run_agent_loop_streamed(
         messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
         started = False
+        instructions = agent.history.get_instructions()
 
         async with httpx.AsyncClient() as client:
             while True:
@@ -132,7 +137,11 @@ def run_agent_loop_streamed(
                 last_msg = ""
                 last_reasoning = ""
                 async for part in agent.provider.stream(
-                    messages, tools, options, client
+                    instructions=instructions,
+                    messages=messages,
+                    tools=tools,
+                    options=options,
+                    client=client,
                 ):
                     if not started:
                         started = True

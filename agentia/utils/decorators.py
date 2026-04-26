@@ -25,8 +25,7 @@ from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
 from io import BytesIO
-from agentia.models import UserMessage, MessagePartText, MessagePartFile
-from agentia.models.chat import NonSystemMessage
+from agentia.models import UserMessage, MessagePartText, MessagePartFile, Message
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools
@@ -350,7 +349,7 @@ def magic(
                     f"Unsupported return type: {return_type} in magic function {callable.__name__}."
                 )
 
-            messages: list[NonSystemMessage] = []
+            messages: list[Message] = []
             for i, (p, image) in enumerate(images):
                 content_type = "image/png"
                 if isinstance(image, ImageUrl):

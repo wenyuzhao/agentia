@@ -62,6 +62,7 @@ class Provider(abc.ABC):
     @abc.abstractmethod
     async def generate(
         self,
+        instructions: str,
         messages: list[Message],
         tools: ToolSet,
         options: LLMOptions,
@@ -71,6 +72,7 @@ class Provider(abc.ABC):
     @abc.abstractmethod
     def stream(
         self,
+        instructions: str,
         messages: list[Message],
         tools: ToolSet,
         options: LLMOptions,

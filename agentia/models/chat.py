@@ -12,24 +12,6 @@ class MessageBase(BaseModel):
         super().__init__(**data)
 
 
-class SystemMessage(MessageBase):
-    role: Literal["system"] = "system"
-    content: str
-    provider_options: ProviderOptions | None = None
-
-    def __init__(
-        self,
-        content: str,
-        *,
-        role: Literal["system"] = "system",
-        provider_options: ProviderOptions | None = None,
-    ):
-        super().__init__(role=role, content=content, provider_options=provider_options)
-
-    def to_openai_format(self) -> dict[str, Any]:
-        return {"role": self.role, "content": self.content}
-
-
 class MessagePartBase(BaseModel):
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
@@ -390,7 +372,7 @@ class ToolMessage(MessageBase):
 class CompactedMessage(MessageBase):
     role: Literal["compacted"] = "compacted"
     content: str
-    original_messages: list[Annotated["NonSystemMessage", Field(discriminator="role")]]
+    original_messages: list["Message"]
 
     def to_openai_format(self) -> dict[str, Any]:
         return {
@@ -413,14 +395,10 @@ class CompactedMessage(MessageBase):
 
 
 type Message = Annotated[
-    SystemMessage | UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
-    Field(discriminator="role"),
-]
-
-type NonSystemMessage = Annotated[
     UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
     Field(discriminator="role"),
 ]
+
 
 CompactedMessage.model_rebuild()
 
@@ -457,7 +435,6 @@ type ResponseFormat = Annotated[
 
 __all__ = [
     "MessageBase",
-    "SystemMessage",
     "MessagePartBase",
     "MessagePartText",
     "MessagePartReasoning",
@@ -473,7 +450,6 @@ __all__ = [
     "ToolMessage",
     "CompactedMessage",
     "Message",
-    "NonSystemMessage",
     "ResponseFormatText",
     "ResponseFormatJson",
     "ResponseFormat",

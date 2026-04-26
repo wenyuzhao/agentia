@@ -24,7 +24,6 @@ from agentia.models.chat import (
     MessagePartText,
     MessagePartToolCall,
     MessagePartToolResult,
-    SystemMessage,
     ToolMessage,
     UserMessage,
 )
@@ -112,9 +111,6 @@ def _file_part_to_blob(part: MessagePartFile) -> types.Blob:
 
 def _convert_message_to_content(msg: Message) -> types.Content | None:
     """Convert an agentia Message to a google.genai types.Content for history seeding."""
-    if isinstance(msg, SystemMessage):
-        return None  # system instructions handled separately
-
     if isinstance(msg, UserMessage):
         parts: list[types.Part] = []
         if isinstance(msg.content, str):
@@ -334,13 +330,8 @@ class GeminiLive(Provider):
 
         # Seed initial history via send_client_content
         if history:
-            initial_messages = history.get(include_instructions=False)
-            # Filter out system messages (already handled as system_instruction)
-            non_system: list[Message] = [
-                m for m in initial_messages if not isinstance(m, SystemMessage)
-            ]
-            if non_system:
-                contents = _convert_messages_to_contents(non_system)
+            if initial_messages := history.get():
+                contents = _convert_messages_to_contents(initial_messages)
                 if contents:
                     contents = cast(list[types.Content | types.ContentDict], contents)
                     assert self._session is not None
@@ -554,6 +545,7 @@ class GeminiLive(Provider):
     @override
     async def generate(
         self,
+        instructions: str,
         messages: list[Message],
         tools: ToolSet,
         options: LLMOptions,
@@ -594,6 +586,7 @@ class GeminiLive(Provider):
     @override
     async def stream(
         self,
+        instructions: str,
         messages: list[Message],
         tools: ToolSet,
         options: LLMOptions,

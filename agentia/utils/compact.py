@@ -39,8 +39,8 @@ async def compact_history(
 ) -> None:
     from agentia.agent import Agent
 
-    non_instruction_messages = agent.history.get(include_instructions=False)
-    length = len(non_instruction_messages)
+    messages = agent.history.get()
+    length = len(messages)
     if length <= keep_last_n:
         return
 
@@ -52,16 +52,14 @@ async def compact_history(
         "Output ONLY the compacted summary, nothing else."
     )
 
-    conversation_text = _format_messages(non_instruction_messages[:-keep_last_n])
+    conversation_text = _format_messages(messages[:-keep_last_n])
 
     compact_agent = Agent(model=model or agent.model, instructions=compact_instructions)
     result = await compact_agent.run(conversation_text)
 
-    messages_to_keep = non_instruction_messages[-keep_last_n:]
+    messages_to_keep = messages[-keep_last_n:]
     agent.history.clear(clear_instructions=False)
     agent.history.add(
-        CompactedMessage(
-            content=result.text, original_messages=list(non_instruction_messages)
-        ),
+        CompactedMessage(content=result.text, original_messages=list(messages)),
         *messages_to_keep,
     )

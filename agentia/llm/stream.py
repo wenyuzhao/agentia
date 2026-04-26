@@ -45,7 +45,7 @@ class ChatCompletionStreamBase:
         self.usage = Usage()
         self.last_usage = Usage()
         self.finish_reason: FinishReason | None = None
-        self.new_messages: list[NonSystemMessage] = []
+        self.new_messages: list[Message] = []
         self.agent = agent
 
     async def _on_finish(self):
@@ -54,7 +54,7 @@ class ChatCompletionStreamBase:
         self.agent.history.usage += self.usage
         await self.agent.events.end_of_turn.emit()
 
-    def _add_new_message(self, msg: NonSystemMessage):
+    def _add_new_message(self, msg: Message):
         self.new_messages.append(msg)
 
 

@@ -56,7 +56,7 @@ Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Pr
 
 ### Message/Models System (`agentia/models/`)
 
-Pydantic-based message models. Types: SystemMessage, UserMessage, AssistantMessage, ToolMessage. Multi-modal content support (text, images, audio, video, files). Structured output via pydantic BaseModel in `ResponseFormatJson`.
+Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage. Multi-modal content support (text, images, audio, video, files). Structured output via pydantic BaseModel in `ResponseFormatJson`.
 
 ### Streaming (`agentia/llm/stream.py`)
 

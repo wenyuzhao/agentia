@@ -1,5 +1,5 @@
 from agentia import Agent
-from agentia.models import CompactedMessage, SystemMessage
+from agentia.models import CompactedMessage
 import pytest
 import dotenv
 
@@ -19,13 +19,12 @@ async def test_compact_basic():
     # Compact the history
     await agent.compact(effort="medium")
 
-    messages = agent.history.get(include_instructions=True)
+    messages = agent.history.get()
     # Should have system instructions + compacted message + last message
-    assert len(messages) == 3
-    assert isinstance(messages[0], SystemMessage)
-    assert isinstance(messages[1], CompactedMessage)
+    assert len(messages) == 2
+    assert isinstance(messages[0], CompactedMessage)
     # The compacted message should contain key facts
-    text = messages[1].content.lower()
+    text = messages[0].content.lower()
     assert "alice" in text
 
 
@@ -36,21 +35,8 @@ async def test_compact_empty_history():
     )
     # Compacting empty history should be a no-op
     await agent.compact(effort="low")
-    messages = agent.history.get(include_instructions=False)
+    messages = agent.history.get()
     assert len(messages) == 0
-
-
-@pytest.mark.asyncio
-async def test_compact_preserves_instructions():
-    instructions = "You are a pirate assistant who speaks in pirate slang."
-    agent = Agent(model="openai/gpt-5-nano", instructions=instructions)
-    await agent.run("Hello there!")
-
-    await agent.compact(effort="high")
-
-    messages = agent.history.get(include_instructions=True)
-    assert isinstance(messages[0], SystemMessage)
-    assert "pirate" in messages[0].content
 
 
 @pytest.mark.asyncio
@@ -63,7 +49,7 @@ async def test_compact_with_model_override():
     # Use a different model for compaction
     await agent.compact(effort="medium", model="openai/gpt-5-nano")
 
-    messages = agent.history.get(include_instructions=False)
+    messages = agent.history.get()
     assert len(messages) == 2
     assert isinstance(messages[0], CompactedMessage)
     assert "12345" in messages[0].content

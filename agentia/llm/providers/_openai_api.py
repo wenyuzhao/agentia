@@ -99,8 +99,10 @@ class OpenAIAPIProvider(Provider):
                 max_tokens = r.max_tokens
         return self.get_reasoning_args(enabled, effort, exclude, max_tokens)
 
-    def _to_oai_messages(self, messages: list[Message]) -> list[Any]:
+    def _to_oai_messages(self, instructions: str, messages: list[Message]) -> list[Any]:
         r: list[Any] = []
+        if s := instructions.strip():
+            r.append({"role": "system", "content": s})
         for m in messages:
             oai_m = m.to_openai_format()
             if isinstance(oai_m, list):
@@ -186,9 +188,13 @@ class OpenAIAPIProvider(Provider):
         )
 
     def _prepare_args(
-        self, messages: list[Message], tool_set: ToolSet, options: LLMOptions
+        self,
+        instructions: str,
+        messages: list[Message],
+        tool_set: ToolSet,
+        options: LLMOptions,
     ) -> dict[str, Any]:
-        msgs = self._to_oai_messages(messages)
+        msgs = self._to_oai_messages(instructions, messages)
         rf = options.response_format
         if rf and not isinstance(rf, (ResponseFormatJson, ResponseFormatText)):
             rf = ResponseFormatJson.from_model(rf)
@@ -239,12 +245,13 @@ class OpenAIAPIProvider(Provider):
     @override
     async def generate(
         self,
+        instructions: str,
         messages: list[Message],
         tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> GenerationResult:
-        args = self._prepare_args(messages, tools, options)
+        args = self._prepare_args(instructions, messages, tools, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
@@ -301,12 +308,13 @@ class OpenAIAPIProvider(Provider):
     @override
     async def stream(
         self,
+        instructions: str,
         messages: list[Message],
         tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
-        args = self._prepare_args(messages, tools, options)
+        args = self._prepare_args(instructions, messages, tools, options)
         if t := os.environ.get("AGENTIA_TIMEOUT"):
             timeout = float(t)
         else:
