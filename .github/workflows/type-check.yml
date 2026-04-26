@@ -18,6 +18,6 @@ jobs:
       - name: Run Pyright
         run: uv run pyright
       - name: Run format check
-        run: uv run ruff check --check
+        run: uv run ruff format --check
       - name: Run lint check
         run: uv run ruff check
