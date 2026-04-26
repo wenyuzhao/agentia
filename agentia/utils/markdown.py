@@ -8,15 +8,54 @@ import frontmatter
 from pydantic import BaseModel, Field
 
 
+class Attachment(BaseModel):
+    path: Path
+    content: Union["MarkdownDoc", Path]
+
+    def get_content(self) -> str:
+        if isinstance(self.content, MarkdownDoc):
+            return self.content.content.strip() or "(no content)"
+        elif not self.path.is_file():
+            return f"<missing file: {self.path}>"
+        elif self.path.suffix.lower() in _TEXT_EXTS:
+            return self.path.read_text(encoding="utf-8").strip() or "(no content)"
+        elif self.path.suffix.lower() in _BINARY_EXTS:
+            return (
+                f"File: {self.path}. Please use the `Read` tool to access its content."
+            )
+        else:
+            return f"Unsupported file type: {self.path.suffix}"
+
+
 class MarkdownDoc(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     content: str
-    attachments: dict[str, Union["MarkdownDoc", Path]] = Field(default_factory=dict)
+    attachments: dict[str, Attachment] = Field(default_factory=dict)
 
+    def flatten_attachments(self) -> dict[str, Attachment]:
+        flat: dict[str, Attachment] = {}
+        for ref, attachment in self.attachments.items():
+            flat[str(attachment.path)] = attachment
+            if isinstance(attachment.content, MarkdownDoc):
+                flat.update(attachment.content.flatten_attachments())
+        return flat
+
+
+Attachment.model_rebuild()
 
 _MARKDOWN_EXTS = {".md", ".markdown"}
-_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}
-_PDF_EXTS = {".pdf"}
+_TEXT_EXTS = {
+    ".txt",
+    ".text",
+    ".csv",
+    ".json",
+    ".jsonl",
+    ".toml",
+    ".yaml",
+    ".yml",
+    ".svg",
+}
+_BINARY_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf"}
 
 # @path/to/file.ext — must not be preceded by an alphanumeric/underscore (avoids matching emails like user@host.com).
 _FILE_REF_RE = re.compile(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_./\-]+\.[A-Za-z0-9]+)")
@@ -38,7 +77,7 @@ _DOLLAR_NAME_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def load_markdown(
-    md: str,
+    md: str | Path,
     *,
     args: list[str] | None = None,
     substitutions: list[Literal["bash", "args", "file"]] | None = None,
@@ -91,11 +130,12 @@ def load_markdown(
     return MarkdownDoc(metadata=metadata, content=content, attachments=attachments)
 
 
-def _read_source(md: str) -> tuple[str, Path]:
-    path = Path(md)
-    if path.is_file():
+def _read_source(md: str | Path) -> tuple[str, Path]:
+    if isinstance(md, Path) or (isinstance(md, str) and os.path.isfile(md)):
+        path = Path(md)
         return path.read_text(encoding="utf-8"), path.resolve().parent
-    return md, Path.cwd().resolve()
+    else:
+        return md, Path.cwd().resolve()
 
 
 def _apply_bash_substitution(content: str, cwd: Path) -> str:
@@ -170,23 +210,32 @@ def _collect_attachments(
     *,
     args: list[str] | None,
     substitutions: list[Literal["bash", "args", "file"]],
-) -> dict[str, MarkdownDoc | Path]:
-    attachments: dict[str, MarkdownDoc | Path] = {}
+) -> dict[str, Attachment]:
+    attachments: dict[str, Attachment] = {}
+    print("_collect_attachments")
     for match in _FILE_REF_RE.finditer(content):
+        print(f"Found file reference: {match.group(0)}")
         ref = match.group(1)
         if ref in attachments:
+            print(f"Reference '{ref}' already collected, skipping.")
             continue
         ref_path = Path(ref)
         resolved = ref_path if ref_path.is_absolute() else base_dir / ref_path
         if not resolved.is_file():
+            print(
+                f"Resolved path '{resolved}' does not exist or is not a file, skipping."
+            )
             continue
         ext = resolved.suffix.lower()
         if ext in _MARKDOWN_EXTS:
-            attachments[ref] = load_markdown(
+            doc = load_markdown(
                 str(resolved),
                 args=args,
                 substitutions=substitutions,
             )
-        elif ext in _IMAGE_EXTS or ext in _PDF_EXTS:
-            attachments[ref] = resolved
+            attachments[ref] = Attachment(path=resolved, content=doc)
+        elif ext in _TEXT_EXTS or ext in _BINARY_EXTS:
+            attachments[ref] = Attachment(path=resolved, content=resolved)
+        else:
+            print(f"Unsupported file type '{ext}' for path '{resolved}', skipping.")
     return attachments
