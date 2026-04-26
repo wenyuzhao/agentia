@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
-from dotenv import load_dotenv
+import dotenv
 
 from .agent import Agent
 from .models import *
@@ -32,6 +33,18 @@ def init_logging(level: logging._Level = logging.INFO):
         level=level, format="[%(asctime)s][%(levelname)-8s][%(name)s] %(message)s"
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def load_dotenv(
+    *, dotenv_path: str | Path | None = None, cwd: bool = True, override: bool = True
+):
+    """Load environment variables from a .env file. By default, it looks for a .env file in the current working directory."""
+    if dotenv_path:
+        dotenv.load_dotenv(dotenv_path=dotenv_path, override=override)
+    if cwd:
+        dotenv.load_dotenv(dotenv_path=Path.cwd() / ".env", override=override)
+    if not dotenv_path and not cwd:
+        raise ValueError("Either dotenv_path must be provided or cwd must be True.")
 
 
 __all__ = [

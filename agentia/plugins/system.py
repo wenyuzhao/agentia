@@ -2,18 +2,15 @@ from . import Plugin, tool
 import subprocess
 from typing import Annotated, override
 from pathlib import Path
-import base64
-import datetime
 from ..tools import ToolResult
 from ..models.base import File
+import base64
 
 
-class Bash(Plugin):
+class System(Plugin):
     @override
     def get_instructions(self) -> str | None:
-        s = f"CURRENT TIME: {datetime.datetime.now().isoformat()}\n"
-        s += f"CURRENT WORKING DIRECTORY: `{str(Path.cwd())}`.\n"
-        return s
+        return f"CURRENT WORKING DIRECTORY: `{str(Path.cwd())}`"
 
     @tool(name="Bash")
     async def run_bash_command(

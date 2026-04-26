@@ -1,7 +1,7 @@
 from agentia import Agent
 import pytest
 import dotenv
-from agentia.plugins.bash import Bash
+from agentia.plugins.system import Bash
 
 dotenv.load_dotenv()
 

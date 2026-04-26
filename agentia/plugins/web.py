@@ -1,6 +1,6 @@
 import os
 from . import Plugin, tool
-from typing import Annotated
+from typing import Annotated, Literal
 import httpx
 from markdownify import markdownify
 from tavily import AsyncTavilyClient
@@ -31,7 +31,45 @@ class Web(Plugin):
             # If the content is not supported, return the raw content
             return {"content": res.text, "content_type": content_type}
 
-    @tool
+    @tool(name="WebSearch")
+    async def web_search(
+        self,
+        query: Annotated[
+            str, "The search query. Please be as specific and verbose as possible."
+        ],
+        topic: Annotated[
+            Literal["general", "news", "finance"] | None,
+            "The topic of the search. Default is 'general'.",
+        ] = None,
+        time_range: Annotated[
+            Literal["day", "week", "month", "year"] | None,
+            "The time range back from the current date based on publish date or last updated date.",
+        ] = None,
+        max_results: Annotated[
+            int | None,
+            "The maximum number of search results to return. Default is 5. It must be between 0 and 20.",
+        ] = None,
+    ):
+        """
+        Perform web search on the given query.
+        Returning the top related search results in json format.
+        When necessary, you need to combine this tool with the get_webpage_content tools (if available), to browse the web in depth by jumping through links.
+        """
+
+        tavily_results = await self.__tavily.search(
+            query=query,
+            search_depth="advanced",
+            # max_results=10,
+            include_answer=True,
+            include_images=True,
+            include_image_descriptions=True,
+            topic=topic,  # type: ignore
+            time_range=time_range,  # type: ignore
+            max_results=max_results,  # type: ignore
+        )
+        return tavily_results
+
+    @tool(name="WebFetch")
     async def get_webpage_content(
         self,
         url: Annotated[str, "The URL of the web page to get the content of"],
