@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 import dotenv
-from agentia import Agent, LiveOptions
+from agentia import Agent
 
 dotenv.load_dotenv()
 

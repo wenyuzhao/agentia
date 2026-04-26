@@ -4,7 +4,6 @@ import pytest
 import dotenv
 
 from agentia.llm.stream import TextStream
-from agentia.llm.stream import TextStream
 
 dotenv.load_dotenv()
 

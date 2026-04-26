@@ -1,4 +1,8 @@
 import threading
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy
 
 
 class EchoCanceller:
@@ -54,7 +58,7 @@ class EchoCanceller:
         self._mic_pending = np.array([], dtype=np.float64)
         self._out_pending = np.array([], dtype=np.float64)
 
-    def _resample(self, data: "numpy.ndarray", from_rate: int, to_rate: int):  # type: ignore[name-defined]
+    def _resample(self, data: "numpy.ndarray", from_rate: int, to_rate: int):
         if from_rate == to_rate:
             return data
         np = self._np

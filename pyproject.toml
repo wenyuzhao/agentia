@@ -48,6 +48,7 @@ dev = [
     "pytest>=7.3.2,<8",
     "pytest-asyncio>=0.21.1,<0.22",
     "pyyaml>=6.0.3",
+    "ruff>=0.15.12",
     "streamlit>=1.52.2",
 ]
 
@@ -63,3 +64,14 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Star imports are used intentionally to re-export model/stream symbols.
+"agentia/__init__.py" = ["F403", "F405"]
+"agentia/models/__init__.py" = ["F403"]
+"agentia/models/chat.py" = ["F403", "F405"]
+"agentia/models/stream.py" = ["F403", "F405"]
+"agentia/history.py" = ["F403", "F405"]
+"agentia/llm/agentic.py" = ["F403", "F405"]
+"agentia/llm/stream.py" = ["F403", "F405"]
+"agentia/llm/providers/_openai_api.py" = ["F403", "F405"]

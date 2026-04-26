@@ -48,7 +48,7 @@ class Bash(Plugin):
             return ToolResult(output=f"File '{path}' does not exist.")
 
         if p.suffix.lower() in [".png", ".jpg", ".jpeg"]:
-            media_type = f"image/png" if p.suffix.lower() == ".png" else f"image/jpeg"
+            media_type = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
         elif p.suffix.lower() == ".pdf":
             media_type = "application/pdf"
         else:

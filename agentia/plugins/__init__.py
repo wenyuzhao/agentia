@@ -1,13 +1,6 @@
 from ..utils.decorators import tool
 from agentia.tools import Plugin, PluginInitError
 
-
-__all__ = [
-    "Plugin",
-    "PluginInitError",
-    "tool",
-]
-
 # Plugins
 from .calc import Calculator
 from .clock import Clock
@@ -17,3 +10,18 @@ from .memory import Memory
 from .search import Search
 from .web import Web
 from .bash import Bash
+
+
+__all__ = [
+    "Plugin",
+    "PluginInitError",
+    "tool",
+    "Calculator",
+    "Clock",
+    "CodeRunner",
+    "Skills",
+    "Memory",
+    "Search",
+    "Web",
+    "Bash",
+]

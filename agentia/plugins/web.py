@@ -50,6 +50,6 @@ class Web(Plugin):
         if len(failed_results) > 0:
             try:
                 return await self.__get(url)
-            except Exception as e:
+            except Exception:
                 pass
         return result

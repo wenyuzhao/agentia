@@ -23,6 +23,15 @@ uv run pytest tests/test_tools.py::test_function_name
 
 # Type checking
 uv run pyright
+
+# Lint
+uv run ruff check
+
+# Lint with auto-fix
+uv run ruff check --fix
+
+# Format
+uv run ruff format
 ```
 
 Tests require API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` (set via `.env` or environment).

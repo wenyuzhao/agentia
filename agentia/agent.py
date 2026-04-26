@@ -85,7 +85,7 @@ class Agent:
                 for i in instructions:
                     self.history.add_instructions(i)
         self.add_instructions(self.tools.get_instructions)
-        self.log = logging.getLogger(f"agentia.agent")
+        self.log = logging.getLogger("agentia.agent")
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()

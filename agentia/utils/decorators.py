@@ -25,7 +25,6 @@ from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
 from io import BytesIO
-import inspect
 from agentia.models import UserMessage, MessagePartText, MessagePartFile
 from agentia.models.chat import NonSystemMessage
 
@@ -111,11 +110,14 @@ class ToolFuncParam:
             t = str  # the default type is string
         # Get parameter optionality
         param_t_is_opt = False
-        is_optional = lambda x: (
-            (get_origin(x) is Union or get_origin(x) is types.UnionType)
-            and len(get_args(x)) == 2
-            and type(None) in get_args(x)
-        )
+
+        def is_optional(x: Any) -> bool:
+            return (
+                (get_origin(x) is Union or get_origin(x) is types.UnionType)
+                and len(get_args(x)) == 2
+                and type(None) in get_args(x)
+            )
+
         if is_optional(t):
             t, param_t_is_opt = get_args(t)[0], True
         param_default_is_empty = self.param.default == inspect.Parameter.empty
