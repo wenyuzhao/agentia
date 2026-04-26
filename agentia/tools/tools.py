@@ -163,9 +163,9 @@ class ToolSet:
             elif isinstance(t, ProviderTool):
                 self.provider_tools[t.name] = t
             else:
-                assert inspect.isfunction(
-                    t
-                ), "Expected a function, MCP server object, Plugin, or ProviderTool"
+                assert inspect.isfunction(t), (
+                    "Expected a function, MCP server object, Plugin, or ProviderTool"
+                )
                 self.__add_function(t)
         self.__initialized = False
 
@@ -195,9 +195,9 @@ class ToolSet:
         elif isinstance(t, MCP):
             self.__add_mcp_server(t)
         else:
-            assert inspect.isfunction(
-                t
-            ), "Expected a function, MCP server object, or Plugin"
+            assert inspect.isfunction(t), (
+                "Expected a function, MCP server object, or Plugin"
+            )
             self.__add_function(t)
 
     def __add_function(self, f: Callable[..., Any], plugin: Optional["Plugin"] = None):

@@ -124,9 +124,9 @@ class MCP:
                 assert url is None, "Local MCP server does not support URL"
                 assert headers is None, "Local MCP server does not support headers"
                 assert auth is None, "Local MCP server does not support auth"
-                assert (
-                    command is not None and len(command) > 0
-                ), "Command must be specified"
+                assert command is not None and len(command) > 0, (
+                    "Command must be specified"
+                )
                 assert args is not None, "Args must be specified"
             case "http" | "sse" | "streamable-http":
                 assert_no_local_args()

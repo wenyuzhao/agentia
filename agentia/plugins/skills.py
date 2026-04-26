@@ -67,9 +67,9 @@ class Skills(Plugin):
         name = doc.metadata.get("name", path.stem)
         assert isinstance(name, str), f"Skill name must be a string in '{md}'"
         description = doc.metadata.get("description", "")
-        assert isinstance(
-            description, str
-        ), f"Skill description must be a string in '{md}'"
+        assert isinstance(description, str), (
+            f"Skill description must be a string in '{md}'"
+        )
         return Skill(path=path, name=name, description=description)
 
     @override
@@ -77,5 +77,5 @@ class Skills(Plugin):
         skills = self.load_all_skills()
         s = ""
         for skill in skills.values():
-            s += f"- **{skill.name}**:\n    * path: {str(skill.path/"SKILL.md")}\n    * description: {skill.description}\n\n"
+            s += f"- **{skill.name}**:\n    * path: {str(skill.path / 'SKILL.md')}\n    * description: {skill.description}\n\n"
         return INSTRUCTIONS_TEMPLATE.format(skills=s)

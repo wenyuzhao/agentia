@@ -62,11 +62,9 @@ class ChatCompletionStream(ChatCompletionStreamBase):
     def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: "Agent"):
         super().__init__(agent)
 
-        async def __gen() -> (
-            AsyncGenerator[
-                ReasoningStream | MessageStream | ToolCall | ToolCallResponse, None
-            ]
-        ):
+        async def __gen() -> AsyncGenerator[
+            ReasoningStream | MessageStream | ToolCall | ToolCallResponse, None
+        ]:
             async for part in gen:
                 if isinstance(part, (ToolCall, ToolCallResponse)):
                     yield part

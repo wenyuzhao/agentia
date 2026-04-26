@@ -137,8 +137,7 @@ def _apply_substitutions(
     content = _DOLLAR_NUM_RE.sub(num_repl, content)
 
     name_to_value = {
-        name: (args[i] if i < len(args) else "")
-        for i, name in enumerate(arg_names)
+        name: (args[i] if i < len(args) else "") for i, name in enumerate(arg_names)
     }
 
     def name_repl(match: re.Match[str]) -> str:

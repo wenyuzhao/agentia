@@ -194,9 +194,18 @@ class UserMessage(MessageBase):
             }
 
 
-type ObjectType = BaseModel | Enum | str | int | float | bool | None | list[
-    "ObjectType"
-] | dict[str, "ObjectType"] | tuple["ObjectType", ...]
+type ObjectType = (
+    BaseModel
+    | Enum
+    | str
+    | int
+    | float
+    | bool
+    | None
+    | list["ObjectType"]
+    | dict[str, "ObjectType"]
+    | tuple["ObjectType", ...]
+)
 
 
 class _Result[X](BaseModel):
@@ -315,7 +324,9 @@ class AssistantMessage(MessageBase):
                 "content": (
                     text_parts[0]
                     if len(text_parts) == 1
-                    else text_parts if text_parts else None
+                    else text_parts
+                    if text_parts
+                    else None
                 ),
                 "tool_calls": tool_calls,
             }
