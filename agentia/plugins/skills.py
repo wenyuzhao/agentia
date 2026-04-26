@@ -101,11 +101,17 @@ class Skills(Plugin):
             return False
         return True
 
+    def ignore_skill(self, skill: Skill) -> bool:
+        return False
+
     def discover_skills(self, path: Path) -> list[Skill]:
         """Recursively discover skills from the given path."""
         assert path.is_dir(), f"'{path}' is not a directory"
         if self.is_skill(path):
-            return [Skill.load(path)]
+            skill = Skill.load(path)
+            if self.ignore_skill(skill):
+                return []
+            return [skill]
         skills = []
         for child in path.iterdir():
             if child.is_dir():
