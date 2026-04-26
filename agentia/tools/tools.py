@@ -3,9 +3,9 @@ import inspect
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
-from agentia.spec.base import File
+from agentia.models.base import File
 from agentia.tools.mcp import MCP
-import agentia.spec as spec
+import agentia.models as models
 from agentia.utils.decorators import ToolFuncParam
 from inspect import Parameter
 from pydantic.type_adapter import TypeAdapter
@@ -236,9 +236,9 @@ class ToolSet:
     def is_empty(self) -> bool:
         return len(self.__tools) == 0
 
-    def get_schema(self) -> Sequence[spec.ToolSchema]:
+    def get_schema(self) -> Sequence[models.ToolSchema]:
         functions = [
-            spec.FunctionTool(
+            models.FunctionTool(
                 name=v.name,
                 description=v.description or "",
                 input_schema=v.schema["parameters"],
@@ -246,7 +246,7 @@ class ToolSet:
             for (k, v) in self.__tools.items()
         ]
         provider_tools = [
-            spec.ProviderDefinedTool(id=t.name, name=t.name, args=t.args or {})
+            models.ProviderDefinedTool(id=t.name, name=t.name, args=t.args or {})
             for t in self.provider_tools.values()
         ]
         return functions + provider_tools
@@ -257,7 +257,7 @@ class ToolSet:
         tool: _PythonFunctionTool,
         agent: "Agent",
         args: dict[str, JsonValue],
-    ) -> spec.ToolCallResponse:
+    ) -> models.ToolCallResponse:
         p_args, kw_args = tool.process_json_args(agent, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
@@ -266,7 +266,7 @@ class ToolSet:
         if isinstance(output, ToolResult):
             files = output.files
             output = output.output
-        return spec.ToolCallResponse(
+        return models.ToolCallResponse(
             tool_call_id=id,
             tool_name=tool.name,
             input=args,
@@ -276,15 +276,15 @@ class ToolSet:
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: dict[str, JsonValue]
-    ) -> spec.ToolCallResponse:
+    ) -> models.ToolCallResponse:
         result = await tool.server.run(tool.name, args)
-        return spec.ToolCallResponse(
+        return models.ToolCallResponse(
             tool_call_id=id, tool_name=tool.name, input=args, output=result
         )
 
     async def __run_one(
-        self, agent: "Agent", c: spec.ToolCall
-    ) -> spec.ToolCallResponse:
+        self, agent: "Agent", c: models.ToolCall
+    ) -> models.ToolCallResponse:
         tool = self.__tools.get(c.tool_name, None)
         if not tool:
             raise ValueError(f"Tool {c.tool_name} not found")
@@ -306,7 +306,7 @@ class ToolSet:
                 raise ValueError(f"Tool {c.tool_name} is of unknown type")
         except Exception as e:
             output: JsonValue = {"error": str(e)}
-            r = spec.ToolCallResponse(
+            r = models.ToolCallResponse(
                 tool_call_id=c.tool_call_id,
                 tool_name=c.tool_name,
                 input=c.input,
@@ -315,14 +315,14 @@ class ToolSet:
             return r
 
     async def run(
-        self, agent: "Agent", tool_calls: list[spec.ToolCall], parallel: bool
-    ) -> list[spec.ToolCallResponse]:
+        self, agent: "Agent", tool_calls: list[models.ToolCall], parallel: bool
+    ) -> list[models.ToolCallResponse]:
         if parallel:
             results = await asyncio.gather(
                 *[self.__run_one(agent, c) for c in tool_calls]
             )
         else:
-            results: list[spec.ToolCallResponse] = []
+            results: list[models.ToolCallResponse] = []
             for c in tool_calls:
                 results.append(await self.__run_one(agent, c))
         return results

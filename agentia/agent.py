@@ -16,9 +16,9 @@ from agentia.llm import LLMOptions, get_provider
 from agentia.llm.agentic import run_agent_loop, run_agent_loop_streamed
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.spec.chat import ResponseFormatJson
+from agentia.models.chat import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
-from agentia.spec import (
+from agentia.models import (
     NonSystemMessage,
     ObjectType,
     Usage,

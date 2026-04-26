@@ -1,7 +1,7 @@
 import asyncio
 from typing import AsyncGenerator, Generator, TYPE_CHECKING
-from agentia.spec.base import FinishReason, Usage
-from agentia.spec.chat import AssistantMessage, NonSystemMessage, ToolMessage
+from agentia.models.base import FinishReason, Usage
+from agentia.models.chat import AssistantMessage, NonSystemMessage, ToolMessage
 
 if TYPE_CHECKING:
     from agentia.agent import Agent

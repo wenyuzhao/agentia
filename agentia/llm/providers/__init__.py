@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 import httpx
 from agentia.llm import LLMOptions
-from agentia.spec.base import ToolCallResponse
-from agentia.spec.chat import Message
-from agentia.spec.live import LiveChunk
+from agentia.models.base import ToolCallResponse
+from agentia.models.chat import Message
+from agentia.models.live import LiveChunk
 from agentia.tools.tools import ToolSet
-import agentia.spec as spec
-from agentia.spec.stream import StreamPart
+import agentia.models as models
+from agentia.models.stream import StreamPart
 
 if TYPE_CHECKING:
     from agentia.history import History
@@ -18,10 +18,10 @@ if TYPE_CHECKING:
 
 @dataclass
 class GenerationResult:
-    message: spec.AssistantMessage
-    finish_reason: spec.FinishReason
-    usage: spec.Usage
-    provider_metadata: spec.ProviderMetadata | None
+    message: models.AssistantMessage
+    finish_reason: models.FinishReason
+    usage: models.Usage
+    provider_metadata: models.ProviderMetadata | None
 
 
 class Provider(abc.ABC):

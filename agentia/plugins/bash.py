@@ -5,7 +5,7 @@ from pathlib import Path
 import base64
 import datetime
 from ..tools import ToolResult
-from ..spec.base import File
+from ..models.base import File
 
 
 class Bash(Plugin):

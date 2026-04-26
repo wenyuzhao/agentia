@@ -3,7 +3,7 @@ import re
 from typing import TYPE_CHECKING, Literal, Sequence
 from openai import BaseModel
 from pydantic import AnyUrl
-from agentia import spec
+from agentia import models
 
 if TYPE_CHECKING:
     from agentia.llm.providers import Provider
@@ -25,9 +25,9 @@ class LLMOptions(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     seed: int | None = None
-    tool_choice: spec.ToolChoice | None = None
-    provider_options: spec.ProviderOptions | None = None
-    response_format: spec.ResponseFormat | type[BaseModel] | None = None
+    tool_choice: models.ToolChoice | None = None
+    provider_options: models.ProviderOptions | None = None
+    response_format: models.ResponseFormat | type[BaseModel] | None = None
     parallel_tool_calls: bool | None = True
     reasoning: ReasoningOptions | None = None
     auto_compact: bool | None = None

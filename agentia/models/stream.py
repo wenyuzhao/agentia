@@ -1,7 +1,7 @@
 from typing import Annotated, Literal, Sequence
 from pydantic import BaseModel, Field
 
-from agentia.spec.chat import AssistantMessage, ToolMessage
+from agentia.models.chat import AssistantMessage, ToolMessage
 from .base import *
 
 

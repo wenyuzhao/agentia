@@ -4,7 +4,7 @@ from agentia.history import History
 from agentia.llm import LLMOptions
 from agentia.llm.completion import ChatCompletion
 from agentia.llm.stream import ChatCompletionEvents, ChatCompletionStream
-from agentia.spec import *
+from agentia.models import *
 from agentia.tools.tools import ToolSet
 
 if TYPE_CHECKING:

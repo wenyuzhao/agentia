@@ -45,7 +45,7 @@ Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Pr
 - **MCP servers**: local (stdio) or remote (HTTP/SSE) via `MCP` class. `MCPContext` manages server lifecycle.
 - **Provider-defined tools**: provider-specific built-in tools.
 
-### Message/Spec System (`agentia/spec/`)
+### Message/Models System (`agentia/models/`)
 
 Pydantic-based message models. Types: SystemMessage, UserMessage, AssistantMessage, ToolMessage. Multi-modal content support (text, images, audio, video, files). Structured output via pydantic BaseModel in `ResponseFormatJson`.
 

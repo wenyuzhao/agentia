@@ -26,8 +26,8 @@ from PIL.Image import Image
 import base64
 from io import BytesIO
 import inspect
-from agentia.spec import UserMessage, MessagePartText, MessagePartFile
-from agentia.spec.chat import NonSystemMessage
+from agentia.models import UserMessage, MessagePartText, MessagePartFile
+from agentia.models.chat import NonSystemMessage
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools

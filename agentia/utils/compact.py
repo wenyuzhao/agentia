@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Sequence
 
-from agentia.spec import CompactedMessage, Message, NonSystemMessage
-from agentia.spec.chat import MessagePartText
+from agentia.models import CompactedMessage, Message, NonSystemMessage
+from agentia.models.chat import MessagePartText
 
 if TYPE_CHECKING:
     from agentia.agent import Agent

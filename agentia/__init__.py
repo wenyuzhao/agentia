@@ -15,7 +15,7 @@ def init_logging(level: logging._Level = logging.INFO):
 from dotenv import load_dotenv
 
 from .agent import Agent
-from .spec import *
+from .models import *
 from .utils.decorators import magic, ImageUrl
 from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError
@@ -50,7 +50,7 @@ __all__ = [
     "ChatCompletionEvents",
     "LLMOptions",
     "ReasoningOptions",
-    # spec
+    # models
     "ProviderOptions",
     "ProviderMetadata",
     "DataContent",

@@ -1,5 +1,5 @@
 from typing import Callable, Literal, Sequence, overload
-from agentia.spec import *
+from agentia.models import *
 
 
 class History:

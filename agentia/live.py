@@ -3,12 +3,11 @@ import asyncio
 from typing import AsyncGenerator, Literal, TYPE_CHECKING, Optional, Sequence, overload
 from pydantic import BaseModel, Field
 from agentia.llm.agentic import run_agent_loop_live
-from agentia.spec import StreamPart
-from typing import TYPE_CHECKING, Literal
+from agentia.models import StreamPart
 from io import BytesIO
 from agentia.utils.aec import EchoCanceller
 from agentia.utils.image_scaling import ScaleOption, downscale_jpeg
-from agentia.spec.live import (
+from agentia.models.live import (
     LiveChunk,
     LiveChunkAudio,
     LiveChunkText,

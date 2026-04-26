@@ -6,7 +6,7 @@ from uuid import uuid4
 import httpx
 from agentia.tools.tools import ToolSet
 from . import LLMOptions, GenerationResult, Provider
-from ...spec import *
+from ...models import *
 from openai.types.chat import (
     ChatCompletionToolParam,
     ChatCompletionToolChoiceOptionParam,

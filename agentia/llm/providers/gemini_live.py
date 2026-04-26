@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 from agentia.live import LiveOptions
 from agentia.llm import LLMOptions
 from agentia.llm.providers import GenerationResult, Provider
-from agentia.spec.base import FunctionTool, ToolCallResponse, Usage
-from agentia.spec.chat import (
+from agentia.models.base import FunctionTool, ToolCallResponse, Usage
+from agentia.models.chat import (
     AssistantMessage,
     Message,
     MessagePartFile,
@@ -28,8 +28,8 @@ from agentia.spec.chat import (
     ToolMessage,
     UserMessage,
 )
-from agentia.spec.base import ToolCall
-from agentia.spec.stream import (
+from agentia.models.base import ToolCall
+from agentia.models.stream import (
     StreamPart,
     StreamPartAudioDelta,
     StreamPartAudioEnd,
@@ -47,7 +47,7 @@ from agentia.spec.stream import (
     StreamPartTurnStart,
 )
 from agentia.tools.tools import ToolSet
-from agentia.spec.live import (
+from agentia.models.live import (
     LiveChunk,
     LiveChunkAudio,
     LiveChunkText,

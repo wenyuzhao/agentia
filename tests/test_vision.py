@@ -1,5 +1,5 @@
 from agentia import Agent
-from agentia.spec import UserMessage, MessagePartText, MessagePartFile
+from agentia.models import UserMessage, MessagePartText, MessagePartFile
 import pytest
 import dotenv
 

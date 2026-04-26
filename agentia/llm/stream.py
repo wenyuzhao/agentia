@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Literal, TYPE_CHECKING
 
 from agentia.llm.completion import async_gen_to_sync
-from agentia.spec import *
+from agentia.models import *
 
 if TYPE_CHECKING:
     from agentia.agent import Agent

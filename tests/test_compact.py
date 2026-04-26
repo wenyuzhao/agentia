@@ -1,5 +1,5 @@
 from agentia import Agent
-from agentia.spec import CompactedMessage, SystemMessage
+from agentia.models import CompactedMessage, SystemMessage
 import pytest
 import dotenv
 
