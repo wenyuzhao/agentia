@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import textwrap
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
@@ -47,7 +48,7 @@ class _PythonFunctionTool(_BaseTool):
         else:
             name = getattr(f, NAME_TAG, f.__name__)
             display_name = getattr(f, DISPLAY_NAME_TAG, name)
-        description: str = getattr(f, DESCRIPTION_TAG, f.__doc__) or ""
+        description: str = textwrap.dedent(getattr(f, DESCRIPTION_TAG, f.__doc__) or "")
         metadata = getattr(f, METADATA_TAG, None)
         params = [
             ToolFuncParam(p, f.__name__)

@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import os
+import textwrap
 import types
 from typing import (
     Any,
@@ -82,13 +83,14 @@ class ToolFuncParam:
         type_desc = None
         if is_dataclass(self.type) or isinstance(self.type, BaseModel):
             if desc := self.type.__doc__:
-                type_desc = desc
+                type_desc = textwrap.dedent(desc)
         meta = (
             get_args(self.param.annotation)[1]
             if get_origin(self.param.annotation) == Annotated
             else None
         )
         if meta is not None and isinstance(meta, str):
+            meta = textwrap.dedent(meta)
             if type_desc:
                 return type_desc + "\n\n" + meta
             return meta
@@ -201,11 +203,11 @@ def _gen_prompt(
     instructions: str | None,
 ) -> tuple[str, list[tuple[ToolFuncParam, Image | ImageUrl]]]:
     desc = "You need to do the following task and return the result in JSON:\n\n"
-    desc += "TASK NAME: " + f.__name__ + "\n"
+    desc += "# TASK: " + f.__name__ + "\n"
     if instructions:
-        desc += "DESCRIPTION: \n" + instructions + "\n\n"
+        desc += "# DESCRIPTION: \n\n" + textwrap.dedent(instructions) + "\n\n"
     elif doc := f.__doc__:
-        desc += "DESCRIPTION: \n" + doc + "\n\n"
+        desc += "# DESCRIPTION: \n\n" + textwrap.dedent(doc) + "\n\n"
     else:
         logging.getLogger("agentia").warning(
             f"WARNING: Function {f.__name__} has no docstring. It's recommended to use the docstring to provide the agent with a description of the task."
