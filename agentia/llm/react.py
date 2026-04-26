@@ -65,9 +65,9 @@ def run_react_loop(
                 c.usage += result.usage
                 c.last_usage = result.usage
                 c._add_new_message(result.message)
+                messages.append(result.message)
                 yield result.message
                 # Add new messages
-                messages.append(result.message)
                 tool_calls = result.message.tool_calls
                 if result.finish_reason != "tool-calls":
                     break
@@ -78,9 +78,15 @@ def run_react_loop(
                     tools=tools,
                     parallel=options.parallel_tool_calls or False,
                 )
-                yield tool_msg
-                messages.append(tool_msg)
                 c._add_new_message(tool_msg)
+                messages.append(tool_msg)
+                yield tool_msg
+                # Process enqueued messages if any
+                if agent._enqueued_messages:
+                    for m in agent._enqueued_messages:
+                        c._add_new_message(m)
+                        messages.append(m)
+                    agent._enqueued_messages = []
 
         agent.history.add(*c.new_messages)
 
@@ -207,6 +213,12 @@ def run_react_loop_streamed(
                 yield StreamPartTurnEnd(role="tool", message=tool_msg)
                 messages.append(tool_msg)
                 s._add_new_message(tool_msg)
+                # Process enqueued messages if any
+                if agent._enqueued_messages:
+                    for m in agent._enqueued_messages:
+                        s._add_new_message(m)
+                        messages.append(m)
+                    agent._enqueued_messages = []
         s.finish_reason = last_finish_reason
         yield StreamPartEnd(usage=s.usage, finish_reason=last_finish_reason)
 
