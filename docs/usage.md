@@ -371,6 +371,10 @@ my-skill/
   scripts/          # Optional: executable scripts (.py, .sh, .js)
 ```
 
+Optional frontmatter flags:
+- `disable-model-invocation: true` — hide the skill from the model; it won't appear in system instructions and the `Skill` tool refuses to execute it. Useful for skills meant only for direct user invocation.
+- `user-invocable: false` — exclude the skill from the user-invocable set (e.g. slash-command surfaces) while still letting the model discover and execute it. Defaults to `true`.
+
 Example `SKILL.md`:
 
 ```markdown
@@ -392,3 +396,39 @@ Get the weather and temperature of a given location.
 
 python scripts/get-weather.py "Sydney"
 ```
+
+### Substitutions
+
+When a skill is executed, its `SKILL.md` content is processed for the following inline substitutions before being returned:
+
+**Bash command substitution** — `` !`cmd` `` runs `cmd` through the shell (with the skill directory as cwd, 30s timeout) and is replaced with the captured stdout.
+
+```markdown
+Current date: !`date +%Y-%m-%d`
+Files in skill: !`ls`
+```
+
+**Argument substitutions** — resolved against arguments passed to the skill (and the frontmatter `arguments` list, when present):
+
+| Syntax | Meaning |
+| --- | --- |
+| `$ARGUMENTS` | All arguments joined by spaces |
+| `$ARGUMENTS[N]` | The Nth argument (0-indexed); empty if out of range |
+| `$N` | Shorthand for `$ARGUMENTS[N]` |
+| `$name` | Named argument, resolved positionally against the frontmatter `arguments` list |
+| `${VAR}` | Environment variable; left untouched if unset |
+| `${CLAUDE_SKILL_DIR}` / `${SKILL_DIR}` | Absolute path to the skill's directory |
+
+Example `SKILL.md` using named arguments:
+
+```markdown
+---
+name: greet
+description: Greet a user
+arguments: [name, greeting]
+---
+
+$greeting, $name! (raw: $ARGUMENTS)
+```
+
+Calling the skill with `/greet "Alice" "Hello"` yields `Hello, Alice! (raw: Alice Hello)`.
