@@ -25,7 +25,6 @@ from agentia.models.chat import (
     MessagePartToolResult,
     ToolMessage,
     UserMessage,
-    SystemUpdateMessage,
 )
 from agentia.models.base import ToolCall
 from agentia.models.stream import (
@@ -174,7 +173,7 @@ def _convert_messages_to_contents(
 
 
 async def _send_user_message_realtime(
-    session: "AsyncSession", msg: UserMessage | SystemUpdateMessage
+    session: "AsyncSession", msg: UserMessage
 ) -> None:
     """Send a UserMessage via send_realtime_input, supporting all part types."""
     if isinstance(msg.content, str):
@@ -510,7 +509,7 @@ class GeminiLive(Provider):
         for msg in new_messages:
             # Send the message via realtime input (triggers model response)
             match msg.role:
-                case "user" | "update":
+                case "user":
                     await _send_user_message_realtime(session, msg)
                 case "tool":
                     # ToolMessage is user-originated content, send via realtime input

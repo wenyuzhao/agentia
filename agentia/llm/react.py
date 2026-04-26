@@ -9,6 +9,7 @@ from agentia.tools.tools import ToolSet
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
+    from agentia.live import Live
     from agentia.live import LiveOptions
 
 
@@ -268,12 +269,13 @@ def run_react_loop_streamed(
     return s
 
 
-async def run_react_loop_live(agent: "Agent") -> AsyncGenerator[StreamPart, None]:
+async def run_react_loop_live(live: "Live") -> AsyncGenerator[StreamPart, None]:
     started = False
     parts: list[AssistantMessagePart] = []
     tool_calls: list[ToolCall] = []
     last_msg = ""
     last_reasoning = ""
+    agent = live.agent
 
     async for part in agent.provider.receive():
         if not started:
@@ -332,6 +334,11 @@ async def run_react_loop_live(agent: "Agent") -> AsyncGenerator[StreamPart, None
                 agent.history.add(tool_msg)
                 yield StreamPartTurnEnd(role="tool", message=tool_msg)
                 await agent.provider.send_tool_responses(tool_responses)
+            # Process enqueued messages if any
+            if msgs := agent.clear_deferred_messages():
+                for m in msgs:
+                    agent.history.add(m)
+                    await live.send_message(m)
             # reset for next turn
             parts = []
             tool_calls = []

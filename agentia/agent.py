@@ -24,7 +24,6 @@ from agentia.models import (
     Usage,
     UserConsentRequest,
     UserMessage,
-    SystemUpdateMessage,
 )
 from agentia.tools.mcp import MCPContext
 from agentia.utils.commands import Commands
@@ -93,7 +92,7 @@ class Agent:
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()
         self.commands = Commands(self)
-        self.__deferred_messages: list[UserMessage | SystemUpdateMessage] = []
+        self.__deferred_messages: list[UserMessage] = []
         self.__live: Optional[Live] = None
 
     @property
@@ -229,7 +228,7 @@ class Agent:
         else:
             raise ValueError(f"Invalid consent response: {consent}")
 
-    async def defer(self, msg: UserMessage | SystemUpdateMessage) -> None:
+    async def defer(self, msg: UserMessage) -> None:
         """
         Enqueue a message to be added to the conversation history immediately after the current turn finishes.
         This can be used to add messages in the middle of a ReAct loop.
@@ -239,7 +238,13 @@ class Agent:
         else:
             self.__deferred_messages.append(msg)
 
-    def clear_deferred_messages(self) -> list[UserMessage | SystemUpdateMessage]:
+    def has_deferred_messages(self) -> bool:
+        """
+        Check if there are any messages enqueued with `defer()`.
+        """
+        return len(self.__deferred_messages) > 0
+
+    def clear_deferred_messages(self) -> list[UserMessage]:
         """
         Clear any messages enqueued with `defer()` and return them.
         """

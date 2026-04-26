@@ -379,20 +379,8 @@ class CompactedMessage(MessageBase):
         return messages
 
 
-class SystemUpdateMessage(MessageBase):
-    role: Literal["update"] = "update"
-    content: str
-
-    def to_openai_format(self) -> dict[str, Any]:
-        return {"role": "user", "content": self.content}
-
-
 type Message = Annotated[
-    UserMessage
-    | AssistantMessage
-    | ToolMessage
-    | CompactedMessage
-    | SystemUpdateMessage,
+    UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
     Field(discriminator="role"),
 ]
 
@@ -446,7 +434,6 @@ __all__ = [
     "AssistantMessage",
     "ToolMessage",
     "CompactedMessage",
-    "SystemUpdateMessage",
     "Message",
     "ResponseFormatText",
     "ResponseFormatJson",

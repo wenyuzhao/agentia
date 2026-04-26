@@ -8,9 +8,8 @@ from typing import Annotated, override
 from pathlib import Path
 from ..tools import ToolResult
 from ..models.base import File
-from ..models.chat import SystemUpdateMessage
 import base64
-from asyncio.subprocess import DEVNULL, PIPE, STDOUT, Process
+from asyncio.subprocess import DEVNULL, PIPE, STDOUT
 
 
 _DEFAULT_MAX_LINES = 1000
@@ -131,9 +130,8 @@ class System(Plugin):
         **Background / timeout:**
             * If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to.
             * While running background tasks, any new output is polled and enqueued regularly.
-            * If `timeout` fires for a foreground command, the process is left running in the background and switched to the same periodic monitoring process as `background=True`.
-            `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
-            * Use background tasks for long-running or daemon processes. Only use this when necessary.
+            * If `timeout` fires for a foreground command, the process is left running in the background. `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
+            * Use background tasks for long-running or daemon processes (e.g. dev servers). Only use this when necessary.
         """
         if not self.bash_enabled:
             raise RuntimeError("Bash tool is not enabled.")
@@ -160,10 +158,6 @@ class System(Plugin):
             # The task tails `log_path` and feeds output back via agent.enqueue
             # so the model sees progress without us blocking the tool call.
             self._background_pids.add(proc.pid)
-            asyncio.create_task(
-                self._monitor_background(proc, log_path),
-                name=f"bash-monitor-pid={proc.pid}",
-            )
             return (
                 f"[Started background process pid={proc.pid}. Output streaming to: {log_path}. "
                 f"New output is enqueued regularly. Use `TaskStop` tool to terminate.]"
@@ -177,10 +171,6 @@ class System(Plugin):
             # to the same background monitor so the agent still sees progress
             # and the eventual exit code instead of going dark.
             self._background_pids.add(proc.pid)
-            asyncio.create_task(
-                self._monitor_background(proc, log_path),
-                name=f"bash-monitor-pid={proc.pid}",
-            )
             return (
                 f"[Command timed out after {timeout}s. Process is still running in background pid={proc.pid}. "
                 f"Output streaming to: {log_path}. New output is enqueued regularly. Use `TaskStop` tool to terminate]"
@@ -208,81 +198,6 @@ class System(Plugin):
         if returncode != 0:
             body += f"\n\n[Command exited with code {returncode}]"
         return body
-
-    async def _monitor_background(self, proc: Process, log_path: str) -> None:
-        """
-        Poll `log_path` every `_BACKGROUND_POLL_INTERVAL` seconds while `proc`
-        is alive, enqueueing any new bytes as a user message. When the process
-        exits, enqueue a final message with the return code (and any trailing
-        output that arrived between the last poll and exit).
-        """
-        pid = proc.pid
-        # Track byte offset so each tick only reports newly-written output,
-        # avoiding repeated re-delivery of the same lines to the agent.
-        offset = 0
-
-        def _read_new() -> str:
-            nonlocal offset
-            try:
-                with open(log_path, "rb") as f:
-                    f.seek(offset)
-                    chunk = f.read()
-                offset += len(chunk)
-                return chunk.decode("utf-8", errors="replace")
-            except OSError:
-                return ""
-
-        def _read_new_and_enqueue():
-            new_output = _read_new()
-            if new_output.strip():
-                # Truncate per-tick so a chatty process can't flood the
-                # conversation history with one giant message.
-                head_lines = int(_DEFAULT_MAX_LINES * _DEFAULT_HEAD_RATIO)
-                body, _ = _truncate(
-                    new_output,
-                    max_head_lines=head_lines,
-                    max_tail_lines=_DEFAULT_MAX_LINES - head_lines,
-                )
-                try:
-                    self.agent.defer(
-                        SystemUpdateMessage(
-                            content=f"[Background pid={pid} new output (full output at {log_path})]\n{body}"
-                        )
-                    )
-                except RuntimeError:
-                    pass
-
-        try:
-            while True:
-                # Race the poll interval against process exit so we react
-                # promptly when the command finishes, instead of waiting out
-                # the full 30s after it's already done.
-                try:
-                    await asyncio.wait_for(
-                        proc.wait(), timeout=_BACKGROUND_POLL_INTERVAL
-                    )
-                    break  # process exited; fall through to final flush below
-                except TimeoutError:
-                    pass
-                _read_new_and_enqueue()
-
-            _read_new_and_enqueue()
-            try:
-                self.agent.defer(
-                    SystemUpdateMessage(
-                        content=f"[Background pid={pid} exited with code {proc.returncode}]"
-                    )
-                )
-            except RuntimeError:
-                pass
-        finally:
-            self._background_pids.discard(pid)
-            # Best-effort cleanup of the temp log; don't care if it's already
-            # gone or if another process holds it open.
-            try:
-                os.unlink(log_path)
-            except OSError:
-                pass
 
     @tool(name="TaskStop")
     async def task_stop(

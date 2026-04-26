@@ -372,7 +372,7 @@ class Live:
         if not self.agent.provider.supports_live:
             raise RuntimeError("Provider does not support live sessions")
         match msg.role:
-            case "user" | "update":
+            case "user":
                 parts = (
                     [MessagePartText(text=msg.content)]
                     if isinstance(msg.content, str)
@@ -406,11 +406,11 @@ class Live:
             raise RuntimeError(
                 "Multithread mode does not support receive() - use start() instead"
             )
-        async for event in run_react_loop_live(self.agent):
+        async for event in run_react_loop_live(self):
             yield event
 
     async def __receive_task(self):
-        async for event in run_react_loop_live(self.agent):
+        async for event in run_react_loop_live(self):
             match event.type:
                 case "text-delta":
                     chunk = LiveChunkText(text=event.delta)
