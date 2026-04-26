@@ -42,18 +42,14 @@ class History:
         """Move cursor to the end of the current message list."""
         self.__live_cursor = len(self.__messages)
 
-    def clear(self, clear_instructions: bool = False) -> None:
+    def clear(self) -> None:
         self.__messages = []
-        if clear_instructions:
-            self.__instruction_generators = []
         self.__live_cursor = 0
         self.current_tokens = 0
         self.usage = Usage()
 
-    def load(
-        self, messages: Sequence[Message], include_instructions: bool = False
-    ) -> None:
-        self.clear(clear_instructions=include_instructions)
+    def load(self, messages: Sequence[Message]) -> None:
+        self.clear()
         for m in messages:
             self.__messages.append(m)
 
