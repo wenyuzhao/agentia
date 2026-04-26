@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentia.tools.markdown import MarkdownDoc, load_markdown
+from agentia.utils.markdown import MarkdownDoc, load_markdown
 
 
 @pytest.fixture
