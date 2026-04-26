@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Sequence, Union
+from typing import Any, Literal, Sequence, Union
 
 import frontmatter
 from pydantic import BaseModel, Field
@@ -40,24 +40,29 @@ _DOLLAR_NAME_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
 def load_markdown(
     md: str,
     *,
-    arguments: Sequence[str] | None = None,
+    arguments: list[str] | None = None,
+    substitutions: list[Literal["bash", "args", "file"]] | None = None,
 ) -> MarkdownDoc:
     """Load a markdown document from a path, resolving inline directives.
 
     The input may be either a path to a markdown file or raw markdown
-    content. Three additional pieces of syntax are supported:
+    content. Three additional pieces of syntax are supported, each
+    controllable via a flag:
 
-    - ``@path/to/file.{md,png,pdf,...}`` references another file relative to
-      the source markdown's directory. Markdown files are loaded recursively
-      into ``attachments`` as ``MarkdownDoc``; images and PDFs are stored as
-      ``Path`` objects. Unsupported or missing files are left untouched.
-    - ``!`cmd``` runs ``cmd`` through the shell and substitutes the captured
-      stdout in place.
-    - String substitutions: ``$ARGUMENTS``, ``$ARGUMENTS[N]``, ``$N``,
-      ``$name`` (matched against the frontmatter ``arguments`` list),
-      ``${CLAUDE_SKILL_DIR}`` (the source file's directory), and
-      ``${CLAUDE_SESSION_ID}`` and other ``${VAR}`` references resolved via
-      the environment.
+    - ``@path/to/file.{md,png,pdf,...}`` (``file_refs``) references another
+      file relative to the source markdown's directory. Markdown files are
+      loaded recursively into ``attachments`` as ``MarkdownDoc``; images
+      and PDFs are stored as ``Path`` objects. Unsupported or missing
+      files are left untouched.
+    - ``!`cmd``` (``bash``) runs ``cmd`` through the shell and substitutes
+      the captured stdout in place.
+    - String substitutions (``substitutions``): ``$ARGUMENTS``,
+      ``$ARGUMENTS[N]``, ``$N``, ``$name`` (matched against the frontmatter
+      ``arguments`` list), ``${CLAUDE_SKILL_DIR}`` (the source file's
+      directory), and ``${CLAUDE_SESSION_ID}`` and other ``${VAR}``
+      references resolved via the environment.
+
+    Set any flag to ``False`` to leave the corresponding syntax untouched.
     """
     text, base_dir = _read_source(md)
 
@@ -71,9 +76,17 @@ def load_markdown(
     if isinstance(raw_arg_names, list):
         arg_names = [str(n) for n in raw_arg_names]
 
-    content = _apply_bash_substitution(content, base_dir)
-    content = _apply_substitutions(content, args, arg_names, base_dir)
-    attachments = _collect_attachments(content, base_dir, arguments=arguments)
+    substitutions = substitutions or []
+    if "bash" in substitutions:
+        content = _apply_bash_substitution(content, base_dir)
+    if "args" in substitutions:
+        content = _apply_substitutions(content, args, arg_names, base_dir)
+    if "file" in substitutions:
+        attachments = _collect_attachments(
+            content, base_dir, arguments=arguments, substitutions=substitutions
+        )
+    else:
+        attachments = {}
 
     return MarkdownDoc(metadata=metadata, content=content, attachments=attachments)
 
@@ -155,7 +168,8 @@ def _collect_attachments(
     content: str,
     base_dir: Path,
     *,
-    arguments: Sequence[str] | None,
+    arguments: list[str] | None,
+    substitutions: list[Literal["bash", "args", "file"]],
 ) -> dict[str, MarkdownDoc | Path]:
     attachments: dict[str, MarkdownDoc | Path] = {}
     for match in _FILE_REF_RE.finditer(content):
@@ -168,7 +182,11 @@ def _collect_attachments(
             continue
         ext = resolved.suffix.lower()
         if ext in _MARKDOWN_EXTS:
-            attachments[ref] = load_markdown(str(resolved), arguments=arguments)
+            attachments[ref] = load_markdown(
+                str(resolved),
+                arguments=arguments,
+                substitutions=substitutions,
+            )
         elif ext in _IMAGE_EXTS or ext in _PDF_EXTS:
             attachments[ref] = resolved
     return attachments
