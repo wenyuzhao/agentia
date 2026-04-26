@@ -212,19 +212,13 @@ def _collect_attachments(
     substitutions: list[Literal["bash", "args", "file"]],
 ) -> dict[str, Attachment]:
     attachments: dict[str, Attachment] = {}
-    print("_collect_attachments")
     for match in _FILE_REF_RE.finditer(content):
-        print(f"Found file reference: {match.group(0)}")
         ref = match.group(1)
         if ref in attachments:
-            print(f"Reference '{ref}' already collected, skipping.")
             continue
         ref_path = Path(ref)
         resolved = ref_path if ref_path.is_absolute() else base_dir / ref_path
         if not resolved.is_file():
-            print(
-                f"Resolved path '{resolved}' does not exist or is not a file, skipping."
-            )
             continue
         ext = resolved.suffix.lower()
         if ext in _MARKDOWN_EXTS:
@@ -236,6 +230,4 @@ def _collect_attachments(
             attachments[ref] = Attachment(path=resolved, content=doc)
         elif ext in _TEXT_EXTS or ext in _BINARY_EXTS:
             attachments[ref] = Attachment(path=resolved, content=resolved)
-        else:
-            print(f"Unsupported file type '{ext}' for path '{resolved}', skipping.")
     return attachments
