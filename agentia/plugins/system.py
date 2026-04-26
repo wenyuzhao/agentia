@@ -96,8 +96,9 @@ def _truncate(
 
 
 class System(Plugin):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, bash=True) -> None:
+        super().__init__()
+        self.bash_enabled = bash
         self._background_pids: set[int] = set()
         weakref.finalize(self, _terminate_background_pids, self._background_pids)
 
@@ -134,6 +135,9 @@ class System(Plugin):
             `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
             * Use background tasks for long-running or daemon processes. Only use this when necessary.
         """
+        if not self.bash_enabled:
+            raise RuntimeError("Bash tool is not enabled.")
+
         await self.agent.user_consent_guard("Run command: " + command)
 
         # Stream both stdout and stderr to a single temp log file so we can

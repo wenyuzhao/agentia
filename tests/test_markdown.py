@@ -34,7 +34,7 @@ def test_load_markdown_resolves_at_path_attachments(workspace: Path):
         workspace / "main.md",
         "see @child.md and the screenshot @img/pic.png here.",
     )
-    doc = load_markdown(str(main))
+    doc = load_markdown(str(main), substitutions=["file"])
     assert "@child.md" in doc.content
     assert "@img/pic.png" in doc.content
     assert isinstance(doc.attachments["child.md"], MarkdownDoc)
@@ -60,13 +60,13 @@ def test_load_markdown_skips_missing_or_unsupported_refs(workspace: Path):
 
 def test_load_markdown_runs_bash_substitution(workspace: Path):
     md = write(workspace / "doc.md", "hello !`echo world` end")
-    doc = load_markdown(str(md))
+    doc = load_markdown(str(md), substitutions=["bash"])
     assert doc.content.strip() == "hello world end"
 
 
 def test_load_markdown_bash_runs_in_source_directory(workspace: Path):
     md = write(workspace / "nested" / "doc.md", "cwd=!`pwd`")
-    doc = load_markdown(str(md))
+    doc = load_markdown(str(md), substitutions=["bash"])
     assert str((workspace / "nested").resolve()) in doc.content
 
 
@@ -75,7 +75,7 @@ def test_load_markdown_substitutes_arguments(workspace: Path):
         workspace / "doc.md",
         "all=$ARGUMENTS first=$ARGUMENTS[0] second=$1",
     )
-    doc = load_markdown(str(md), arguments=["alpha", "beta"])
+    doc = load_markdown(str(md), args=["alpha", "beta"], substitutions=["args"])
     assert "all=alpha beta" in doc.content
     assert "first=alpha" in doc.content
     assert "second=beta" in doc.content
@@ -86,7 +86,7 @@ def test_load_markdown_substitutes_named_arguments(workspace: Path):
         workspace / "doc.md",
         "---\narguments: [issue, branch]\n---\nfix $issue on $branch ($unknown)",
     )
-    doc = load_markdown(str(md), arguments=["123", "main"])
+    doc = load_markdown(str(md), args=["123", "main"], substitutions=["args"])
     assert "fix 123 on main" in doc.content
     assert "$unknown" in doc.content
 
@@ -99,21 +99,21 @@ def test_load_markdown_substitutes_skill_dir_and_env(
         workspace / "doc.md",
         "dir=${CLAUDE_SKILL_DIR} sid=${CLAUDE_SESSION_ID}",
     )
-    doc = load_markdown(str(md))
+    doc = load_markdown(str(md), substitutions=["args"])
     assert f"dir={workspace.resolve()}" in doc.content
     assert "sid=sess-42" in doc.content
 
 
 def test_load_markdown_unknown_brace_var_is_preserved(workspace: Path):
     md = write(workspace / "doc.md", "x=${DEFINITELY_NOT_SET_VAR}")
-    doc = load_markdown(str(md))
+    doc = load_markdown(str(md), substitutions=["args"])
     assert "${DEFINITELY_NOT_SET_VAR}" in doc.content
 
 
 def test_load_markdown_recursive_attachments_inherit_arguments(workspace: Path):
     write(workspace / "child.md", "I am $0")
     md = write(workspace / "main.md", "see @child.md")
-    doc = load_markdown(str(md), arguments=["alice"])
+    doc = load_markdown(str(md), args=["alice"], substitutions=["args", "file"])
     child = doc.attachments["child.md"]
     assert isinstance(child, MarkdownDoc)
     assert "I am alice" in child.content

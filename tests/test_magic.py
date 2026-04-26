@@ -38,11 +38,18 @@ class Weather(BaseModel):
     unit: Literal["celsius", "fahrenheit"]
 
 
-@magic(tools=[System()])
+def calculator(expr: str) -> str:
+    """
+    A calculator tool that evaluates a math expression and returns the result as a string.
+    """
+    return str(eval(expr))
+
+
+@magic(tools=[calculator])
 async def convert_to_fahrenheit(weather: Weather) -> Weather:
     """
     Update the weather object: convert the temperature to Fahrenheit.
-    Use python3 -c "print(1+1)" to evaluate math expressions if needed.
+    Use the calculator tool to evaluate math expressions if needed.
     """
     ...
 

@@ -70,6 +70,8 @@ class Commands:
             result = handler(args)
             if inspect.isawaitable(result):
                 result = await result
+            if result and isinstance(result, str) and not result:
+                result = None
             return result
         if skill := self.__find_skill(name):
             return skill.execute(args)

@@ -58,7 +58,7 @@ async def compact_history(
     result = await compact_agent.run(conversation_text)
 
     messages_to_keep = messages[-keep_last_n:]
-    agent.history.clear(clear_instructions=False)
+    agent.history.clear()
     agent.history.add(
         CompactedMessage(content=result.text, original_messages=list(messages)),
         *messages_to_keep,
