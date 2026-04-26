@@ -1,6 +1,6 @@
 name: Pyright Type Checks
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 jobs:
   checks:
@@ -17,3 +17,7 @@ jobs:
           uv sync --all-extras --all-groups --all-packages --frozen
       - name: Run Pyright
         run: uv run pyright
+      - name: Run format check
+        run: uv run ruff check --check
+      - name: Run lint check
+        run: uv run ruff check

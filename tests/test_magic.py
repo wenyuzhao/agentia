@@ -2,7 +2,6 @@ from typing import Literal
 import dotenv
 from pydantic import BaseModel
 from agentia import magic
-from agentia.plugins import System
 from enum import StrEnum
 import pytest
 
