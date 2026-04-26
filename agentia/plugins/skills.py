@@ -73,10 +73,13 @@ class Skills(Plugin):
                 Path.cwd() / ".agentia" / "skills",
                 Path.home() / ".config" / "agentia" / "skills",
             ]
-        search_paths = [Path(p) for p in search_paths]
-        all_skills = self.load_all_skills(search_paths)
+        self.search_paths = [Path(p) for p in search_paths]
         self.user_invocable_skills: dict[str, Skill] = {}
         self.agent_skills: dict[str, Skill] = {}
+
+    @override
+    async def init(self):
+        all_skills = self.load_all_skills(self.search_paths)
         for skill in all_skills.values():
             if skill.user_invocable:
                 self.user_invocable_skills[skill.name] = skill
