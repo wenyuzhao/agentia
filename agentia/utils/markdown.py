@@ -70,7 +70,7 @@ def load_markdown(
     metadata: dict[str, Any] = dict(fm.metadata)
     content = fm.content
 
-    args = list(args) if args is not None else []
+    args = args if args is not None else []
     arg_names: list[str] = []
     raw_arg_names = metadata.get("arguments")
     if isinstance(raw_arg_names, list):

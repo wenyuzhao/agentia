@@ -122,15 +122,12 @@ class Skills(Plugin):
         return INSTRUCTIONS_TEMPLATE.format(skills=s)
 
     @tool(name="Skill")
-    def execute_skill(self, skill_name: str, args: list[str] | None = None):
+    def execute_skill(self, skill_name: str):
         """
         Execute a skill within the main conversation. All available skills are listed in system instructions.
 
-        When users reference a slash command (`/<skill_name>` or `/<skill_name> ...args`), they are referring to a skill. Use this tool to invoke it.
-
         How to invoke:
-            - Set `skill_name` to the exact name of an available skill (no leading slash).
-            - Set `args` to pass optional arguments.
+            - Invoke the tool with `skill_name` set to the exact name of an available skill (no leading slash).
 
         Returns the content of the skill's SKILL.md after processing any directives with the provided arguments.
             - For file-references (`@path/to/file`, either absolute path or relative to the skill path), use the Read tool to access the file content.
@@ -140,5 +137,5 @@ class Skills(Plugin):
             raise ValueError(f"Skill '{skill_name}' not found")
         if skill.disable_model_invocation:
             raise ValueError(f"Skill '{skill_name}' is disabled for model invocation")
-        result_content = skill.execute(args)
+        result_content = skill.execute([])
         return result_content
