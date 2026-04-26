@@ -2,7 +2,7 @@ from typing import Literal
 import dotenv
 from pydantic import BaseModel
 from agentia import magic
-from agentia.plugins import Calculator
+from agentia.plugins import System
 from enum import StrEnum
 import pytest
 
@@ -38,10 +38,11 @@ class Weather(BaseModel):
     unit: Literal["celsius", "fahrenheit"]
 
 
-@magic(tools=[Calculator()])
+@magic(tools=[System()])
 async def convert_to_fahrenheit(weather: Weather) -> Weather:
     """
     Update the weather object: convert the temperature to Fahrenheit.
+    Use python3 -c "print(1+1)" to evaluate math expressions if needed.
     """
     ...
 

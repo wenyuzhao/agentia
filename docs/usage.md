@@ -432,3 +432,54 @@ $greeting, $name! (raw: $ARGUMENTS)
 ```
 
 Calling the skill with `/greet "Alice" "Hello"` yields `Hello, Alice! (raw: Alice Hello)`.
+
+## 5. Slash Commands
+
+`agent.commands` dispatches `/name arg0 arg1 ...` strings to either a custom
+handler or a user-invocable skill.
+
+```python
+agent = Agent(model="openai/gpt-5.4-nano", skills=True)
+
+# Register a custom handler. Sync or async; receives the parsed args list.
+agent.commands.register("greet", lambda args: f"Hello, {args[0]}!")
+
+async def clear(args):
+    agent.history.clear()
+    return "history cleared"
+
+agent.commands.register("/clear", clear)  # leading slash is optional
+
+# Dispatch:
+result = await agent.commands.handle('/greet "Alice"')   # -> "Hello, Alice!"
+result = await agent.commands.handle("/clear")           # -> "history cleared"
+```
+
+Resolution order:
+1. Custom handler registered with `agent.commands.register(name, handler)`.
+2. A user-invocable skill (i.e. `user-invocable: true`, the default) with the same name.
+3. Otherwise `handle()` returns `None` and does nothing.
+
+Handlers receive the positional argument list parsed via `shlex` (so quoted
+arguments work). They may return `str` or `None`, sync or async. Use
+`agent.commands.unregister(name)` to remove a handler, `agent.commands.has(name)`
+to check whether a name resolves, and `Commands.parse(input)` to parse a
+command string without dispatching.
+
+### Slash Commands in `run` and `generate_object`
+
+`agent.run(prompt)` and `agent.generate_object(prompt, type)` automatically
+dispatch slash commands when `prompt` is a string starting with `/`:
+
+- If a handler/skill returns a string, that string is used as the prompt sent
+  to the LLM (the original `/cmd` text is not stored in history).
+- If a handler returns `None`, or no handler/skill matches, the LLM is **not
+  invoked**. `run()` returns an empty `AssistantMessage`; `generate_object()`
+  raises `ValueError`.
+
+```python
+agent.commands.register("clear", lambda args: (agent.history.clear(), None)[1])
+
+await agent.run("/clear")          # handler runs; LLM is skipped
+await agent.run("/weather Sydney") # skill markdown becomes the prompt
+```

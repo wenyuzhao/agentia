@@ -38,6 +38,8 @@ class ChatCompletion:
     async def __wait_for_completion(self) -> AssistantMessage:
         async for msg in self.__gen:
             ...
+        if not self.new_messages:
+            return AssistantMessage(content=[])
         m = self.new_messages[-1]
         assert isinstance(m, AssistantMessage)
         return m

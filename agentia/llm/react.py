@@ -31,15 +31,24 @@ async def __process_tool_calls(
     return tool_msg, tool_responses
 
 
-def __add_prompt(
-    _agent: "Agent", history: History, prompt: str | Message | Sequence[Message]
-) -> None:
+async def __add_prompt(
+    agent: "Agent", history: History, prompt: str | Message | Sequence[Message]
+) -> bool:
+    """Add the prompt to history. Returns False if the prompt was a slash command
+    that produced no output, in which case the LLM should be skipped."""
+
+    prompt = await agent.commands.process_messages(prompt)
+
+    if not prompt:
+        return False
+
     if isinstance(prompt, str):
         history.add(UserMessage(content=[MessagePartText(text=prompt)]))
     elif not isinstance(prompt, (list, Sequence)):
         history.add(prompt)
     else:
         history.add(*prompt)
+    return True
 
 
 def run_react_loop(
@@ -51,7 +60,8 @@ def run_react_loop(
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
-        __add_prompt(agent, agent.history, prompt)
+        if not await __add_prompt(agent, agent.history, prompt):
+            return
         messages = agent.history.get()
         instructions = agent.history.get_instructions()
 
@@ -131,7 +141,8 @@ def run_react_loop_streamed(
     tools = agent.tools
 
     async def gen() -> AsyncGenerator[StreamPart, None]:
-        __add_prompt(agent, agent.history, prompt)
+        if not await __add_prompt(agent, agent.history, prompt):
+            return
         messages = agent.history.get()
         last_finish_reason: FinishReason = "unknown"
         started = False

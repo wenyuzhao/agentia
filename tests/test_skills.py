@@ -1,7 +1,7 @@
 from agentia import Agent
 import pytest
 import dotenv
-from agentia.plugins.system import Bash
+from agentia.plugins import System
 
 dotenv.load_dotenv()
 
@@ -9,7 +9,7 @@ dotenv.load_dotenv()
 @pytest.mark.asyncio
 async def test_skills():
     agent = Agent(
-        model="anthropic/claude-sonnet-4.6", skills=["./examples"], tools=[Bash()]
+        model="anthropic/claude-sonnet-4.6", skills=["./examples"], tools=[System()]
     )
     run = agent.run("What is the weather and temperature like in boston?")
     all_assistant_content: str = ""

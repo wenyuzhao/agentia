@@ -25,6 +25,7 @@ from agentia.models import (
     UserConsentRequest,
 )
 from agentia.tools.mcp import MCPContext
+from agentia.utils.commands import Commands
 from agentia.utils.compact import compact_history
 from agentia.utils.event_emitter import EventEmitter
 from pathlib import Path
@@ -89,6 +90,7 @@ class Agent:
         self._mcp_context: Optional[MCPContext] = None
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()
+        self.commands = Commands(self)
         self.__deferred_messages: list[Message] = []
 
     @property

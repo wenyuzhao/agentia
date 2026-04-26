@@ -102,6 +102,8 @@ class ChatCompletionStream(ChatCompletionStreamBase):
     async def __wait_for_completion(self) -> AssistantMessage:
         async for item in self.__gen:
             ...
+        if not self.new_messages:
+            return AssistantMessage(content=[])
         m = self.new_messages[-1]
         assert isinstance(m, AssistantMessage)
         return m
@@ -130,6 +132,8 @@ class ChatCompletionEvents(ChatCompletionStreamBase):
     async def __wait_for_completion(self) -> AssistantMessage:
         async for item in self.__gen:
             ...
+        if not self.new_messages:
+            return AssistantMessage(content=[])
         m = self.new_messages[-1]
         assert isinstance(m, AssistantMessage)
         return m
