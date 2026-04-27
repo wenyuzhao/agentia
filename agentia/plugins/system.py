@@ -111,7 +111,9 @@ class System(Plugin):
         cwd: Annotated[
             str | None, "The optional working directory for the command."
         ] = None,
-        timeout: Annotated[int | None, "Optional timeout in seconds."] = 5 * 60,
+        timeout: Annotated[
+            int | None, "Optional timeout in seconds. Set to 0 to disable."
+        ] = 5 * 60,
         background: Annotated[
             bool,
             "If true, start the command detached and return immediately with its PID.",

@@ -34,7 +34,7 @@ class Web(Plugin):
             if content_type and content_type.startswith(("image/", "video/")):
                 return ToolResult(
                     output=f"Loaded media content {content_type} from {url}",
-                    files=[File(data=res.content, media_type=content_type)],
+                    files=[File(data=url, media_type=content_type)],
                 )
             # If the content is not supported, return the raw content
             return {"content": res.text, "content_type": content_type}
