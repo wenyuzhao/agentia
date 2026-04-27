@@ -118,7 +118,7 @@ class System(Plugin):
         ] = False,
     ) -> str:
         """
-        Run a bash command and return its combined stdout and stderr.
+        Run a bash command and return its combined stdout and stderr (no need to do the redirection yourself).
 
         **Truncation:**
             * Large output is truncated with the full output spooled to a temp file.

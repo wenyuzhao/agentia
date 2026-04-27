@@ -287,9 +287,9 @@ class ToolSet:
         self, agent: "Agent", c: models.ToolCall
     ) -> models.ToolCallResponse:
         tool = self.__tools.get(c.tool_name, None)
-        if not tool:
-            raise ValueError(f"Tool {c.tool_name} not found")
         try:
+            if not tool:
+                raise ValueError(f"Tool '{c.tool_name}' not found")
             if isinstance(tool, _PythonFunctionTool):
                 return await self.__run_python_tool(
                     id=c.tool_call_id,
