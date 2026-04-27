@@ -147,13 +147,16 @@ class System(Plugin):
         # both return the combined output and (in background mode) tail it.
         fd, log_path = tempfile.mkstemp(prefix="agentia-bash-", suffix=".log")
         os.close(fd)
+        env = os.environ.copy()
+        # Pass session-local environment variables to the subprocess
+        env.update(self.agent.env)
         with open(log_path, "wb") as log_write:
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=log_write,
                 stderr=STDOUT,
                 cwd=cwd,
-                env=os.environ.copy(),
+                env=env,
                 # Detach into a new session so timeouts/background mode leave
                 # the process alive without us having to babysit its tty.
                 start_new_session=True,

@@ -94,6 +94,8 @@ class Agent:
         self.commands = Commands(self)
         self.__deferred_messages: list[UserMessage] = []
         self.__live: Optional[Live] = None
+        self.env: dict[str, str] = {}
+        """Session-local environment variables that can be used in tools. This is also passed to the processes launched by the Bash tool."""
 
     @property
     def id(self) -> str:
