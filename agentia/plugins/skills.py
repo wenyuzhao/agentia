@@ -44,7 +44,7 @@ class Skill(BaseModel):
             name=name,
             description=desc,
             metadata=doc.metadata,
-            doc=doc,
+            doc=None,
         )
 
     @property

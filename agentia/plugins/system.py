@@ -151,6 +151,7 @@ class System(Plugin):
                 stdout=log_write,
                 stderr=STDOUT,
                 cwd=cwd,
+                env=os.environ.copy(),
                 # Detach into a new session so timeouts/background mode leave
                 # the process alive without us having to babysit its tty.
                 start_new_session=True,
@@ -209,6 +210,7 @@ class System(Plugin):
         Read the contents of a file so that you can inspect their content.
             * Text files: return the UTF-8 text content (maybe truncated).
             * Images and PDFs: return as attachments with appropriate media types.
+        Note: this tool is only for accessing local files, not web contents.
         """
         p = Path(path)
         if not p.exists():
