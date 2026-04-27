@@ -9,7 +9,7 @@ from pathlib import Path
 from ..tools import ToolResult
 from ..models.base import File
 import base64
-from asyncio.subprocess import DEVNULL, PIPE, STDOUT
+from asyncio.subprocess import STDOUT
 
 
 _DEFAULT_MAX_LINES = 1000
