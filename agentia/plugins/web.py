@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 import httpx
 from markdownify import markdownify
 from tavily import AsyncTavilyClient
+from ..tools import ToolResult
+from ..models import File
 
 
 class Web(Plugin):
@@ -28,6 +30,12 @@ class Web(Plugin):
             # raw text: .txt, .csv, .json, .md
             if content_type in ["text/plain", "application/json", "text/markdown"]:
                 return {"content": res.text, "content_type": content_type}
+            # images or videos
+            if content_type and content_type.startswith(("image/", "video/")):
+                return ToolResult(
+                    output=f"Loaded media content {content_type} from {url}",
+                    files=[File(data=res.content, media_type=content_type)],
+                )
             # If the content is not supported, return the raw content
             return {"content": res.text, "content_type": content_type}
 
@@ -78,12 +86,17 @@ class Web(Plugin):
         Access a web page by a URL, and fetch the content of this web page (in markdown format).
         You can always use this tool to directly access web content or access external sites.
         Use it at any time when you think you may need to access the internet.
+
+        You can also use this tool to fetch images or videos by their URLs. Images or videos are determined by their content type or file extension.
         """
-        result = await self.__tavily.extract(
-            urls=url,
-            # extract_depth="advanced",
-            include_images=True,
-        )
+        try:
+            r = await self.__get(url)
+            if isinstance(r, ToolResult):
+                return r
+        except Exception:
+            pass
+
+        result = await self.__tavily.extract(urls=url, include_images=True)
         failed_results = result.get("failed_results", [])
         if len(failed_results) > 0:
             try:

@@ -163,20 +163,16 @@ class System(Plugin):
             self._background_pids.add(proc.pid)
             return (
                 f"[Started background process pid={proc.pid}. Output streaming to: {log_path}. "
-                f"New output is enqueued regularly. Use `TaskStop` tool to terminate.]"
+                f"New output is enqueued regularly. Use the `kill` command to terminate.]"
             )
 
         try:
             returncode = await asyncio.wait_for(proc.wait(), timeout=timeout)
         except TimeoutError:
-            # Don't kill the process — leave it running so the user/agent can
-            # decide whether to wait longer or stop it via TaskStop. Hand off
-            # to the same background monitor so the agent still sees progress
-            # and the eventual exit code instead of going dark.
             self._background_pids.add(proc.pid)
             return (
                 f"[Command timed out after {timeout}s. Process is still running in background pid={proc.pid}. "
-                f"Output streaming to: {log_path}. New output is enqueued regularly. Use `TaskStop` tool to terminate]"
+                f"Output streaming to: {log_path}. New output is enqueued regularly. Use the `kill` command to terminate.]"
             )
 
         output = Path(log_path).read_text(encoding="utf-8", errors="replace")
@@ -201,54 +197,6 @@ class System(Plugin):
         if returncode != 0:
             body += f"\n\n[Command exited with code {returncode}]"
         return body
-
-    @tool(name="TaskStop")
-    async def task_stop(
-        self,
-        pid: Annotated[int, "Process ID of the task to stop."],
-    ) -> str:
-        """
-        Stop a running process by PID using the `kill` command. Sends SIGTERM first;
-        if the process is still alive after a brief grace period, escalates to SIGKILL.
-        Use this to terminate background processes started by `Bash` (either via `background=True` or after a timeout).
-        """
-        await self.agent.user_consent_guard(f"Kill process: {pid}")
-
-        async def _kill(sig_flag: str) -> tuple[int, str]:
-            proc = await asyncio.create_subprocess_exec(
-                "kill", sig_flag, str(pid), stdout=PIPE, stderr=PIPE
-            )
-            _, stderr = await proc.communicate()
-            assert proc.returncode is not None
-            return proc.returncode, stderr.decode(errors="replace").strip()
-
-        async def _alive() -> bool:
-            proc = await asyncio.create_subprocess_exec(
-                "kill",
-                "-0",
-                str(pid),
-                stdout=DEVNULL,
-                stderr=DEVNULL,
-            )
-            await proc.wait()
-            return proc.returncode == 0
-
-        rc, err = await _kill("-TERM")
-        if rc != 0:
-            msg = err or f"kill exited with code {rc}"
-            return f"[Failed to kill pid={pid}: {msg}]"
-
-        for _ in range(20):
-            await asyncio.sleep(1)
-            if not await _alive():
-                return f"[Sent SIGTERM to pid={pid}]"
-
-        rc, err = await _kill("-KILL")
-        if rc != 0:
-            msg = err or f"kill -9 exited with code {rc}"
-            return f"[SIGTERM did not stop pid={pid}; SIGKILL also failed: {msg}]"
-        self._background_pids.discard(pid)
-        return f"[SIGTERM did not stop pid={pid}; sent SIGKILL]"
 
     @tool(name="Read")
     async def read_file(
