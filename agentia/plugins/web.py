@@ -1,21 +1,33 @@
 import os
 from . import Plugin, tool
-from typing import Annotated, Literal
+from typing import Annotated, Literal, override
 import httpx
 from markdownify import markdownify
 from tavily import AsyncTavilyClient
 from ..tools import ToolResult
 from ..models import File
+from dataclasses import dataclass
+
+
+@dataclass
+class HttpGetTextResponse:
+    content: str
+    content_type: str
 
 
 class Web(Plugin):
     def __init__(self, tavily_api_key: str | None = None):
-        api_key = tavily_api_key or os.environ.get("TAVILY_API_KEY")
-        if not api_key:
-            raise ValueError("TAVILY_API_KEY is required for Web")
-        self.__tavily = AsyncTavilyClient(api_key=api_key)
+        self.api_key = tavily_api_key or os.environ.get("TAVILY_API_KEY")
+        self.__tavily = AsyncTavilyClient(api_key=self.api_key)
 
-    async def __get(self, url: str):
+    @override
+    def get_instructions(self) -> str | None:
+        if not self.api_key:
+            return "This agent has the WebSearch tool, but no Tavily API key is set. The tool is not usable. Please ask the user to set the TAVILY_API_KEY environment variable."
+        return None
+
+    @staticmethod
+    async def http_get(url: str) -> HttpGetTextResponse | ToolResult:
         async with httpx.AsyncClient(
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -26,18 +38,20 @@ class Web(Plugin):
             content_type = res.headers.get("content-type")
             if content_type == "text/html":
                 md = markdownify(res.text)
-                return {"content": md, "content_type": content_type}
+                return HttpGetTextResponse(content=md, content_type=content_type)
             # raw text: .txt, .csv, .json, .md
-            if content_type in ["text/plain", "application/json", "text/markdown"]:
-                return {"content": res.text, "content_type": content_type}
+            if str(content_type).startswith("text/") or content_type in [
+                "application/json"
+            ]:
+                return HttpGetTextResponse(content=res.text, content_type=content_type)
             # images or videos
-            if content_type and content_type.startswith(("image/", "video/")):
+            if str(content_type).startswith(("image/", "video/", "application/pdf")):
                 return ToolResult(
-                    output=f"Loaded media content {content_type} from {url}",
+                    output=f"Loaded file {content_type} from {url}",
                     files=[File(data=url, media_type=content_type)],
                 )
-            # If the content is not supported, return the raw content
-            return {"content": res.text, "content_type": content_type}
+            # Raise an error for unsupported content types
+            raise ValueError(f"Unsupported content type: {content_type}")
 
     @tool(name="WebSearch")
     async def web_search(
@@ -64,6 +78,10 @@ class Web(Plugin):
         When necessary, you need to combine this tool with the get_webpage_content tools (if available), to browse the web in depth by jumping through links.
         """
 
+        if not self.api_key:
+            raise ValueError(
+                "Tavily API key is required for web search. Ask the user to set the TAVILY_API_KEY environment variable."
+            )
         tavily_results = await self.__tavily.search(
             query=query,
             search_depth="advanced",
@@ -90,17 +108,19 @@ class Web(Plugin):
         You can also use this tool to fetch images or videos by their URLs. Images or videos are determined by their content type or file extension.
         """
         try:
-            r = await self.__get(url)
-            if isinstance(r, ToolResult):
+            r = await Web.http_get(url)
+            if not self.api_key or isinstance(r, ToolResult):
                 return r
-        except Exception:
+        except Exception as e:
+            if not self.api_key:
+                raise e
             pass
 
         result = await self.__tavily.extract(urls=url, include_images=True)
         failed_results = result.get("failed_results", [])
         if len(failed_results) > 0:
             try:
-                return await self.__get(url)
+                return await Web.http_get(url)
             except Exception:
                 pass
         return result

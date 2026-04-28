@@ -4,7 +4,7 @@ import os
 import signal
 import tempfile
 import weakref
-from typing import Annotated, override
+from typing import Annotated, Any, override
 from pathlib import Path
 from ..tools import ToolResult
 from ..models.base import File
@@ -204,19 +204,66 @@ class System(Plugin):
             body += f"\n\n[Command exited with code {returncode}]"
         return body
 
+    def __trim_text(self, text: str, offset: int | None, limit: int | None) -> str:
+        all_lines = text.splitlines()
+        total = len(all_lines)
+        start = max(1, offset) if offset else 1
+        if total > 0 and start > total:
+            raise ValueError(
+                f"Offset {offset} is out of range for file with {total} lines."
+            )
+        max_lines = min(limit, _DEFAULT_MAX_LINES) if limit else _DEFAULT_MAX_LINES
+        sliced = "\n".join(all_lines[start - 1 : start - 1 + max_lines])
+        body, _ = _truncate(sliced, max_head_lines=max_lines, max_tail_lines=0)
+        kept = body.count("\n") + 1 if body else 0
+        end = start + kept - 1
+        if end < total:
+            body += f"\n\n[Showed lines {start}-{end} of {total}. Pass offset={end + 1} to continue.]"
+        return body
+
     @tool(name="Read")
     async def read_file(
         self,
-        path: Annotated[str, "Path to the file"],
+        path: Annotated[str, "Path or URL to the file"],
         offset: Annotated[int | None, "Start line number (1-indexed)"] = None,
         limit: Annotated[int | None, "Max number of lines to read"] = None,
-    ) -> str | ToolResult:
+    ) -> Any:
         """
         Read the contents of a file so that you can inspect their content.
             * Text files: return the UTF-8 text content (maybe truncated).
             * Images and PDFs: return as attachments with appropriate media types.
-        Note: this tool is only for accessing local files, not web contents.
+            * For web URLs, this tool will fetch the content and return it.
+                * For HTMLs, this will return the raw HTML as text (maybe truncated). Use the WebFetch tool to get better formatted content for HTML pages.
         """
+        from .web import Web
+
+        # Base64-encoded data URL
+        if path.startswith("data:"):
+            assert offset is None and limit is None, (
+                "Offset and limit are not supported for data URLs."
+            )
+            # get content type from data URL, default to application/octet-stream
+            content_type = "application/octet-stream"
+            if ";" in path and path.index(";") < path.index(","):
+                content_type = path[5 : path.index(";")]
+            return ToolResult(
+                files=[File(media_type=content_type, data=path)],
+                output=f"Loaded data URL ({len(path)} characters).",
+            )
+
+        # Web content
+        if path.startswith(("http://", "https://")):
+            assert offset is None and limit is None, (
+                "Offset and limit are not supported for web URLs."
+            )
+            result = await Web.http_get(path)
+            if isinstance(result, ToolResult):
+                return result
+            else:
+                result.content = self.__trim_text(result.content, offset, limit)
+                return {"content": result.content, "content_type": result.content_type}
+
+        # Check path
         p = Path(path)
         if not p.exists():
             raise ValueError(f"File '{path}' does not exist.")
@@ -236,21 +283,7 @@ class System(Plugin):
 
         # Text files
         text = p.read_text(encoding="utf-8")
-        all_lines = text.splitlines()
-        total = len(all_lines)
-        start = max(1, offset) if offset else 1
-        if total > 0 and start > total:
-            raise ValueError(
-                f"Offset {offset} is out of range for file with {total} lines."
-            )
-        max_lines = min(limit, _DEFAULT_MAX_LINES) if limit else _DEFAULT_MAX_LINES
-        sliced = "\n".join(all_lines[start - 1 : start - 1 + max_lines])
-        body, _ = _truncate(sliced, max_head_lines=max_lines, max_tail_lines=0)
-        kept = body.count("\n") + 1 if body else 0
-        end = start + kept - 1
-        if end < total:
-            body += f"\n\n[Showed lines {start}-{end} of {total}. Pass offset={end + 1} to continue.]"
-        return body
+        return self.__trim_text(text, offset, limit)
 
     @tool(name="Write")
     async def write_file(
