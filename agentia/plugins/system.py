@@ -288,7 +288,7 @@ class System(Plugin):
     @tool(name="Write")
     async def write_file(
         self,
-        path: Annotated[str, "Path to the file"],
+        path: Annotated[str, "Path to the file. Local paths only, no URLs."],
         content: Annotated[str, "Full content to write"],
     ) -> str:
         """
@@ -303,7 +303,7 @@ class System(Plugin):
     @tool(name="Edit")
     async def edit_file(
         self,
-        path: Annotated[str, "Path to the file"],
+        path: Annotated[str, "Path to the file. Local paths only, no URLs."],
         old_text: Annotated[
             str,
             "Exact text to replace. Must appear verbatim: including whitespace and newlines, and exactly once in the file.",
