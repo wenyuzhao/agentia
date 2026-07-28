@@ -37,55 +37,6 @@ class StreamPartReasoningEnd(BaseModel):
     id: str
 
 
-class StreamPartAudioStart(BaseModel):
-    type: Literal["audio-start"] = "audio-start"
-    id: str
-
-
-class StreamPartAudioDelta(BaseModel):
-    type: Literal["audio-delta"] = "audio-delta"
-    id: str
-    delta: bytes
-    """PCM audio data. Output is 24kHz, 16-bit, mono, little-endian."""
-
-
-class StreamPartAudioEnd(BaseModel):
-    type: Literal["audio-end"] = "audio-end"
-    id: str
-
-
-class StreamPartInputTranscriptionStart(BaseModel):
-    type: Literal["input-transcription-start"] = "input-transcription-start"
-    id: str
-
-
-class StreamPartInputTranscriptionDelta(BaseModel):
-    type: Literal["input-transcription-delta"] = "input-transcription-delta"
-    id: str
-    delta: str
-
-
-class StreamPartInputTranscriptionEnd(BaseModel):
-    type: Literal["input-transcription-end"] = "input-transcription-end"
-    id: str
-
-
-class StreamPartOutputTranscriptionStart(BaseModel):
-    type: Literal["output-transcription-start"] = "output-transcription-start"
-    id: str
-
-
-class StreamPartOutputTranscriptionDelta(BaseModel):
-    type: Literal["output-transcription-delta"] = "output-transcription-delta"
-    id: str
-    delta: str
-
-
-class StreamPartOutputTranscriptionEnd(BaseModel):
-    type: Literal["output-transcription-end"] = "output-transcription-end"
-    id: str
-
-
 class StreamPartTurnStart(BaseModel):
     type: Literal["turn-start"] = "turn-start"
     role: Literal["assistant", "tool"]
@@ -134,15 +85,6 @@ type StreamPart = Annotated[
     | ToolCall
     | ToolCallResponse
     | Annotation
-    | StreamPartAudioStart
-    | StreamPartAudioDelta
-    | StreamPartAudioEnd
-    | StreamPartInputTranscriptionStart
-    | StreamPartInputTranscriptionDelta
-    | StreamPartInputTranscriptionEnd
-    | StreamPartOutputTranscriptionStart
-    | StreamPartOutputTranscriptionDelta
-    | StreamPartOutputTranscriptionEnd
     | StreamPartTurnStart
     | StreamPartTurnEnd
     | StreamPartStart
@@ -157,15 +99,6 @@ __all__ = [
     "StreamPartReasoningStart",
     "StreamPartReasoningDelta",
     "StreamPartReasoningEnd",
-    "StreamPartAudioStart",
-    "StreamPartAudioDelta",
-    "StreamPartAudioEnd",
-    "StreamPartInputTranscriptionStart",
-    "StreamPartInputTranscriptionDelta",
-    "StreamPartInputTranscriptionEnd",
-    "StreamPartOutputTranscriptionStart",
-    "StreamPartOutputTranscriptionDelta",
-    "StreamPartOutputTranscriptionEnd",
     "StreamPartTurnStart",
     "StreamPartTurnEnd",
     "StreamPartStart",

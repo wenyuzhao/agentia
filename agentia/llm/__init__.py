@@ -71,9 +71,5 @@ def get_provider(selector: str) -> "Provider":
             from .providers.ollama import Ollama
 
             return Ollama(model=model)
-        case "gemini-live":
-            from .providers.gemini_live import GeminiLive
-
-            return GeminiLive(model=model)
         case _:
             raise ValueError(f"Unknown provider: {provider}")

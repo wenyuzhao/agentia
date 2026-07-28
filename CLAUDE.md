@@ -44,7 +44,7 @@ Tests require API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
 
 ### LLM Providers (`agentia/llm/`)
 
-Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama, Gemini Live. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
+Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
 
 ### Tool System (`agentia/tools/`)
 
@@ -60,7 +60,7 @@ Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage
 
 ### Streaming (`agentia/llm/stream.py`)
 
-`ChatCompletionStream` for async message iteration; `ChatCompletionEvents` for granular stream part events (text-start/delta/end, reasoning-start/delta/end, audio events).
+`ChatCompletionStream` for async message iteration; `ChatCompletionEvents` for granular stream part events (text-start/delta/end, reasoning-start/delta/end).
 
 ### Skills (`agentia/plugins/skills.py`)
 
@@ -69,10 +69,6 @@ Discovers SKILL.md files from `.skills/`, `.agentia/skills/`, and `~/.config/age
 ### Magic Decorator (`agentia/utils/decorators.py`)
 
 `@magic` transforms async functions into AI-powered tools with typed pydantic input/output validation.
-
-### Live Sessions (`agentia/live.py`)
-
-WebSocket-based real-time bidirectional streaming for audio/video/text (currently via Gemini Live API).
 
 ## Key Design Patterns
 

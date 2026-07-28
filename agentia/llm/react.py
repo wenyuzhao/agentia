@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, AsyncGenerator, Optional, Sequence
+from typing import TYPE_CHECKING, AsyncGenerator, Sequence
 import httpx
 from agentia.history import History
 from agentia.llm import LLMOptions
@@ -9,8 +9,6 @@ from agentia.tools.tools import ToolSet
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
-    from agentia.live import Live
-    from agentia.live import LiveOptions
 
 
 async def __process_tool_calls(
@@ -56,7 +54,6 @@ def run_react_loop(
     agent: "Agent",
     prompt: str | Message | Sequence[Message],
     options: LLMOptions,
-    live_options: Optional["LiveOptions"],
 ) -> ChatCompletion:
     tools = agent.tools
 
@@ -104,7 +101,6 @@ def run_react_loop(
 
     async def gen_wrapper() -> AsyncGenerator[AssistantMessage | ToolMessage, None]:
         from agentia.tools.mcp import MCPContext
-        from agentia.live import LiveOptions
 
         await agent._auto_compact_if_needed(options)
 
@@ -113,20 +109,9 @@ def run_react_loop(
 
             await tools.init()
 
-            if agent.provider.supports_live:
-                await agent.provider.connect_live(
-                    live_options or LiveOptions(),
-                    tools,
-                    agent.history.get_instructions(),
-                    history=agent.history,
-                )
-
             async for msg in gen():
                 yield msg
             agent._temp_mcp_context = None
-
-            if agent.provider.supports_live:
-                await agent.provider.disconnect_live()
 
     c = ChatCompletion(gen_wrapper(), agent)
     return c
@@ -137,7 +122,6 @@ def run_react_loop_streamed(
     prompt: str | Message | Sequence[Message],
     events: bool,
     options: LLMOptions,
-    live_options: Optional["LiveOptions"],
 ) -> ChatCompletionStream | ChatCompletionEvents:
     tools = agent.tools
 
@@ -238,7 +222,6 @@ def run_react_loop_streamed(
 
     async def gen_wrapper() -> AsyncGenerator[StreamPart, None]:
         from agentia.tools.mcp import MCPContext
-        from agentia.live import LiveOptions
 
         await agent._auto_compact_if_needed(options)
 
@@ -247,100 +230,12 @@ def run_react_loop_streamed(
 
             await tools.init()
 
-            if agent.provider.supports_live:
-                await agent.provider.connect_live(
-                    live_options or LiveOptions(),
-                    tools,
-                    agent.history.get_instructions(),
-                    history=agent.history,
-                )
-
             async for part in gen():
                 yield part
             agent._temp_mcp_context = None
-
-            if agent.provider.supports_live:
-                await agent.provider.disconnect_live()
 
     if events:
         s = ChatCompletionEvents(gen_wrapper(), agent)
     else:
         s = ChatCompletionStream(gen_wrapper(), agent)
     return s
-
-
-async def run_react_loop_live(live: "Live") -> AsyncGenerator[StreamPart, None]:
-    started = False
-    parts: list[AssistantMessagePart] = []
-    tool_calls: list[ToolCall] = []
-    last_msg = ""
-    last_reasoning = ""
-    agent = live.agent
-
-    async for part in agent.provider.receive():
-        if not started:
-            started = True
-            yield StreamPartStart()
-        assert part.type not in (
-            "stream-start",
-            "stream-end",
-        ), f"Provider must not yield {part.type}"
-
-        match part.type:
-            case "turn-start":
-                yield part
-            case "text-start":
-                last_msg = ""
-            case "text-delta":
-                last_msg += part.delta
-            case "text-end":
-                parts.append(MessagePartText(text=last_msg))
-            case "reasoning-start":
-                last_reasoning = ""
-            case "reasoning-delta":
-                last_reasoning += part.delta
-            case "reasoning-end":
-                parts.append(MessagePartReasoning(text=last_reasoning))
-            case "tool-call":
-                parts.append(
-                    MessagePartToolCall(
-                        tool_call_id=part.tool_call_id,
-                        tool_name=part.tool_name,
-                        input=part.input,
-                        provider_executed=part.provider_executed,
-                    )
-                )
-                if not part.provider_executed:
-                    tool_calls.append(part)
-        yield part
-
-        if part.type == "turn-end":
-            if part.usage.total_tokens is not None:
-                agent.history.current_tokens = part.usage.total_tokens
-            agent.history.usage += part.usage
-
-        if part.type == "turn-end" or part.type == "tool-call":
-            # append the assistant message to history
-            msg = AssistantMessage(content=parts)
-            agent.history.add(msg)
-            # run tool calls if any
-            if tool_calls:
-                yield StreamPartTurnStart(role="tool")
-                tool_msg, tool_responses = await __process_tool_calls(
-                    agent, tool_calls, agent.tools, False
-                )
-                for tr in tool_responses:
-                    yield tr
-                agent.history.add(tool_msg)
-                yield StreamPartTurnEnd(role="tool", message=tool_msg)
-                await agent.provider.send_tool_responses(tool_responses)
-            # Process enqueued messages if any
-            if msgs := agent.clear_deferred_messages():
-                for m in msgs:
-                    agent.history.add(m)
-                    await live.send_message(m)
-            # reset for next turn
-            parts = []
-            tool_calls = []
-            last_msg = ""
-            last_reasoning = ""

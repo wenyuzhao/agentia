@@ -11,7 +11,6 @@ from typing import (
 import logging
 import uuid
 from agentia.history import History
-from agentia.live import LiveOptions
 from agentia.llm import LLMOptions, get_provider
 from agentia.llm.react import run_react_loop, run_react_loop_streamed
 from agentia.llm.completion import ChatCompletion
@@ -30,7 +29,6 @@ from agentia.utils.commands import Commands
 from agentia.utils.compact import compact_history
 from agentia.utils.event_emitter import EventEmitter
 from pathlib import Path
-from agentia.live import Live
 
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
@@ -93,7 +91,6 @@ class Agent:
         self.events = AgentEvents()
         self.commands = Commands(self)
         self.__deferred_messages: list[UserMessage] = []
-        self.__live: Optional[Live] = None
         self.env: dict[str, str] = {}
         """Session-local environment variables that can be used in tools. This is also passed to the processes launched by the Bash tool."""
 
@@ -185,10 +182,10 @@ class Agent:
     ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
         options_merged = self.__merge_options(options)
         if stream:
-            x = run_react_loop_streamed(self, prompt, events, options_merged, None)
+            x = run_react_loop_streamed(self, prompt, events, options_merged)
         else:
             assert not events, "events=True is only supported with stream=True"
-            x = run_react_loop(self, prompt, options_merged, None)
+            x = run_react_loop(self, prompt, options_merged)
         return x
 
     async def generate_object[T: ObjectType](
@@ -199,7 +196,7 @@ class Agent:
     ) -> T:
         options_merged = self.__merge_options(options)
         options_merged.response_format = ResponseFormatJson.from_model(type)
-        result_msg = await run_react_loop(self, prompt, options_merged, None)
+        result_msg = await run_react_loop(self, prompt, options_merged)
         return result_msg.parse(type)
 
     async def __aenter__(self):
@@ -235,10 +232,7 @@ class Agent:
         Enqueue a message to be added to the conversation history immediately after the current turn finishes.
         This can be used to add messages in the middle of a ReAct loop.
         """
-        if self.__live is not None:
-            await self.__live.send_message(msg)
-        else:
-            self.__deferred_messages.append(msg)
+        self.__deferred_messages.append(msg)
 
     def has_deferred_messages(self) -> bool:
         """
@@ -260,11 +254,3 @@ class Agent:
         model: str | None = None,
     ) -> None:
         await compact_history(self, effort, model)
-
-    def live(self, options: LiveOptions | None = None) -> Live:
-        if not self.provider.supports_live:
-            raise NotImplementedError("This provider does not support live sessions")
-        if self.__live is not None:
-            raise RuntimeError("Live session already active")
-        self.__live = Live(self, options)
-        return self.__live

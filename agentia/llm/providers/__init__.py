@@ -1,19 +1,13 @@
 import abc
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, AsyncGenerator, Sequence
+from typing import AsyncGenerator, Sequence
 import httpx
 from agentia.llm import LLMOptions
-from agentia.models.base import ToolCallResponse
 from agentia.models.chat import Message
-from agentia.models.live import LiveChunk
 from agentia.tools.tools import ToolSet
 import agentia.models as models
 from agentia.models.stream import StreamPart
-
-if TYPE_CHECKING:
-    from agentia.history import History
-    from agentia.live import LiveOptions
 
 
 @dataclass
@@ -77,32 +71,3 @@ class Provider(abc.ABC):
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]: ...
-
-    # --- Live session methods (optional, for bidirectional providers) ---
-
-    @property
-    def supports_live(self) -> bool:
-        return False
-
-    async def connect_live(
-        self,
-        options: "LiveOptions",
-        tools: ToolSet,
-        instructions: str | None,
-        history: "History",
-    ) -> None:
-        raise NotImplementedError("This provider does not support live sessions")
-
-    async def disconnect_live(self) -> None:
-        raise NotImplementedError("This provider does not support live sessions")
-
-    async def send_live_chunk(self, chunk: LiveChunk) -> None:
-        raise NotImplementedError("This provider does not support live sessions")
-
-    async def send_tool_responses(self, responses: list[ToolCallResponse]) -> None:
-        raise NotImplementedError("This provider does not support live sessions")
-
-    async def receive(self) -> AsyncGenerator[StreamPart, None]:
-        raise NotImplementedError("This provider does not support live sessions")
-        # Make this a valid async generator
-        yield  # type: ignore[misc]
