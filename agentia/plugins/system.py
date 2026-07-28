@@ -4,7 +4,7 @@ import os
 import signal
 import tempfile
 import weakref
-from typing import Annotated, Any, override
+from typing import Annotated, Any, Iterable, Literal, override
 from pathlib import Path
 from ..tools import ToolResult
 from ..models.base import File
@@ -32,7 +32,26 @@ _FILE_MIME_TYPES = {
     ".gif": "image/gif",
     ".webp": "image/webp",
     ".pdf": "application/pdf",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
 }
+
+Modality = Literal["image", "audio", "video", "pdf"]
+_ALL_MODALITIES: tuple[Modality, ...] = ("image", "audio", "video", "pdf")
+
+
+def _modality_of(media_type: str) -> Modality | None:
+    """Map a media type to its high-level modality, or None if unrecognized."""
+    major = media_type.split("/", 1)[0]
+    if major in ("image", "audio", "video"):
+        return major  # type: ignore[return-value]
+    if media_type == "application/pdf":
+        return "pdf"
+    return None
 
 
 def _truncate(
@@ -94,9 +113,15 @@ def _truncate(
 
 
 class System(Plugin):
-    def __init__(self, bash=True) -> None:
+    def __init__(
+        self,
+        modalities: Iterable[Modality] | None = None,
+    ) -> None:
         super().__init__()
-        self.bash_enabled = bash
+        # Modalities the `LoadFile` tool is allowed to load. `None` means all.
+        self.modalities: set[Modality] = (
+            set(modalities) if modalities is not None else set(_ALL_MODALITIES)
+        )
         self._background_pids: set[int] = set()
         weakref.finalize(self, _terminate_background_pids, self._background_pids)
 
@@ -135,9 +160,6 @@ class System(Plugin):
                 * set timeout = 0 to disable the timeout and run indefinitely in the foreground. e.g. when running `sleep 1h`.
             * Use background tasks for long-running or daemon processes (e.g. dev servers). Only use this when necessary.
         """
-        if not self.bash_enabled:
-            raise RuntimeError("Bash tool is not enabled.")
-
         if timeout is not None and timeout <= 0:
             timeout = None
 
@@ -204,48 +226,28 @@ class System(Plugin):
             body += f"\n\n[Command exited with code {returncode}]"
         return body
 
-    def __trim_text(self, text: str, offset: int | None, limit: int | None) -> str:
-        all_lines = text.splitlines()
-        total = len(all_lines)
-        start = max(1, offset) if offset else 1
-        if total > 0 and start > total:
-            raise ValueError(
-                f"Offset {offset} is out of range for file with {total} lines."
-            )
-        max_lines = min(limit, _DEFAULT_MAX_LINES) if limit else _DEFAULT_MAX_LINES
-        sliced = "\n".join(all_lines[start - 1 : start - 1 + max_lines])
-        body, _ = _truncate(sliced, max_head_lines=max_lines, max_tail_lines=0)
-        kept = body.count("\n") + 1 if body else 0
-        end = start + kept - 1
-        if end < total:
-            body += f"\n\n[Showed lines {start}-{end} of {total}. Pass offset={end + 1} to continue.]"
-        return body
-
-    @tool(name="Read")
-    async def read_file(
+    @tool(name="LoadFile")
+    async def load_file(
         self,
-        path: Annotated[str, "Path or URL to the file"],
-        offset: Annotated[int | None, "Start line number (1-indexed)"] = None,
-        limit: Annotated[int | None, "Max number of lines to read"] = None,
+        path: Annotated[
+            str, "Local path, data: URL, or web URL to the media file"
+        ],
     ) -> Any:
         """
-        Read the contents of a file so that you can inspect their content.
-            * Text files: return the UTF-8 text content (maybe truncated).
-            * Images and PDFs: return as attachments with appropriate media types.
-            * For web URLs, this tool will fetch the content and return it.
-                * For HTMLs, this will return the raw HTML as text (maybe truncated). Use the WebFetch tool to get better formatted content for HTML pages.
+        Load a media file (image, PDF, audio, video, ...) so that you can inspect its content.
+            * Local paths, `data:` URLs, and web URLs are supported.
+            * The media is returned as an attachment with the appropriate media type.
+            * This tool does NOT read text files. To read a text file, use the Bash tool (e.g. `cat`) instead.
         """
         from .web import Web
 
         # Base64-encoded data URL
         if path.startswith("data:"):
-            assert offset is None and limit is None, (
-                "Offset and limit are not supported for data URLs."
-            )
             # get content type from data URL, default to application/octet-stream
             content_type = "application/octet-stream"
             if ";" in path and path.index(";") < path.index(","):
                 content_type = path[5 : path.index(";")]
+            self.__check_modality(path, content_type)
             return ToolResult(
                 files=[File(media_type=content_type, data=path)],
                 output=f"Loaded data URL ({len(path)} characters).",
@@ -253,15 +255,16 @@ class System(Plugin):
 
         # Web content
         if path.startswith(("http://", "https://")):
-            assert offset is None and limit is None, (
-                "Offset and limit are not supported for web URLs."
-            )
             result = await Web.http_get(path)
             if isinstance(result, ToolResult):
+                for f in result.files or []:
+                    self.__check_modality(path, f.media_type)
                 return result
-            else:
-                result.content = self.__trim_text(result.content, offset, limit)
-                return {"content": result.content, "content_type": result.content_type}
+            # Textual web content is not a media file.
+            raise ValueError(
+                f"'{path}' returned text content ({result.content_type}), not a media file. "
+                "Use the WebFetch tool to fetch textual web pages instead."
+            )
 
         # Check path
         p = Path(path)
@@ -270,71 +273,30 @@ class System(Plugin):
         if p.is_dir():
             raise ValueError(f"'{path}' is a directory, not a file.")
 
-        # Non-text files
+        # Only known media types are supported; text files should be read via Bash.
         suffix = p.suffix.lower()
-        if suffix in _FILE_MIME_TYPES:
-            media_type = _FILE_MIME_TYPES[suffix]
-            encoded = base64.b64encode(p.read_bytes()).decode()
-            url = f"data:{media_type};base64,{encoded}"
-            return ToolResult(
-                files=[File(media_type=media_type, data=url)],
-                output=f"Loaded file '{path}' ({media_type}).",
+        if suffix not in _FILE_MIME_TYPES:
+            raise ValueError(
+                f"'{path}' is not a supported media file. This tool only loads media files "
+                f"(one of: {', '.join(sorted(_FILE_MIME_TYPES))}). "
+                "To read a text file, use the Bash tool (e.g. `cat`) instead."
             )
 
-        # Text files
-        text = p.read_text(encoding="utf-8")
-        return self.__trim_text(text, offset, limit)
+        media_type = _FILE_MIME_TYPES[suffix]
+        self.__check_modality(path, media_type)
+        encoded = base64.b64encode(p.read_bytes()).decode()
+        url = f"data:{media_type};base64,{encoded}"
+        return ToolResult(
+            files=[File(media_type=media_type, data=url)],
+            output=f"Loaded file '{path}' ({media_type}).",
+        )
 
-    @tool(name="Write")
-    async def write_file(
-        self,
-        path: Annotated[str, "Path to the file. Local paths only, no URLs."],
-        content: Annotated[str, "Full content to write"],
-    ) -> str:
-        """
-        Write `content` to `path`. Missing parent directories are created automatically. Existing content is overwritten.
-        """
-        await self.agent.user_consent_guard(f"Write file: {path}")
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-        return f"Wrote {len(content)} characters to '{path}'."
-
-    @tool(name="Edit")
-    async def edit_file(
-        self,
-        path: Annotated[str, "Path to the file. Local paths only, no URLs."],
-        old_text: Annotated[
-            str,
-            "Exact text to replace. Must appear verbatim: including whitespace and newlines, and exactly once in the file.",
-        ],
-        new_text: Annotated[str, "Replacement text."],
-    ) -> str:
-        """
-        Surgically replace a unique substring in a file. `old_text` must match
-        exactly and appear exactly once. The edit fails — leaving the file
-        untouched — if there are zero or multiple matches, or if `new_text`
-        equals `old_text`. For larger rewrites, use Write instead.
-        """
-        await self.agent.user_consent_guard(f"Edit file: {path}")
-        p = Path(path)
-        if not p.exists():
-            raise ValueError(f"File '{path}' does not exist.")
-        if p.is_dir():
-            raise ValueError(f"'{path}' is a directory, not a file.")
-        content = p.read_text()
-        matches = content.count(old_text)
-        if matches == 0:
+    def __check_modality(self, path: str, media_type: str) -> None:
+        """Reject media whose modality is not among the enabled ones."""
+        modality = _modality_of(media_type)
+        if modality not in self.modalities:
+            enabled = ", ".join(sorted(self.modalities)) or "none"
             raise ValueError(
-                f"`old_text` was not found in '{path}'. The match must be exact, including whitespace and newlines."
+                f"'{path}' has media type '{media_type}', which is not an enabled "
+                f"modality (enabled: {enabled})."
             )
-        if matches > 1:
-            raise ValueError(
-                f"`old_text` matches {matches} places in '{path}'. Include more surrounding context so the match is unique."
-            )
-        if old_text == new_text:
-            raise ValueError(
-                f"No change applied to '{path}': `old_text` and `new_text` are identical."
-            )
-        p.write_text(content.replace(old_text, new_text, 1))
-        return f"Edited '{path}': replaced {len(old_text)} characters with {len(new_text)}."
