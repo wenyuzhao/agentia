@@ -53,10 +53,13 @@ class OpenAIAPIProvider(Provider):
         if r := options.reasoning:
             if r.enabled is not None:
                 return r.enabled
-
-        return self.__think_in_model_string or os.environ.get(
-            "AGENTIA_REASONING_ENABLED", ""
-        ).lower() in {"true", "1", "yes"}
+        if self.__think_in_model_string:
+            return True
+        return os.environ.get("AGENTIA_REASONING_ENABLED", "").lower() in {
+            "true",
+            "1",
+            "yes",
+        }
 
     def get_reasoning_args(
         self,
@@ -90,7 +93,7 @@ class OpenAIAPIProvider(Provider):
             max_tokens = int(x)
         else:
             max_tokens = None
-        if (r := options.reasoning) and r.enabled:
+        if (r := options.reasoning) and enabled:
             if r.effort is not None:
                 effort = r.effort
             if r.exclude is not None:
