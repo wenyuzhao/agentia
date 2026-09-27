@@ -42,31 +42,31 @@ Tests require API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
 
 `Agent` (`agent.py`) is the central class. It orchestrates: model selection, tool management, conversation history, and the ReAct loop (`llm/react.py`: generate → tool calls → execute in parallel → continue). Execution modes: `agent.run()` (returns completed response), streaming via `agent.run(stream=True)`, and event-based via `agent.run(stream=True, events=True)`. MCP-based tools require `async with agent:` context manager.
 
-### LLM Providers (`agentia/llm/`)
+### LLM Providers (`src/agentia/llm/`)
 
 Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
 
-### Tool System (`agentia/tools/`)
+### Tool System (`src/agentia/tools/`)
 
 `ToolSet` manages multiple tool sources:
 - **Plain functions**: auto-converted using signatures and docstrings. Parameter descriptions via `Annotated[type, "description"]`.
-- **Plugins** (`agentia/plugins/`): classes extending `Plugin` base with `@tool`-decorated methods, lifecycle hooks (`init()`), and instruction injection (`get_instructions()`).
+- **Plugins** (`src/agentia/plugins/`): classes extending `Plugin` base with `@tool`-decorated methods, lifecycle hooks (`init()`), and instruction injection (`get_instructions()`).
 - **MCP servers**: local (stdio) or remote (HTTP/SSE) via `MCP` class. `MCPContext` manages server lifecycle.
 - **Provider-defined tools**: provider-specific built-in tools.
 
-### Message/Models System (`agentia/models/`)
+### Message/Models System (`src/agentia/models/`)
 
 Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage. Multi-modal content support (text, images, audio, video, files). Structured output via pydantic BaseModel in `ResponseFormatJson`.
 
-### Streaming (`agentia/llm/stream.py`)
+### Streaming (`src/agentia/llm/stream.py`)
 
 `ChatCompletionStream` for async message iteration; `ChatCompletionEvents` for granular stream part events (text-start/delta/end, reasoning-start/delta/end).
 
-### Skills (`agentia/plugins/skills.py`)
+### Skills (`src/agentia/plugins/skills.py`)
 
 Discovers SKILL.md files from `.skills/`, `.agentia/skills/`, and `~/.config/agentia/skills/`. Each skill has frontmatter metadata and markdown instructions, optionally with `resources/` and `scripts/` directories.
 
-### Magic Decorator (`agentia/utils/decorators.py`)
+### Magic Decorator (`src/agentia/utils/decorators.py`)
 
 `@magic` transforms async functions into AI-powered tools with typed pydantic input/output validation.
 

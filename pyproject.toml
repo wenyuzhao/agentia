@@ -49,10 +49,10 @@ dev = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["agentia"]
+include = ["src/agentia"]
 
 [tool.hatch.build.targets.wheel]
-include = ["agentia"]
+packages = ["src/agentia"]
 
 [build-system]
 requires = ["hatchling"]
@@ -63,11 +63,11 @@ testpaths = ["tests"]
 
 [tool.ruff.lint.per-file-ignores]
 # Star imports are used intentionally to re-export model/stream symbols.
-"agentia/__init__.py" = ["F403", "F405"]
-"agentia/models/__init__.py" = ["F403"]
-"agentia/models/chat.py" = ["F403", "F405"]
-"agentia/models/stream.py" = ["F403", "F405"]
-"agentia/history.py" = ["F403", "F405"]
-"agentia/llm/react.py" = ["F403", "F405"]
-"agentia/llm/stream.py" = ["F403", "F405"]
-"agentia/llm/providers/_openai_api.py" = ["F403", "F405"]
+"src/agentia/__init__.py" = ["F403", "F405"]
+"src/agentia/models/__init__.py" = ["F403"]
+"src/agentia/models/chat.py" = ["F403", "F405"]
+"src/agentia/models/stream.py" = ["F403", "F405"]
+"src/agentia/history.py" = ["F403", "F405"]
+"src/agentia/llm/react.py" = ["F403", "F405"]
+"src/agentia/llm/stream.py" = ["F403", "F405"]
+"src/agentia/llm/providers/_openai_api.py" = ["F403", "F405"]
