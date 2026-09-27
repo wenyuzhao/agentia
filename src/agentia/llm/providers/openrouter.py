@@ -1,4 +1,4 @@
-from typing import override
+from typing import Any, override
 from ._openai_api import OpenAIAPIProvider
 import os
 import httpx
@@ -29,6 +29,32 @@ class OpenRouter(OpenAIAPIProvider):
             self.extra_body["provider"] = {
                 "order": [x.strip().lower() for x in p.split(",") if x.strip()],
             }
+
+    @override
+    def get_reasoning_args(
+        self,
+        enabled: bool | None,
+        effort: str | None,
+        exclude: bool | None,
+        max_tokens: int | None,
+    ) -> dict[str, Any] | None:
+        """Extend the Responses `reasoning` object with OpenRouter's own fields.
+
+        `enabled` is required for models where reasoning is opt-in (e.g. Anthropic)
+        and no effort is given, and `effort` and `max_tokens` are mutually exclusive.
+        """
+        if not enabled:
+            return None
+        reasoning: dict[str, Any] = {"enabled": True}
+        if effort is not None:
+            reasoning["effort"] = effort
+        elif max_tokens is not None:
+            reasoning["max_tokens"] = max_tokens
+        if exclude is not None:
+            reasoning["exclude"] = exclude
+        if not exclude:
+            reasoning["summary"] = "auto"
+        return reasoning
 
     @staticmethod
     async def fetch_context_length(model: str) -> int:

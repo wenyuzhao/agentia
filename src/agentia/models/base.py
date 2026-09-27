@@ -1,3 +1,31 @@
+"""Shared primitives: usage, tool definitions, annotations and file payloads.
+
+Responses API types
+-------------------
+- `Usage`               -- the `response.usage` object, flattened. `reasoning_tokens`
+                           comes from `output_tokens_details.reasoning_tokens` and
+                           `cached_input_tokens` from `input_tokens_details.cached_tokens`.
+- `FunctionTool`        -- a `function` tool definition (`to_responses_tool()` emits the
+                           flat `{type, name, description, parameters, strict}` shape).
+- `ProviderDefinedTool` -- a built-in, provider-executed tool (`web_search`,
+                           `file_search`, `code_interpreter`, ...), emitted as
+                           `{type: <id>, **args}`.
+- `UrlCitation`         -- a `url_citation` annotation on an `output_text` part.
+- `Annotation`          -- the annotation union (currently only `url_citation`).
+- `ToolChoice`          -- the `tool_choice` parameter: "auto" / "none" / "required",
+                           or a tool name for `{type: "function", name: ...}`.
+
+Agentia extensions
+------------------
+- `File`                -- a media payload (bytes, path, URL or `file-` id) that content
+                           parts are built from. Not an API type.
+- `DataContent`         -- the `bytes | str` payload alias used by `File`.
+- `FinishReason`        -- a normalized reason across providers. The API instead reports
+                           `response.status` plus `incomplete_details.reason`.
+- `ToolSchema`          -- the union of the two tool definition types above.
+- `UserConsentRequest`  -- agentia's human-in-the-loop consent prompt.
+"""
+
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, JsonValue
@@ -49,15 +77,25 @@ class FunctionTool(BaseModel):
     name: str
     input_schema: JsonValue
     description: str | None = None
+    strict: bool = False
+    """
+    Whether the model must produce arguments that exactly match `input_schema`.
 
-    def to_openai_schema(self) -> Any:
-        return {
-            "type": self.type,
+    Strict mode requires the schema to set `additionalProperties: false` and list every
+    property in `required`, so it stays opt-in for schemas derived from plain functions.
+    """
+
+    def to_responses_tool(self) -> Any:
+        """Serialize to a Responses API function tool definition."""
+        tool: dict[str, Any] = {
+            "type": "function",
             "name": self.name,
-            "description": self.description,
             "parameters": self.input_schema,
-            "strict": True,
+            "strict": self.strict,
         }
+        if self.description is not None:
+            tool["description"] = self.description
+        return tool
 
 
 class ProviderDefinedTool(BaseModel):
@@ -66,7 +104,8 @@ class ProviderDefinedTool(BaseModel):
     name: str
     args: dict[str, JsonValue] = Field(default_factory=dict)
 
-    def to_openai_schema(self) -> Any:
+    def to_responses_tool(self) -> Any:
+        """Serialize to a Responses API built-in tool definition."""
         return {"type": self.id, **self.args}
 
 
@@ -75,29 +114,11 @@ type ToolSchema = Annotated[
 ]
 
 
-class ToolCall(BaseModel):
-    type: Literal["tool-call"] = "tool-call"
-
-    tool_call_id: str
-    """The identifier of the tool call. It must be unique across all tool calls."""
-
-    tool_name: str
-    """The name of the tool that should be called."""
-
-    input: dict[str, JsonValue]
-    """JSON object with the tool call arguments. Must match the parameters schema of the tool."""
-
-    provider_executed: bool | None = None
-    """
-    Whether the tool call will be executed by the provider.
-    If this flag is not set or is false, the tool call will be executed by the client.
-    """
-
-
 class File(BaseModel):
     media_type: str
     data: DataContent
     id: str = Field(default_factory=lambda: str(uuid4()))
+    filename: str | None = None
 
     def to_url(self) -> str:
         if isinstance(self.data, bytes):
@@ -133,59 +154,23 @@ class File(BaseModel):
             raise ValueError("Invalid data type for File")
 
 
-class ToolCallResponse(BaseModel):
-    type: Literal["tool-result"] = "tool-result"
+class UrlCitation(BaseModel):
+    type: Literal["url_citation"] = "url_citation"
 
-    tool_call_id: str
-    """The ID of the tool call that this result is associated with."""
+    end_index: int = 0
+    """The index of the last character of the citation in the message."""
 
-    tool_name: str
-    """Name of the tool that generated this result."""
+    start_index: int = 0
+    """The index of the first character of the citation in the message."""
 
-    input: dict[str, JsonValue]
-
-    output: JsonValue
-    """Result of the tool call. This is a JSON-serializable object."""
-
-    output_files: list[File] = Field(default_factory=list)
-    """Optional list of files generated by the tool call."""
-
-    is_error: bool | None = None
-    """Optional flag if the result is an error or an error message."""
-
-    provider_executed: bool | None = None
-    """
-    Whether the tool result was generated by the provider.
-    If this flag is set to true, the tool result was generated by the provider.
-    If this flag is not set or is false, the tool result was generated by the client.
-    """
-
-    preliminary: bool | None = None
-    """
-    Whether the tool result is preliminary.
-
-    Preliminary tool results replace each other, e.g. image previews.
-    There always has to be a final, non-preliminary tool result.
-
-    If this flag is set to true, the tool result is preliminary.
-    If this flag is not set or is false, the tool result is not preliminary.
-    """
-
-
-class Annotation(BaseModel):
-    type: Literal["annotation"] = "annotation"
-
-    end: int
-    """The index of the last character of the URL citation in the message."""
-
-    start: int
-    """The index of the first character of the URL citation in the message."""
-
-    title: str
+    title: str = ""
     """The title of the web resource."""
 
     url: str
     """The URL of the web resource."""
+
+
+type Annotation = Annotated[UrlCitation, Field(discriminator="type")]
 
 
 class UserConsentRequest(BaseModel):
@@ -206,9 +191,8 @@ __all__ = [
     "FunctionTool",
     "ProviderDefinedTool",
     "ToolSchema",
-    "ToolCall",
-    "ToolCallResponse",
     "File",
+    "UrlCitation",
     "Annotation",
     "UserConsentRequest",
 ]

@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Sequence
 
-from agentia.models import CompactedMessage, Message
-from agentia.models.chat import MessagePartText
+from agentia.models import (
+    Compaction,
+    FunctionCall,
+    FunctionCallOutput,
+    Item,
+    Message,
+    Reasoning,
+)
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -15,19 +21,22 @@ EFFORT_INSTRUCTIONS = {
 }
 
 
-def _format_messages(messages: Sequence[Message]) -> str:
+def _format_items(items: Sequence[Item]) -> str:
     lines: list[str] = []
-    for msg in messages:
-        role = msg.role
-        if isinstance(msg.content, str):
-            lines.append(f"[{role}]: {msg.content}")
-        elif isinstance(msg.content, Sequence):
-            parts = []
-            for part in msg.content:
-                if isinstance(part, MessagePartText):
-                    parts.append(part.text)
-            if parts:
-                lines.append(f"[{role}]: {''.join(parts)}")
+    for item in items:
+        match item:
+            case Message():
+                if text := item.text:
+                    lines.append(f"[{item.role}]: {text}")
+            case FunctionCall():
+                lines.append(f"[tool call {item.name}]: {item.arguments}")
+            case FunctionCallOutput():
+                lines.append(f"[tool result {item.name or item.call_id}]: {item.text}")
+            case Reasoning():
+                if text := item.display_text:
+                    lines.append(f"[reasoning]: {text}")
+            case Compaction():
+                lines.append(f"[summary]: {item.summary}")
     return "\n\n".join(lines)
 
 
@@ -39,8 +48,8 @@ async def compact_history(
 ) -> None:
     from agentia.agent import Agent
 
-    messages = agent.history.get()
-    length = len(messages)
+    items = agent.history.get()
+    length = len(items)
     if length <= keep_last_n:
         return
 
@@ -52,14 +61,14 @@ async def compact_history(
         "Output ONLY the compacted summary, nothing else."
     )
 
-    conversation_text = _format_messages(messages[:-keep_last_n])
+    conversation_text = _format_items(items[:-keep_last_n])
 
     compact_agent = Agent(model=model or agent.model, instructions=compact_instructions)
     result = await compact_agent.run(conversation_text)
 
-    messages_to_keep = messages[-keep_last_n:]
+    items_to_keep = items[-keep_last_n:]
     agent.history.clear()
     agent.history.add(
-        CompactedMessage(content=result.text, original_messages=list(messages)),
-        *messages_to_keep,
+        Compaction(summary=result.text, original_items=list(items)),
+        *items_to_keep,
     )

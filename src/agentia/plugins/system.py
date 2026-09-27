@@ -229,9 +229,7 @@ class System(Plugin):
     @tool(name="LoadFile")
     async def load_file(
         self,
-        path: Annotated[
-            str, "Local path, data: URL, or web URL to the media file"
-        ],
+        path: Annotated[str, "Local path, data: URL, or web URL to the media file"],
     ) -> Any:
         """
         Load a media file (image, PDF, audio, video, ...) so that you can inspect its content.

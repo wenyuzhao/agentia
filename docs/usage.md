@@ -54,12 +54,21 @@ response = await agent.run("What is the weather?")
 print(response.text)
 ```
 
-**Async iteration over messages:**
+**Async iteration over items:**
+
+A turn is a sequence of items, not a single message, so check `item.type`:
 
 ```python
-async for msg in agent.run("What is the weather?"):
-    if msg.role == "assistant":
-        print(msg.text)
+async for item in agent.run("What is the weather?"):
+    match item.type:
+        case "message" if item.role == "assistant":
+            print(item.text)
+        case "reasoning":
+            print("[REASONING]", item.display_text)
+        case "function_call":
+            print("[CALL]", item.name, item.input)
+        case "function_call_output":
+            print("[RESULT]", item.text)
 ```
 
 **Streaming text chunks:**
@@ -79,10 +88,12 @@ async for stream in run:
 
 **Event-based streaming:**
 
+Event `type`s are the Responses API's own SSE type strings:
+
 ```python
 run = agent.run("Hello", stream=True, events=True)
 async for event in run:
-    if event.type == "text-delta":
+    if event.type == "response.output_text.delta":
         print(event.delta, end="")
 ```
 
@@ -156,12 +167,14 @@ agent.add_instructions("Additional context.")
 
 ### Conversation History
 
+History is a list of Responses API items (see [Items](#11-items--the-responses-api)):
+
 ```python
-agent.history.clear()                        # Clear messages, keep instructions
-agent.history.clear(clear_instructions=True)  # Clear everything
-agent.history.add(user_message)               # Add a message
-agent.history.load(messages)                  # Replace all messages
-messages = agent.history.get()                # Get full history
+agent.history.clear()            # Clear items, keep instructions
+agent.history.add(Message.user("Hi"))  # Add one or more items
+agent.history.load(items)        # Replace all items
+items = agent.history.get()      # list[Item]
+new_items = agent.history.get_new()    # items added since the last cursor advance
 ```
 
 ### LLM Options
@@ -185,6 +198,132 @@ agent = Agent(
 
 # Override per-call
 response = await agent.run("Hello", options=LLMOptions(temperature=0))
+```
+
+`presence_penalty`, `frequency_penalty`, `seed` and `stop_sequences` have no
+first-class field in the OpenAI Responses API. They are only forwarded (in the
+request's extra body) when you set them explicitly, so they reach gateways that
+still accept them and are otherwise absent from the request.
+
+`ReasoningOptions.effort` and `ReasoningOptions.max_tokens` are mutually
+exclusive; `effort` wins when both are set.
+
+## 1.1 Items & the Responses API
+
+Agentia speaks the OpenAI **Responses API** exclusively, in its stateless form —
+nothing is stored server-side (`store: false`) and the full conversation is sent on
+every request. Accordingly, the conversation history is a **list of items**
+(`agent.history.get() -> list[Item]`), mirroring the API's `ItemField` union rather
+than a list of chat messages:
+
+| Item | `type` | What it is |
+| --- | --- | --- |
+| `Message` | `message` | Text content with a `role` of user / assistant / system / developer |
+| `Reasoning` | `reasoning` | The model's reasoning, its own item — not part of the message |
+| `FunctionCall` | `function_call` | A tool call the model requested |
+| `FunctionCallOutput` | `function_call_output` | A tool result, an *input* for the next request |
+| `Compaction` | `compaction` | A compacted run of earlier items (see Compaction below) |
+
+One assistant turn therefore produces **several** items, in order: a `reasoning` item,
+then a `message` and/or one `function_call` per tool the model wants to run.
+
+### Building Messages
+
+`Message` has a helper per role. Strings become `input_text` (or `output_text` for
+assistant messages), and a `File` becomes `input_image`, `input_audio` or `input_file`
+according to its media type:
+
+```python
+from agentia import Message, File
+
+Message.user("What is in this image?")
+Message.user(["What is this animal?", File(data="https://example.com/cat.png", media_type="image/png")])
+Message.assistant("Hello!")
+Message.system("Be concise.")
+Message.developer("Prefer SI units.")
+```
+
+Content parts can also be constructed directly — `InputText`, `InputImage`,
+`InputFile`, `InputAudio`, `OutputText`, `Refusal`:
+
+```python
+from agentia import Message, InputText, InputImage
+
+Message(role="user", content=[InputText(text="Compare these"), InputImage(image_url="https://…")])
+```
+
+Useful accessors: `Message.text` (all text concatenated), `Message.refusal`,
+`Message.parse(SomeModel)` for structured output, `Reasoning.text` /
+`.summary_text` / `.display_text`, `FunctionCall.input` (parsed `arguments`), and
+`FunctionCallOutput.text`.
+
+### Reasoning Round-Trips
+
+Because nothing is stored server-side, a reasoning item can only be replayed on the
+next request if it keeps the provider's own identity:
+
+```python
+item.id                 # Responses output item id, e.g. "rs_..."
+item.content            # [ReasoningText(...)] — raw reasoning
+item.summary            # [SummaryText(...)]  — summary blocks
+item.encrypted_content  # opaque payload returned because store=false
+item.signature          # provider signature over the reasoning content
+item.format             # e.g. "openai-responses-v1"
+```
+
+A `Reasoning` item with no `id` is dropped when serializing, since the provider would
+reject it. Use `to_responses_input(items)` to serialize a list yourself.
+
+### Compaction
+
+`Compaction` plays the role of the API's `compaction` item, but agentia compacts
+client-side: `summary` is plain text, `original_items` keeps what was replaced (use
+`.flatten()` to expand nested compactions), and it serializes as an assistant message.
+
+### Stream Events
+
+Event `type` strings are exactly the Responses API's, and every event carries a
+`sequence_number`, so you can match on them directly:
+
+`response.created` · `response.in_progress` · `response.completed` ·
+`response.incomplete` · `response.failed` · `response.output_item.added` / `.done` ·
+`response.content_part.added` / `.done` · `response.output_text.delta` / `.done` ·
+`response.output_text.annotation.added` · `response.refusal.delta` / `.done` ·
+`response.reasoning_text.delta` / `.done` ·
+`response.reasoning_summary_text.delta` / `.done` ·
+`response.reasoning_summary_part.added` / `.done` ·
+`response.function_call_arguments.delta` / `.done` · `error`
+
+Two things the Responses API has no events for are namespaced under `agentia.*`:
+
+| Event | Meaning |
+| --- | --- |
+| `agentia.run.started` | A whole `run()` began. One per `run()`. |
+| `agentia.run.completed` | A whole `run()` finished, carrying total `usage` and `finish_reason`. |
+| `agentia.input_item.added` | Agentia appended an input item — a client-executed tool result, or an item from `Agent.defer()`. |
+
+`response.output_item.*` covers only what the model produced, which is why a
+client-executed tool result is *not* one: a `function_call_output` is an input to the
+next request, so it arrives as `agentia.input_item.added`.
+
+A single `run()` spans one `response.created` … `response.completed` cycle per
+iteration of the ReAct loop:
+
+```
+agentia.run.started
+  response.created
+    response.output_item.added   (reasoning)
+    response.reasoning_summary_text.delta …
+    response.output_item.done    (reasoning)
+    response.output_item.added   (function_call)
+    response.function_call_arguments.delta …
+    response.output_item.done    (function_call)
+  response.completed
+  agentia.input_item.added       (function_call_output — agentia ran the tool)
+  response.created               (next iteration)
+    …
+  response.completed
+agentia.run.completed
 ```
 
 ## 2. Function Tools & Plugins

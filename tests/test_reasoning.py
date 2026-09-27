@@ -32,12 +32,11 @@ async def test_reasoning():
 
     has_reasoning = False
 
-    async for msg in run:
-        print(msg)
-        if msg.role == "assistant":
-            r = msg.reasoning
-            if r and r.strip() != "":
-                has_reasoning = True
+    async for item in run:
+        print(item)
+        # Reasoning is its own item in the Responses API, not part of the message.
+        if item.type == "reasoning" and item.display_text.strip():
+            has_reasoning = True
     assert has_reasoning
 
 

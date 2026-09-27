@@ -1,25 +1,17 @@
 from collections.abc import AsyncGenerator
-import json
 import os
 from typing import Any, Sequence, override
-from uuid import uuid4
 import httpx
 from agentia.tools.tools import ToolSet
 from . import LLMOptions, GenerationResult, Provider
 from ...models import *
-from openai.types.chat import (
-    ChatCompletionToolParam,
-    ChatCompletionToolChoiceOptionParam,
-)
 import openai
-from openai.types import CompletionUsage
-
-
-def _gen_id() -> str:
-    return uuid4().hex
+from openai.types.responses import Response, ResponseUsage
 
 
 class OpenAIAPIProvider(Provider):
+    """Base provider for services that speak the OpenAI Responses API."""
+
     def __init__(
         self,
         name: str,
@@ -68,15 +60,22 @@ class OpenAIAPIProvider(Provider):
         exclude: bool | None,
         max_tokens: int | None,
     ) -> dict[str, Any] | None:
+        """Build the Responses API `reasoning` object.
+
+        Only the fields the Responses API itself defines are emitted here. Gateways
+        that accept more (e.g. OpenRouter's `enabled`/`exclude`/`max_tokens`) extend
+        this in their own provider. `max_tokens` has no standard equivalent and is
+        ignored unless a provider overrides this.
+        """
         if not enabled:
             return None
-        reasoning: dict[str, Any] = {"enabled": True}
+        reasoning: dict[str, Any] = {}
         if effort is not None:
             reasoning["effort"] = effort
-        if exclude is not None:
-            reasoning["exclude"] = exclude
-        if max_tokens is not None:
-            reasoning["max_tokens"] = max_tokens
+        if not exclude:
+            # Ask for a summary so reasoning text is visible for models that only
+            # expose reasoning through summaries (e.g. OpenAI's own models).
+            reasoning["summary"] = "auto"
         return reasoning
 
     def get_reasoning_args_from_options(
@@ -102,28 +101,35 @@ class OpenAIAPIProvider(Provider):
                 max_tokens = r.max_tokens
         return self.get_reasoning_args(enabled, effort, exclude, max_tokens)
 
-    def _to_oai_messages(self, instructions: str, messages: list[Message]) -> list[Any]:
-        r: list[Any] = []
-        if s := instructions.strip():
-            r.append({"role": "system", "content": s})
-        for m in messages:
-            oai_m = m.to_openai_format()
-            if isinstance(oai_m, list):
-                r.extend(oai_m)
-            else:
-                r.append(oai_m)
-        return r
+    def _to_responses_input(self, items: Sequence[Item]) -> list[Any]:
+        """Flatten the conversation into a Responses API `input` array."""
+        return to_responses_input(items)
 
-    def _get_finish_reason(self, choice: str) -> FinishReason:
-        match choice:
-            case "stop":
+    def _get_finish_reason(self, response: Response | None) -> FinishReason:
+        if response is None:
+            return "unknown"
+        if any(item.type == "function_call" for item in response.output):
+            return "tool-calls"
+        match response.status:
+            case "completed":
                 return "stop"
-            case "length":
-                return "length"
-            case "tool_calls" | "function_call":
-                return "tool-calls"
-            case "content_filter":
-                return "content-filter"
+            case "incomplete":
+                reason = (
+                    response.incomplete_details.reason
+                    if response.incomplete_details
+                    else None
+                )
+                match reason:
+                    case "max_output_tokens":
+                        return "length"
+                    case "content_filter":
+                        return "content-filter"
+                    case _:
+                        return "other"
+            case "failed":
+                return "error"
+            case "cancelled":
+                return "interrupted"
             case _:
                 return "unknown"
 
@@ -131,106 +137,68 @@ class OpenAIAPIProvider(Provider):
         self,
         tools: Sequence[ToolSchema] | None,
         tool_choice: ToolChoice | None,
-    ) -> tuple[
-        list[ChatCompletionToolParam] | None, ChatCompletionToolChoiceOptionParam | None
-    ]:
-        oai_tools: list[ChatCompletionToolParam] = []
+    ) -> tuple[list[Any] | None, Any | None]:
         if not tools:
             return None, None
-        for t in tools:
-            match t.type:
-                case "function":
-                    f = {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,  # type: ignore
-                    }
-                    for k in list(f.keys()):
-                        if f[k] is None:
-                            del f[k]
-                    oai_tools.append(
-                        {
-                            "type": "function",
-                            "function": f,  # type: ignore
-                        }
-                    )
+        oai_tools: list[Any] = [t.to_responses_tool() for t in tools]
         if not tool_choice:
             return oai_tools, None
         match tool_choice:
-            case "none":
-                return oai_tools, "none"
-            case "auto":
-                return oai_tools, "auto"
-            case "required":
-                return oai_tools, "required"
+            case "none" | "auto" | "required":
+                return oai_tools, tool_choice
             case _:
                 assert isinstance(tool_choice, str)
-                tc: ChatCompletionToolChoiceOptionParam = {
-                    "type": "function",
-                    "function": {"name": tool_choice},
-                }
-                return oai_tools, tc
+                return oai_tools, {"type": "function", "name": tool_choice}
 
-    def _get_usage(self, u: CompletionUsage | None) -> Usage:
+    def _get_usage(self, u: ResponseUsage | None) -> Usage:
         if not u:
             return Usage()
         return Usage(
-            input_tokens=u.prompt_tokens,
-            output_tokens=u.completion_tokens,
+            input_tokens=u.input_tokens,
+            output_tokens=u.output_tokens,
             total_tokens=u.total_tokens,
             reasoning_tokens=(
-                u.completion_tokens_details.reasoning_tokens
-                if u.completion_tokens_details
+                u.output_tokens_details.reasoning_tokens
+                if u.output_tokens_details
                 else None
             ),
             cached_input_tokens=(
-                u.prompt_tokens_details.cached_tokens
-                if u.prompt_tokens_details
-                else None
+                u.input_tokens_details.cached_tokens if u.input_tokens_details else None
             ),
         )
 
     def _prepare_args(
         self,
         instructions: str,
-        messages: list[Message],
+        items: Sequence[Item],
         tool_set: ToolSet,
         options: LLMOptions,
     ) -> dict[str, Any]:
-        msgs = self._to_oai_messages(instructions, messages)
         rf = options.response_format
         if rf and not isinstance(rf, (ResponseFormatJson, ResponseFormatText)):
             rf = ResponseFormatJson.from_model(rf)
-        if not rf or rf.type == "text":
-            response_format = None
-        elif not rf.json_schema:
-            response_format = {"type": "json_object"}
-        else:
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "schema": rf.json_schema,
-                    "strict": True,
-                    "name": rf.name or "response",
-                    "description": rf.description,
-                },
-            }
+        text = {"format": rf.to_responses_text_format()} if rf else None
         schema = tool_set.get_schema()
         tools, tool_choice = self._prepare_tools(schema, options.tool_choice)
         args: dict[str, Any] = {
             "model": self.model,
-            "messages": msgs,
+            "input": self._to_responses_input(items),
+            "instructions": instructions.strip() or None,
             "temperature": options.temperature,
             "top_p": options.top_p,
-            "max_tokens": options.max_output_tokens,
-            "frequency_penalty": options.frequency_penalty,
-            "presence_penalty": options.presence_penalty,
-            "response_format": response_format,
-            "stop": options.stop_sequences,
-            "seed": options.seed,
+            "max_output_tokens": options.max_output_tokens,
+            "text": text,
             "tools": tools,
             "tool_choice": tool_choice,
+            # Only meaningful alongside tools, and rejected by some providers without them.
+            "parallel_tool_calls": options.parallel_tool_calls if tools else None,
+            # Never persist conversations server-side; the history lives in the agent.
+            "store": False,
         }
+        if self.reasoning_enabled(options):
+            # Without server-side storage, reasoning can only be replayed if the
+            # provider hands back the encrypted payload.
+            args["include"] = ["reasoning.encrypted_content"]
         for k in list(args.keys()):
             if args[k] is None:
                 del args[k]
@@ -241,195 +209,397 @@ class OpenAIAPIProvider(Provider):
         body.update(self.extra_body)
         if reasoning_args := self.get_reasoning_args_from_options(options):
             body.update({"reasoning": reasoning_args})
+        # The Responses API has no first-class fields for these, so they are only
+        # forwarded when explicitly set, for gateways that still accept them.
+        for key, value in (
+            ("frequency_penalty", options.frequency_penalty),
+            ("presence_penalty", options.presence_penalty),
+            ("seed", options.seed),
+            ("stop", options.stop_sequences),
+        ):
+            if value is not None:
+                body[key] = value
         if options.extra_body:
             body.update(options.extra_body)
         return body
+
+    def _timeout(self) -> float | None:
+        if t := os.environ.get("AGENTIA_TIMEOUT"):
+            return float(t)
+        return None
+
+    def _parse_reasoning_item(self, item: Any) -> Reasoning:
+        return Reasoning(
+            id=item.id,
+            content=[
+                ReasoningText(text=c.text)
+                for c in (getattr(item, "content", None) or [])
+                if getattr(c, "type", None) == "reasoning_text"
+            ],
+            summary=[
+                SummaryText(text=s.text)
+                for s in (item.summary or [])
+                if getattr(s, "type", None) == "summary_text"
+            ],
+            encrypted_content=getattr(item, "encrypted_content", None),
+            signature=getattr(item, "signature", None),
+            format=getattr(item, "format", None),
+        )
+
+    def _parse_message_item(self, item: Any) -> Message:
+        content: list[OutputContent] = []
+        for c in item.content:
+            match c.type:
+                case "output_text":
+                    content.append(
+                        OutputText(
+                            text=c.text,
+                            annotations=[
+                                UrlCitation(
+                                    title=a.title or "",
+                                    url=a.url,
+                                    start_index=a.start_index or 0,
+                                    end_index=a.end_index or 0,
+                                )
+                                for a in (c.annotations or [])
+                                if a.type == "url_citation"
+                            ],
+                        )
+                    )
+                case "refusal":
+                    content.append(Refusal(refusal=c.refusal))
+        return Message(
+            role="assistant", id=item.id, content=content, status="completed"
+        )
+
+    def _parse_output(self, response: Response, reasoning_enabled: bool) -> list[Item]:
+        """Convert a response's `output` array into conversation items."""
+        items: list[Item] = []
+        for item in response.output:
+            match item.type:
+                case "reasoning":
+                    if not reasoning_enabled:
+                        continue
+                    r = self._parse_reasoning_item(item)
+                    if r.display_text or r.encrypted_content or r.signature:
+                        items.append(r)
+                case "message":
+                    items.append(self._parse_message_item(item))
+                case "function_call":
+                    items.append(
+                        FunctionCall(
+                            id=item.id,
+                            call_id=item.call_id,
+                            name=item.name,
+                            arguments=item.arguments or "{}",
+                            status="completed",
+                        )
+                    )
+        return items
+
+    def _response_info(self, response: Response | None) -> ResponseInfo:
+        if response is None:
+            return ResponseInfo()
+        return ResponseInfo(
+            id=response.id,
+            status=response.status,
+            usage=self._get_usage(response.usage),
+            finish_reason=self._get_finish_reason(response),
+        )
 
     @override
     async def generate(
         self,
         instructions: str,
-        messages: list[Message],
+        items: Sequence[Item],
         tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
     ) -> GenerationResult:
-        args = self._prepare_args(instructions, messages, tools, options)
-        if t := os.environ.get("AGENTIA_TIMEOUT"):
-            timeout = float(t)
-        else:
-            timeout = None
-        response = await self.client(client).chat.completions.create(
+        args = self._prepare_args(instructions, items, tools, options)
+        response = await self.client(client).responses.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self._get_extra_body(options),
             stream=False,
-            timeout=timeout,
+            timeout=self._timeout(),
         )
-        choice = response.choices[0]
-        parts: Sequence[AssistantMessagePart] = []
-
-        if self.reasoning_enabled(options) and hasattr(choice.message, "reasoning"):
-            reasoning_text: str = choice.message.reasoning  # type: ignore
-            if reasoning_text and reasoning_text.strip() != "":
-                parts.append(MessagePartReasoning(text=reasoning_text))
-
-        text = choice.message.content
-        if text:
-            parts.append(MessagePartText(text=text))
-        for tc in choice.message.tool_calls or []:
-            assert tc.type == "function"
-            args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-            parts.append(
-                MessagePartToolCall(
-                    tool_call_id=tc.id or _gen_id(),
-                    tool_name=tc.function.name,
-                    input=args,
-                )
-            )
-
-        annotations: list[Annotation] | None = None
-        for a in choice.message.annotations or []:
-            if not annotations:
-                annotations = []
-            annotations.append(
-                Annotation(
-                    title=a.url_citation.title,
-                    url=a.url_citation.url,
-                    start=a.url_citation.start_index,
-                    end=a.url_citation.end_index,
-                )
-            )
-
         return GenerationResult(
-            message=AssistantMessage(content=parts, annotations=annotations),
-            finish_reason=self._get_finish_reason(choice.finish_reason),
+            items=self._parse_output(response, self.reasoning_enabled(options)),
+            finish_reason=self._get_finish_reason(response),
             usage=self._get_usage(response.usage),
+            response_id=response.id,
         )
 
     @override
     async def stream(
         self,
         instructions: str,
-        messages: list[Message],
+        items: Sequence[Item],
         tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
-    ) -> AsyncGenerator[StreamPart, None]:
-        args = self._prepare_args(instructions, messages, tools, options)
-        if t := os.environ.get("AGENTIA_TIMEOUT"):
-            timeout = float(t)
-        else:
-            timeout = None
-        response = await self.client(client).chat.completions.create(
+    ) -> AsyncGenerator[StreamEvent, None]:
+        args = self._prepare_args(instructions, items, tools, options)
+        events = await self.client(client).responses.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self._get_extra_body(options),
             stream=True,
-            stream_options={
-                "include_usage": True,
-            },
-            timeout=timeout,
+            timeout=self._timeout(),
         )
-        started = False
-        streaming_text = False
-        streaming_reasoning = False
-        tool_calls: list[ToolCall | None] = []
-        tool_call_partial_inputs: list[str] = []
-        finished = False
-        first_chunk = True
-        finish_reason: str | None = None
-        usage: Usage | None = None
 
-        async for chunk in response:
-            if chunk.usage:
-                usage = self._get_usage(chunk.usage)
-            if chunk.choices and chunk.choices[0].finish_reason:
-                finish_reason = self._get_finish_reason(chunk.choices[0].finish_reason)
+        reasoning_enabled = self.reasoning_enabled(options)
+        seq = 0
+        response: Response | None = None
 
-            if finished:
-                continue
+        def next_seq() -> int:
+            nonlocal seq
+            seq += 1
+            return seq
 
-            if not started:
-                started = True
-                yield StreamPartTurnStart(role="assistant")
+        async for event in events:
+            # Matching on `event.type` directly keeps the union narrowed.
+            match event.type:
+                case "response.created":
+                    yield ResponseCreatedEvent(
+                        sequence_number=next_seq(),
+                        response=ResponseInfo(
+                            id=event.response.id, status=event.response.status
+                        ),
+                    )
 
-            if not chunk.choices:
-                continue
+                case "response.in_progress":
+                    yield ResponseInProgressEvent(
+                        sequence_number=next_seq(),
+                        response=ResponseInfo(
+                            id=event.response.id, status=event.response.status
+                        ),
+                    )
 
-            choice = chunk.choices[0]
-            delta = choice.delta
-
-            # For anthropic/claude-opus-4.6 on openrouter, there is an extra chunk before reasoning with content == '\n'.
-            # Filter this out.
-            if first_chunk:
-                first_chunk = False
-                if (
-                    self.name == "openrouter"
-                    and self.model.startswith("anthropic/claude")
-                    and self.reasoning_enabled(options)
-                    and not hasattr(delta, "reasoning")
-                    and (not delta.content or not delta.content.strip())
-                    and not delta.tool_calls
-                ):
-                    continue
-
-            if rd := getattr(delta, "reasoning", None):
-                if not self.reasoning_enabled(options):
-                    continue
-                if not streaming_reasoning:
-                    streaming_reasoning = True
-                    yield StreamPartReasoningStart(id=_gen_id())
-                yield StreamPartReasoningDelta(id=_gen_id(), delta=rd)
-            elif streaming_reasoning:
-                streaming_reasoning = False
-                yield StreamPartReasoningEnd(id=_gen_id())
-
-            if delta.content:
-                if not streaming_text:
-                    streaming_text = True
-                    yield StreamPartTextStart(id=_gen_id())
-                yield StreamPartTextDelta(id=_gen_id(), delta=delta.content)
-            elif streaming_text:
-                streaming_text = False
-                yield StreamPartTextEnd(id=_gen_id())
-
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    index = tc.index
-                    if index >= len(tool_calls) or tool_calls[index] is None:
-                        tool_calls.extend([None] * (index - len(tool_calls) + 1))
-                        tool_call_partial_inputs.extend(
-                            [""] * (index - len(tool_call_partial_inputs) + 1)
-                        )
-                        tool_calls[index] = ToolCall(
-                            tool_call_id="", tool_name="", input={}
-                        )
-                        tool_call_partial_inputs[index] = ""
-                    tc_obj = tool_calls[index]
-                    assert tc_obj is not None
-                    if tc.id:
-                        tc_obj.tool_call_id += tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            tc_obj.tool_name += tc.function.name
-                        if tc.function.arguments:
-                            tool_call_partial_inputs[index] += tc.function.arguments
-
-            if choice.finish_reason:
-                if streaming_text:
-                    streaming_text = False
-                    yield StreamPartTextEnd(id=_gen_id())
-                for i, tc in enumerate(tool_calls):
-                    if not tc:
+                case "response.output_item.added":
+                    if event.item.type == "reasoning" and not reasoning_enabled:
                         continue
-                    tc.input = json.loads(tool_call_partial_inputs[i] or "{}")
-                    yield tc
-                finished = True
+                    if parsed := self._parse_stream_item(event.item):
+                        yield ResponseOutputItemAddedEvent(
+                            sequence_number=next_seq(),
+                            output_index=event.output_index,
+                            item=parsed,
+                        )
 
-        yield StreamPartTurnEnd(
-            usage=usage or Usage(),
-            finish_reason=self._get_finish_reason(finish_reason or "unknown"),
-            role="assistant",
-            message=None,
-        )
+                case "response.output_item.done":
+                    if event.item.type == "reasoning" and not reasoning_enabled:
+                        continue
+                    if parsed := self._parse_stream_item(event.item):
+                        yield ResponseOutputItemDoneEvent(
+                            sequence_number=next_seq(),
+                            output_index=event.output_index,
+                            item=parsed,
+                        )
+
+                case "response.content_part.added" | "response.content_part.done":
+                    part = self._parse_content_part(event.part)
+                    if part is None:
+                        continue
+                    cls = (
+                        ResponseContentPartAddedEvent
+                        if event.type == "response.content_part.added"
+                        else ResponseContentPartDoneEvent
+                    )
+                    yield cls(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        part=part,
+                    )
+
+                case "response.output_text.delta":
+                    yield ResponseOutputTextDeltaEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        delta=event.delta,
+                    )
+
+                case "response.output_text.done":
+                    yield ResponseOutputTextDoneEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        text=event.text,
+                    )
+
+                case "response.output_text.annotation.added":
+                    a = event.annotation
+                    if isinstance(a, dict) and a.get("type") == "url_citation":
+                        yield ResponseOutputTextAnnotationAddedEvent(
+                            sequence_number=next_seq(),
+                            item_id=event.item_id,
+                            output_index=event.output_index,
+                            content_index=event.content_index,
+                            annotation_index=event.annotation_index,
+                            annotation=UrlCitation(
+                                title=str(a.get("title") or ""),
+                                url=str(a.get("url") or ""),
+                                start_index=int(a.get("start_index") or 0),
+                                end_index=int(a.get("end_index") or 0),
+                            ),
+                        )
+
+                case "response.refusal.delta":
+                    yield ResponseRefusalDeltaEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        delta=event.delta,
+                    )
+
+                case "response.refusal.done":
+                    yield ResponseRefusalDoneEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        refusal=event.refusal,
+                    )
+
+                case "response.reasoning_text.delta":
+                    if not reasoning_enabled:
+                        continue
+                    yield ResponseReasoningTextDeltaEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        delta=event.delta,
+                    )
+
+                case "response.reasoning_text.done":
+                    if not reasoning_enabled:
+                        continue
+                    yield ResponseReasoningTextDoneEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        content_index=event.content_index,
+                        text=event.text,
+                    )
+
+                case "response.reasoning_summary_text.delta":
+                    if not reasoning_enabled:
+                        continue
+                    yield ResponseReasoningSummaryTextDeltaEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        summary_index=event.summary_index,
+                        delta=event.delta,
+                    )
+
+                case "response.reasoning_summary_text.done":
+                    if not reasoning_enabled:
+                        continue
+                    yield ResponseReasoningSummaryTextDoneEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        summary_index=event.summary_index,
+                        text=event.text,
+                    )
+
+                case (
+                    "response.reasoning_summary_part.added"
+                    | "response.reasoning_summary_part.done"
+                ):
+                    if not reasoning_enabled:
+                        continue
+                    cls2 = (
+                        ResponseReasoningSummaryPartAddedEvent
+                        if event.type == "response.reasoning_summary_part.added"
+                        else ResponseReasoningSummaryPartDoneEvent
+                    )
+                    yield cls2(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        summary_index=event.summary_index,
+                        part=SummaryText(text=event.part.text),
+                    )
+
+                case "response.function_call_arguments.delta":
+                    yield ResponseFunctionCallArgumentsDeltaEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        delta=event.delta,
+                    )
+
+                case "response.function_call_arguments.done":
+                    yield ResponseFunctionCallArgumentsDoneEvent(
+                        sequence_number=next_seq(),
+                        item_id=event.item_id,
+                        output_index=event.output_index,
+                        arguments=event.arguments,
+                    )
+
+                case "response.completed" | "response.incomplete" | "response.failed":
+                    response = event.response
+                    info = self._response_info(response)
+                    match event.type:
+                        case "response.completed":
+                            yield ResponseCompletedEvent(
+                                sequence_number=next_seq(), response=info
+                            )
+                        case "response.incomplete":
+                            yield ResponseIncompleteEvent(
+                                sequence_number=next_seq(), response=info
+                            )
+                        case _:
+                            yield ResponseFailedEvent(
+                                sequence_number=next_seq(), response=info
+                            )
+
+                case "error":
+                    yield ErrorEvent(
+                        sequence_number=next_seq(),
+                        message=event.message,
+                        code=event.code,
+                        param=event.param,
+                    )
+
+        if response is None:
+            # The provider ended the stream without a terminal response event.
+            yield ResponseCompletedEvent(
+                sequence_number=next_seq(), response=ResponseInfo()
+            )
+
+    def _parse_stream_item(self, item: Any) -> Item | None:
+        """Convert one streamed output item into a conversation item."""
+        match item.type:
+            case "reasoning":
+                return self._parse_reasoning_item(item)
+            case "message":
+                return self._parse_message_item(item)
+            case "function_call":
+                return FunctionCall(
+                    id=item.id,
+                    call_id=item.call_id,
+                    name=item.name,
+                    arguments=item.arguments or "{}",
+                    status="completed",
+                )
+            case _:
+                return None
+
+    def _parse_content_part(self, part: Any) -> Content | None:
+        match getattr(part, "type", None):
+            case "output_text":
+                return OutputText(text=part.text)
+            case "refusal":
+                return Refusal(refusal=part.refusal)
+            case _:
+                return None

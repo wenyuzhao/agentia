@@ -4,17 +4,18 @@ from dataclasses import dataclass
 from typing import AsyncGenerator, Sequence
 import httpx
 from agentia.llm import LLMOptions
-from agentia.models.chat import Message
 from agentia.tools.tools import ToolSet
 import agentia.models as models
-from agentia.models.stream import StreamPart
+from agentia.models.items import Item
+from agentia.models.stream import StreamEvent
 
 
 @dataclass
 class GenerationResult:
-    message: models.AssistantMessage
+    items: list[Item]
     finish_reason: models.FinishReason
     usage: models.Usage
+    response_id: str | None = None
 
 
 class Provider(abc.ABC):
@@ -56,7 +57,7 @@ class Provider(abc.ABC):
     async def generate(
         self,
         instructions: str,
-        messages: list[Message],
+        items: Sequence[Item],
         tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
@@ -66,8 +67,8 @@ class Provider(abc.ABC):
     def stream(
         self,
         instructions: str,
-        messages: list[Message],
+        items: Sequence[Item],
         tools: ToolSet,
         options: LLMOptions,
         client: httpx.AsyncClient,
-    ) -> AsyncGenerator[StreamPart, None]: ...
+    ) -> AsyncGenerator[StreamEvent, None]: ...

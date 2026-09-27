@@ -103,12 +103,9 @@ async def test_unregister():
     assert await agent.commands.handle("/foo") == "/foo"
 
 
-def _user_text(msg) -> str:
-    """Extract concatenated text from a UserMessage, regardless of content shape."""
-    content = msg.content
-    if isinstance(content, str):
-        return content
-    return "".join(p.text for p in content if hasattr(p, "text"))
+def _user_text(item) -> str:
+    """Concatenated text of a user message item."""
+    return item.text
 
 
 @pytest.mark.asyncio
@@ -140,7 +137,7 @@ async def test_run_uses_handler_output_as_prompt():
     assert "hello" in msg.text.lower()
     history = agent.history.get()
     assert len(history) >= 2
-    assert history[0].role == "user"
+    assert history[0].type == "message" and history[0].role == "user"
     assert "hello" in _user_text(history[0])
 
 

@@ -13,16 +13,16 @@ import uuid
 from agentia.history import History
 from agentia.llm import LLMOptions, get_provider
 from agentia.llm.react import run_react_loop, run_react_loop_streamed
-from agentia.llm.completion import ChatCompletion
-from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
-from agentia.models.chat import ResponseFormatJson
+from agentia.llm.completion import Run
+from agentia.llm.stream import RunStream, RunEvents
+from agentia.models.options import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
 from agentia.models import (
-    Message,
+    InputItem,
+    Item,
     ObjectType,
     Usage,
     UserConsentRequest,
-    UserMessage,
 )
 from agentia.tools.mcp import MCPContext
 from agentia.utils.commands import Commands
@@ -90,7 +90,7 @@ class Agent:
         self._temp_mcp_context: Optional[MCPContext] = None
         self.events = AgentEvents()
         self.commands = Commands(self)
-        self.__deferred_messages: list[UserMessage] = []
+        self.__deferred_items: list[Item] = []
         self.env: dict[str, str] = {}
         """Session-local environment variables that can be used in tools. This is also passed to the processes launched by the Bash tool."""
 
@@ -145,41 +145,41 @@ class Agent:
     @overload
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: InputItem,
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
         options: LLMOptions | None = None,
-    ) -> ChatCompletion: ...
+    ) -> Run: ...
 
     @overload
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: InputItem,
         *,
         stream: Literal[True],
         events: Literal[False] = False,
         options: LLMOptions | None = None,
-    ) -> ChatCompletionStream: ...
+    ) -> RunStream: ...
 
     @overload
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: InputItem,
         *,
         stream: Literal[True],
         events: Literal[True],
         options: LLMOptions | None = None,
-    ) -> ChatCompletionEvents: ...
+    ) -> RunEvents: ...
 
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: InputItem,
         *,
         stream: bool = False,
         events: bool = False,
         options: LLMOptions | None = None,
-    ) -> ChatCompletion | ChatCompletionStream | ChatCompletionEvents:
+    ) -> Run | RunStream | RunEvents:
         options_merged = self.__merge_options(options)
         if stream:
             x = run_react_loop_streamed(self, prompt, events, options_merged)
@@ -190,7 +190,7 @@ class Agent:
 
     async def generate_object[T: ObjectType](
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: InputItem,
         type: type[T],
         options: LLMOptions | None = None,
     ) -> T:
@@ -227,26 +227,26 @@ class Agent:
         else:
             raise ValueError(f"Invalid consent response: {consent}")
 
-    async def defer(self, msg: UserMessage) -> None:
+    async def defer(self, item: Item) -> None:
         """
-        Enqueue a message to be added to the conversation history immediately after the current turn finishes.
-        This can be used to add messages in the middle of a ReAct loop.
+        Enqueue an item to be added to the conversation history immediately after the current turn finishes.
+        This can be used to add items in the middle of a ReAct loop.
         """
-        self.__deferred_messages.append(msg)
+        self.__deferred_items.append(item)
 
-    def has_deferred_messages(self) -> bool:
+    def has_deferred_items(self) -> bool:
         """
-        Check if there are any messages enqueued with `defer()`.
+        Check if there are any items enqueued with `defer()`.
         """
-        return len(self.__deferred_messages) > 0
+        return len(self.__deferred_items) > 0
 
-    def clear_deferred_messages(self) -> list[UserMessage]:
+    def clear_deferred_items(self) -> list[Item]:
         """
-        Clear any messages enqueued with `defer()` and return them.
+        Clear any items enqueued with `defer()` and return them.
         """
-        msgs = self.__deferred_messages
-        self.__deferred_messages = []
-        return msgs
+        items = self.__deferred_items
+        self.__deferred_items = []
+        return items
 
     async def compact(
         self,

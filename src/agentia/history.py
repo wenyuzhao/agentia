@@ -5,7 +5,7 @@ from agentia.models import *
 class History:
     def __init__(self) -> None:
         self.__instruction_generators: list[str | Callable[[], str | None]] = []
-        self.__messages: list[Message] = []
+        self.__items: list[Item] = []
         self.__live_cursor: int = 0
         self.current_tokens: int = 0
         self.usage: Usage = Usage()
@@ -28,30 +28,30 @@ class History:
                     instructions.append(gen)
         return "\n\n".join(instructions)
 
-    def add(self, *messages: Message) -> None:
-        self.__messages.extend(messages)
+    def add(self, *items: Item) -> None:
+        self.__items.extend(items)
 
-    def get(self) -> list[Message]:
-        return list(self.__messages)
+    def get(self) -> list[Item]:
+        return list(self.__items)
 
-    def get_new(self) -> Sequence[Message]:
-        """Return only messages added since the last cursor advance."""
-        return self.__messages[self.__live_cursor :]
+    def get_new(self) -> Sequence[Item]:
+        """Return only items added since the last cursor advance."""
+        return self.__items[self.__live_cursor :]
 
     def advance_cursor(self) -> None:
-        """Move cursor to the end of the current message list."""
-        self.__live_cursor = len(self.__messages)
+        """Move cursor to the end of the current item list."""
+        self.__live_cursor = len(self.__items)
 
     def clear(self) -> None:
-        self.__messages = []
+        self.__items = []
         self.__live_cursor = 0
         self.current_tokens = 0
         self.usage = Usage()
 
-    def load(self, messages: Sequence[Message]) -> None:
+    def load(self, items: Sequence[Item]) -> None:
         self.clear()
-        for m in messages:
-            self.__messages.append(m)
+        for i in items:
+            self.__items.append(i)
 
 
 __all__ = ["History"]

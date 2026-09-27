@@ -47,11 +47,9 @@ async def test_stream_with_events():
         events=True,
     )
     all_assistant_content = ""
-    async for stream in run:
-        print("stream: ", stream)
-        content = ""
-        if stream.type == "text-delta":
-            content += stream.delta
-        all_assistant_content += content
+    async for event in run:
+        print("stream: ", event)
+        if event.type == "response.output_text.delta":
+            all_assistant_content += event.delta
     print(all_assistant_content)
     assert "72" in all_assistant_content

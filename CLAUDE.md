@@ -44,7 +44,7 @@ Tests require API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
 
 ### LLM Providers (`src/agentia/llm/`)
 
-Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
+Provider abstraction with a common base (`_openai_api.py`) that speaks the **stateless OpenAI Responses API** (`/v1/responses`, always `store: false`) — the Chat Completions API is not supported. Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama. Note that Ollama and the Cloudflare `/compat` gateway do not implement `/v1/responses`. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
 
 ### Tool System (`src/agentia/tools/`)
 
@@ -54,13 +54,38 @@ Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Pr
 - **MCP servers**: local (stdio) or remote (HTTP/SSE) via `MCP` class. `MCPContext` manages server lifecycle.
 - **Provider-defined tools**: provider-specific built-in tools.
 
-### Message/Models System (`src/agentia/models/`)
+### Items/Models System (`src/agentia/models/`)
 
-Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage. Multi-modal content support (text, images, audio, video, files). Structured output via pydantic BaseModel in `ResponseFormatJson`.
+Pydantic models mirroring the Responses API, split across `base.py` (usage, tools, files,
+annotations), `content.py` (content parts), `items.py` (the `Item` union), `options.py`
+(response format) and `stream.py` (stream events).
 
-### Streaming (`src/agentia/llm/stream.py`)
+Conversation history is a **list of `Item`**, not messages. The `Item` union mirrors the
+API's `ItemField`: `Message` (`message`, with a user/assistant/system/developer role),
+`Reasoning` (`reasoning` — its own item, not part of the message), `FunctionCall`
+(`function_call`), `FunctionCallOutput` (`function_call_output`) and `Compaction`
+(`compaction`, agentia's client-side compaction). One assistant turn yields several items.
 
-`ChatCompletionStream` for async message iteration; `ChatCompletionEvents` for granular stream part events (text-start/delta/end, reasoning-start/delta/end).
+Build messages with `Message.user()` / `.assistant()` / `.system()` / `.developer()`;
+strings become `input_text`/`output_text` and a `File` becomes `input_image` /
+`input_audio` / `input_file` by media type. Serialize with `item.to_responses_item()` or
+`to_responses_input(items)`. `Reasoning` keeps the provider's `id`, `encrypted_content`,
+`signature` and `format` so it can be replayed under `store: false`; an item without an
+`id` is dropped. Structured output via `ResponseFormatJson` → Responses `text.format`.
+
+### Streaming (`src/agentia/models/stream.py`, `src/agentia/llm/stream.py`)
+
+Stream event `type` strings are exactly the Responses API's SSE types
+(`response.output_text.delta`, `response.output_item.added`/`.done`,
+`response.reasoning_summary_text.delta`, …), each carrying `sequence_number` plus
+`item_id`/`output_index`/`content_index`/`summary_index`. Three `agentia.*` extensions
+cover what the API has no events for: `agentia.run.started` / `agentia.run.completed`
+(a `run()` spans several responses) and `agentia.input_item.added` (items agentia
+appends itself — client-executed tool results and `Agent.defer()` items; a
+`function_call_output` is an input, so it is never a `response.output_item.*`).
+
+`Run` (non-streaming, iterates items), `RunStream` (text/reasoning streams plus tool
+items) and `RunEvents` (raw stream events) are the three `Agent.run()` return types.
 
 ### Skills (`src/agentia/plugins/skills.py`)
 

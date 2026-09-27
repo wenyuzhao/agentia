@@ -29,7 +29,7 @@ async def test_function_call():
     )
     all_assistant_content = ""
     async for msg in run:
-        if msg.role == "assistant":
+        if msg.type == "message" and msg.role == "assistant":
             all_assistant_content += msg.text
         print(msg)
     assert "72" in all_assistant_content
@@ -122,7 +122,7 @@ async def test_tool_lazy_loading():
     )
     all_assistant_content = ""
     async for msg in run:
-        if msg.role == "assistant":
+        if msg.type == "message" and msg.role == "assistant":
             all_assistant_content += msg.text
         print(msg)
     assert "72" in all_assistant_content

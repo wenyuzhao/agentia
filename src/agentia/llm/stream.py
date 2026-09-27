@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Literal, TYPE_CHECKING
 
-from agentia.llm.completion import async_gen_to_sync
+from agentia.llm.completion import async_gen_to_sync, last_assistant_message
 from agentia.models import *
 
 if TYPE_CHECKING:
@@ -40,12 +40,12 @@ class MessageStream(TextStream):
     type: Literal["message-stream"] = "message-stream"
 
 
-class ChatCompletionStreamBase:
+class RunStreamBase:
     def __init__(self, agent: "Agent"):
         self.usage = Usage()
         self.last_usage = Usage()
         self.finish_reason: FinishReason | None = None
-        self.new_messages: list[Message] = []
+        self.new_items: list[Item] = []
         self.agent = agent
 
     async def _on_finish(self):
@@ -54,40 +54,68 @@ class ChatCompletionStreamBase:
         self.agent.history.usage += self.usage
         await self.agent.events.end_of_turn.emit()
 
-    def _add_new_message(self, msg: Message):
-        self.new_messages.append(msg)
+    def _add_new_item(self, item: Item):
+        self.new_items.append(item)
 
 
-class ChatCompletionStream(ChatCompletionStreamBase):
-    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: "Agent"):
+async def _text_stream(
+    gen: AsyncGenerator[StreamEvent, None], first: str
+) -> AsyncGenerator[str, None]:
+    """Yield output-text deltas until the current content part ends."""
+    yield first
+    async for event in gen:
+        match event.type:
+            case "response.output_text.delta":
+                yield event.delta
+            case "response.output_text.done" | "response.content_part.done":
+                break
+
+
+async def _reasoning_stream(
+    gen: AsyncGenerator[StreamEvent, None], first: str
+) -> AsyncGenerator[str, None]:
+    """Yield reasoning deltas until the current reasoning item ends."""
+    yield first
+    async for event in gen:
+        match event.type:
+            case (
+                "response.reasoning_text.delta"
+                | "response.reasoning_summary_text.delta"
+            ):
+                yield event.delta
+            case (
+                "response.reasoning_text.done"
+                | "response.reasoning_summary_text.done"
+                | "response.output_item.done"
+            ):
+                break
+
+
+class RunStream(RunStreamBase):
+    """A streaming `Agent.run()`, yielding text/reasoning streams and finished items."""
+
+    def __init__(self, gen: AsyncGenerator[StreamEvent, None], agent: "Agent"):
         super().__init__(agent)
 
         async def __gen() -> AsyncGenerator[
-            ReasoningStream | MessageStream | ToolCall | ToolCallResponse, None
+            ReasoningStream | MessageStream | FunctionCall | FunctionCallOutput, None
         ]:
-            async for part in gen:
-                if isinstance(part, (ToolCall, ToolCallResponse)):
-                    yield part
-                elif isinstance(part, StreamPartTextStart):
-
-                    async def gen2():
-                        async for part2 in gen:
-                            if isinstance(part2, StreamPartTextDelta):
-                                yield part2.delta
-                            elif isinstance(part2, StreamPartTextEnd):
-                                break
-
-                    yield MessageStream(gen2())
-                elif isinstance(part, StreamPartReasoningStart):
-
-                    async def gen2():
-                        async for part2 in gen:
-                            if isinstance(part2, StreamPartReasoningDelta):
-                                yield part2.delta
-                            elif isinstance(part2, StreamPartReasoningEnd):
-                                break
-
-                    yield ReasoningStream(gen2())
+            async for event in gen:
+                match event.type:
+                    case "response.output_item.done":
+                        # Only the model's own function calls; results come below.
+                        if isinstance(event.item, FunctionCall):
+                            yield event.item
+                    case "agentia.input_item.added":
+                        if isinstance(event.item, FunctionCallOutput):
+                            yield event.item
+                    case "response.output_text.delta":
+                        yield MessageStream(_text_stream(gen, event.delta))
+                    case (
+                        "response.reasoning_text.delta"
+                        | "response.reasoning_summary_text.delta"
+                    ):
+                        yield ReasoningStream(_reasoning_stream(gen, event.delta))
             await self._on_finish()
 
         self.__gen = __gen()
@@ -95,18 +123,14 @@ class ChatCompletionStream(ChatCompletionStreamBase):
     def __aiter__(
         self,
     ) -> AsyncGenerator[
-        ReasoningStream | MessageStream | ToolCall | ToolCallResponse | Annotation, None
+        ReasoningStream | MessageStream | FunctionCall | FunctionCallOutput, None
     ]:
         return self.__gen
 
-    async def __wait_for_completion(self) -> AssistantMessage:
-        async for item in self.__gen:
+    async def __wait_for_completion(self) -> Message:
+        async for _ in self.__gen:
             ...
-        if not self.new_messages:
-            return AssistantMessage(content=[])
-        m = self.new_messages[-1]
-        assert isinstance(m, AssistantMessage)
-        return m
+        return last_assistant_message(self.new_items)
 
     def __await__(self):
         return self.__wait_for_completion().__await__()
@@ -115,28 +139,26 @@ class ChatCompletionStream(ChatCompletionStreamBase):
         return async_gen_to_sync(self.__gen)
 
 
-class ChatCompletionEvents(ChatCompletionStreamBase):
-    def __init__(self, gen: AsyncGenerator[StreamPart, None], agent: "Agent"):
+class RunEvents(RunStreamBase):
+    """A streaming `Agent.run()`, yielding raw Responses API stream events."""
+
+    def __init__(self, gen: AsyncGenerator[StreamEvent, None], agent: "Agent"):
         super().__init__(agent)
 
         async def __gen():
-            async for part in gen:
-                yield part
+            async for event in gen:
+                yield event
             await self._on_finish()
 
         self.__gen = __gen()
 
-    def __aiter__(self) -> AsyncGenerator[StreamPart, None]:
+    def __aiter__(self) -> AsyncGenerator[StreamEvent, None]:
         return self.__gen
 
-    async def __wait_for_completion(self) -> AssistantMessage:
-        async for item in self.__gen:
+    async def __wait_for_completion(self) -> Message:
+        async for _ in self.__gen:
             ...
-        if not self.new_messages:
-            return AssistantMessage(content=[])
-        m = self.new_messages[-1]
-        assert isinstance(m, AssistantMessage)
-        return m
+        return last_assistant_message(self.new_items)
 
     def __await__(self):
         return self.__wait_for_completion().__await__()

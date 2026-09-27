@@ -258,7 +258,7 @@ class ToolSet:
         tool: _PythonFunctionTool,
         agent: "Agent",
         args: dict[str, JsonValue],
-    ) -> models.ToolCallResponse:
+    ) -> models.FunctionCallOutput:
         p_args, kw_args = tool.process_json_args(agent, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
@@ -267,63 +267,57 @@ class ToolSet:
         if isinstance(output, ToolResult):
             files = output.files
             output = output.output
-        return models.ToolCallResponse(
-            tool_call_id=id,
-            tool_name=tool.name,
-            input=args,
-            output=output,
-            output_files=files,
+        return models.FunctionCallOutput.create(
+            call_id=id, name=tool.name, output=output, files=files
         )
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: dict[str, JsonValue]
-    ) -> models.ToolCallResponse:
+    ) -> models.FunctionCallOutput:
         result = await tool.server.run(tool.name, args)
-        return models.ToolCallResponse(
-            tool_call_id=id, tool_name=tool.name, input=args, output=result
+        return models.FunctionCallOutput.create(
+            call_id=id, name=tool.name, output=result
         )
 
     async def __run_one(
-        self, agent: "Agent", c: models.ToolCall
-    ) -> models.ToolCallResponse:
-        tool = self.__tools.get(c.tool_name, None)
+        self, agent: "Agent", c: models.FunctionCall
+    ) -> models.FunctionCallOutput:
+        tool = self.__tools.get(c.name, None)
         try:
             if not tool:
-                raise ValueError(f"Tool '{c.tool_name}' not found")
+                raise ValueError(f"Tool '{c.name}' not found")
             if isinstance(tool, _PythonFunctionTool):
                 return await self.__run_python_tool(
-                    id=c.tool_call_id,
+                    id=c.call_id,
                     tool=tool,
                     agent=agent,
                     args=c.input,
                 )
             elif isinstance(tool, _MCPTool):
                 return await self.__run_mcp_tool(
-                    id=c.tool_call_id,
+                    id=c.call_id,
                     tool=tool,
                     args=c.input,
                 )
             else:
-                raise ValueError(f"Tool {c.tool_name} is of unknown type")
+                raise ValueError(f"Tool {c.name} is of unknown type")
         except Exception as e:
-            output: JsonValue = {"error": str(e)}
-            r = models.ToolCallResponse(
-                tool_call_id=c.tool_call_id,
-                tool_name=c.tool_name,
-                input=c.input,
-                output=output,
+            return models.FunctionCallOutput.create(
+                call_id=c.call_id,
+                name=c.name,
+                output={"error": str(e)},
+                is_error=True,
             )
-            return r
 
     async def run(
-        self, agent: "Agent", tool_calls: list[models.ToolCall], parallel: bool
-    ) -> list[models.ToolCallResponse]:
+        self, agent: "Agent", tool_calls: list[models.FunctionCall], parallel: bool
+    ) -> list[models.FunctionCallOutput]:
         if parallel:
             results = await asyncio.gather(
                 *[self.__run_one(agent, c) for c in tool_calls]
             )
         else:
-            results: list[models.ToolCallResponse] = []
+            results: list[models.FunctionCallOutput] = []
             for c in tool_calls:
                 results.append(await self.__run_one(agent, c))
         return results

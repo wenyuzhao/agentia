@@ -1,5 +1,5 @@
 from agentia import Agent
-from agentia.models import CompactedMessage
+from agentia.models import Compaction
 import pytest
 import dotenv
 
@@ -20,11 +20,11 @@ async def test_compact_basic():
     await agent.compact(effort="medium")
 
     messages = agent.history.get()
-    # Should have system instructions + compacted message + last message
+    # Should have the compaction item + the items kept from the last turn
     assert len(messages) == 2
-    assert isinstance(messages[0], CompactedMessage)
+    assert isinstance(messages[0], Compaction)
     # The compacted message should contain key facts
-    text = messages[0].content.lower()
+    text = messages[0].summary.lower()
     assert "alice" in text
 
 
@@ -51,5 +51,5 @@ async def test_compact_with_model_override():
 
     messages = agent.history.get()
     assert len(messages) == 2
-    assert isinstance(messages[0], CompactedMessage)
-    assert "12345" in messages[0].content
+    assert isinstance(messages[0], Compaction)
+    assert "12345" in messages[0].summary

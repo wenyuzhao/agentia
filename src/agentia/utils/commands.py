@@ -2,7 +2,7 @@ import inspect
 import shlex
 from typing import TYPE_CHECKING, Awaitable, Callable, Sequence
 
-from agentia.models.chat import Message, MessagePartText, UserMessage
+from agentia.models import InputItem, InputText, Item, Message
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -77,35 +77,30 @@ class Commands:
             return skill.execute(args)
         return input  # treat as normal input if no command matched
 
-    async def process_messages(
-        self, prompt: str | Message | Sequence[Message]
-    ) -> list[Message]:
-        messages = []
+    async def process_items(self, prompt: InputItem) -> list[Item]:
+        """Expand slash commands in a prompt, returning the items to add to history."""
+        items: list[Item] = []
         for p in (
             prompt
             if isinstance(prompt, Sequence) and not isinstance(prompt, str)
             else [prompt]
         ):
             if isinstance(p, str):
-                if p := await self.handle(p):
-                    messages.append(UserMessage(p))
-            elif isinstance(p, UserMessage):
-                if isinstance(p.content, str):
-                    if c := await self.handle(p.content):
-                        messages.append(UserMessage(c))
-                else:
-                    parts = []
-                    for part in p.content:
-                        if isinstance(part, MessagePartText):
-                            if c := await self.handle(part.text):
-                                parts.append(MessagePartText(c))
-                        else:
-                            parts.append(part)
-                    if parts:
-                        messages.append(UserMessage(parts))
+                if text := await self.handle(p):
+                    items.append(Message.user(text))
+            elif isinstance(p, Message) and p.role == "user":
+                parts = []
+                for part in p.content:
+                    if isinstance(part, InputText):
+                        if c := await self.handle(part.text):
+                            parts.append(InputText(text=c))
+                    else:
+                        parts.append(part)
+                if parts:
+                    items.append(Message(role="user", content=parts, id=p.id))
             else:
-                messages.append(p)
-        return messages
+                items.append(p)
+        return items
 
     def __find_skill(self, name: str):
         from agentia.plugins.skills import Skill, Skills

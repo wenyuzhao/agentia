@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import dotenv
 
@@ -5,6 +7,7 @@ dotenv.load_dotenv()
 
 from agentia import Agent  # noqa: E402
 from agentia.llm import get_provider  # noqa: E402
+from agentia.llm.providers.openai import OpenAI  # noqa: E402
 
 
 class TestModelImmutability:
@@ -15,14 +18,15 @@ class TestModelImmutability:
             agent.model = "openai/gpt-5-mini"  # type: ignore[misc]
 
     def test_provider_model_is_readonly(self):
-        provider = get_provider("openai:gpt-5-nano")
-        assert provider.model == "gpt-5-nano"
+        # No provider prefix, so this goes through the default provider.
+        provider = get_provider("openai/gpt-5-nano")
+        assert provider.model == "openai/gpt-5-nano"
         with pytest.raises(AttributeError):
-            provider.model = "gpt-5-mini"  # type: ignore[misc]
+            provider.model = "openai/gpt-5-mini"  # type: ignore[misc]
 
     def test_provider_model_strips_think_suffix(self):
-        provider = get_provider("openai:gpt-5-nano:think")
-        assert provider.model == "gpt-5-nano"
+        provider = get_provider("openrouter:openai/gpt-5-nano:think")
+        assert provider.model == "openai/gpt-5-nano"
 
     def test_openrouter_model_is_readonly(self):
         provider = get_provider("openrouter:openai/gpt-5-nano")
@@ -48,7 +52,9 @@ class TestGetContextLength:
 
     @pytest.mark.asyncio
     async def test_openai_context_length(self):
-        provider = get_provider("openai:gpt-5-nano")
+        # The OpenAI provider has no context length in its own API and falls back to
+        # OpenRouter's public model catalog, so the OpenRouter key is enough here.
+        provider = OpenAI(model="gpt-5-nano", api_key=os.environ["OPENROUTER_API_KEY"])
         ctx = await provider.get_context_length()
         assert isinstance(ctx, int)
         assert ctx > 0

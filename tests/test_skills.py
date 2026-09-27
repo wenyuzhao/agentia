@@ -14,7 +14,7 @@ async def test_skills():
     run = agent.run("What is the weather and temperature like in boston?")
     all_assistant_content: str = ""
     async for msg in run:
-        if msg.role == "assistant":
+        if msg.type == "message" and msg.role == "assistant":
             all_assistant_content += msg.text
         print(msg)
     assert "27" in all_assistant_content

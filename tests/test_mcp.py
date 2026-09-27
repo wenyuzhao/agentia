@@ -15,7 +15,7 @@ async def test_mcp():
     run = agent.run("Use tools to calculate 234 ** 3, don't add commas to the number")
     all_assistant_content: str = ""
     async for msg in run:
-        if msg.role == "assistant":
+        if msg.type == "message" and msg.role == "assistant":
             all_assistant_content += msg.text
         print(msg)
     assert "12812904" in all_assistant_content

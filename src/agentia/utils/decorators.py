@@ -26,7 +26,7 @@ from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
 from io import BytesIO
-from agentia.models import UserMessage, MessagePartText, MessagePartFile, Message
+from agentia.models import File, Item, Message
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools
@@ -351,7 +351,7 @@ def magic(
                     f"Unsupported return type: {return_type} in magic function {callable.__name__}."
                 )
 
-            messages: list[Message] = []
+            messages: list[Item] = []
             for i, (p, image) in enumerate(images):
                 content_type = "image/png"
                 if isinstance(image, ImageUrl):
@@ -397,13 +397,7 @@ def magic(
                 if p.description:
                     s += f"\nDescription: {p.description})"
                 messages.append(
-                    UserMessage(
-                        content=[
-                            MessagePartText(text=s),
-                            MessagePartFile(data=url, media_type=content_type),
-                        ],
-                        role="user",
-                    )
+                    Message.user([s, File(data=url, media_type=content_type)])
                 )
             async with agent:
                 await agent.run(messages)
