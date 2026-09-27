@@ -1,4 +1,5 @@
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
+
 from agentia.models import *
 
 

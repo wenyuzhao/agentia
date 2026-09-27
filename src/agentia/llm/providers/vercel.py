@@ -1,7 +1,9 @@
-from typing import override
-from ._openai_api import OpenAIAPIProvider
 import os
+from typing import override
+
 import httpx
+
+from ._openai_api import OpenAIAPIProvider
 
 # Model list: https://vercel.com/ai-gateway/models
 

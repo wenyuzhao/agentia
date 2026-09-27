@@ -103,10 +103,12 @@ async for event in run:
 from pydantic import BaseModel, Field
 from enum import StrEnum
 
+
 class HairColor(StrEnum):
     BLACK = "black"
     BROWN = "brown"
     BLONDE = "blonde"
+
 
 class Person(BaseModel):
     name: str
@@ -114,6 +116,7 @@ class Person(BaseModel):
     hair_color: HairColor
     hobbies: list[str]
     location: str = Field(..., description="City and country")
+
 
 result = await agent.generate_object("Get details about Einstein", Person)
 assert isinstance(result, Person)
@@ -126,28 +129,34 @@ Turn any function into an AI-powered function with typed returns:
 ```python
 from agentia import magic, ImageUrl
 
+
 @magic
 async def summarise(text: str) -> str:
     """Summarise the given text to one sentence."""
     ...
 
+
 print(await summarise("Long article text here..."))
+
 
 @magic
 async def classify(text: str) -> Literal["positive", "negative", "neutral"]:
     """Classify sentiment."""
     ...
 
+
 @magic(model="openai/gpt-5.4-nano", tools=[Calculator()])
 async def calculate(expression: str) -> int:
     """Calculate the given expression."""
     ...
+
 
 # Image inputs
 @magic
 async def describe(image: ImageUrl) -> str:
     """Describe the image."""
     ...
+
 
 print(await describe(ImageUrl("https://example.com/photo.jpg")))
 ```
@@ -170,11 +179,11 @@ agent.add_instructions("Additional context.")
 History is a list of Responses API items (see [Items](#11-items--the-responses-api)):
 
 ```python
-agent.history.clear()            # Clear items, keep instructions
+agent.history.clear()  # Clear items, keep instructions
 agent.history.add(Message.user("Hi"))  # Add one or more items
-agent.history.load(items)        # Replace all items
-items = agent.history.get()      # list[Item]
-new_items = agent.history.get_new()    # items added since the last cursor advance
+agent.history.load(items)  # Replace all items
+items = agent.history.get()  # list[Item]
+new_items = agent.history.get_new()  # items added since the last cursor advance
 ```
 
 ### LLM Options
@@ -237,7 +246,12 @@ according to its media type:
 from agentia import Message, File
 
 Message.user("What is in this image?")
-Message.user(["What is this animal?", File(data="https://example.com/cat.png", media_type="image/png")])
+Message.user(
+    [
+        "What is this animal?",
+        File(data="https://example.com/cat.png", media_type="image/png"),
+    ]
+)
 Message.assistant("Hello!")
 Message.system("Be concise.")
 Message.developer("Prefer SI units.")
@@ -249,7 +263,10 @@ Content parts can also be constructed directly — `InputText`, `InputImage`,
 ```python
 from agentia import Message, InputText, InputImage
 
-Message(role="user", content=[InputText(text="Compare these"), InputImage(image_url="https://…")])
+Message(
+    role="user",
+    content=[InputText(text="Compare these"), InputImage(image_url="https://…")],
+)
 ```
 
 Useful accessors: `Message.text` (all text concatenated), `Message.refusal`,
@@ -263,12 +280,12 @@ Because nothing is stored server-side, a reasoning item can only be replayed on 
 next request if it keeps the provider's own identity:
 
 ```python
-item.id                 # Responses output item id, e.g. "rs_..."
-item.content            # [ReasoningText(...)] — raw reasoning
-item.summary            # [SummaryText(...)]  — summary blocks
+item.id  # Responses output item id, e.g. "rs_..."
+item.content  # [ReasoningText(...)] — raw reasoning
+item.summary  # [SummaryText(...)]  — summary blocks
 item.encrypted_content  # opaque payload returned because store=false
-item.signature          # provider signature over the reasoning content
-item.format             # e.g. "openai-responses-v1"
+item.signature  # provider signature over the reasoning content
+item.format  # e.g. "openai-responses-v1"
 ```
 
 A `Reasoning` item with no `id` is dropped when serializing, since the provider would
@@ -335,12 +352,16 @@ Any typed function works as a tool. Use `Annotated` for parameter descriptions. 
 ```python
 from typing import Annotated, Literal
 
+
 def get_weather(
     location: Annotated[str, "The city and state, e.g. San Francisco, CA"],
-    unit: Annotated[Literal["celsius", "fahrenheit"], "Temperature unit"] = "fahrenheit",
+    unit: Annotated[
+        Literal["celsius", "fahrenheit"], "Temperature unit"
+    ] = "fahrenheit",
 ):
     """Get the current weather in a given location"""
     return {"location": location, "temperature": "72", "unit": unit}
+
 
 agent = Agent(model="openai/gpt-5.4-nano", tools=[get_weather])
 response = await agent.run("What's the weather in Boston?")
@@ -362,6 +383,7 @@ Use for custom name, description, or metadata:
 ```python
 from agentia import tool
 
+
 @tool(name="weather_lookup", description="Look up weather data")
 def get_weather(location: Annotated[str, "City name"]):
     return {"temperature": 72}
@@ -371,6 +393,7 @@ def get_weather(location: Annotated[str, "City name"]):
 
 ```python
 from agentia import ToolResult, File
+
 
 @tool
 def generate_chart(data: Annotated[str, "CSV data"]):
@@ -388,6 +411,7 @@ Extend `Plugin` and decorate methods with `@tool`:
 
 ```python
 from agentia import Agent, Plugin, tool
+
 
 class WeatherPlugin(Plugin):
     @tool
@@ -407,6 +431,7 @@ class WeatherPlugin(Plugin):
         """Get the current temperature"""
         return {"temperature": "72", "unit": unit}
 
+
 agent = Agent(model="openai/gpt-5.4-nano", tools=[WeatherPlugin()])
 response = await agent.run("Weather in Boston?")
 ```
@@ -424,8 +449,8 @@ Plugin features:
 agent = Agent(model="openai/gpt-5.4-nano")
 response = await agent.run("Hi!")  # No tools yet
 
-agent.tools.add(get_weather)       # Add tool later
-agent.tools.add(WeatherPlugin())   # Add plugin later
+agent.tools.add(get_weather)  # Add tool later
+agent.tools.add(WeatherPlugin())  # Add plugin later
 response = await agent.run("Weather in Boston?")
 ```
 
@@ -460,7 +485,12 @@ Optional parameters: `env` (dict), `cwd` (str/Path), `timeout` (int).
 
 ```python
 MCP(name="api", type="http", url="https://api.example.com/mcp")
-MCP(name="api", type="sse", url="https://api.example.com/sse", headers={"Authorization": "Bearer ..."})
+MCP(
+    name="api",
+    type="sse",
+    url="https://api.example.com/sse",
+    headers={"Authorization": "Bearer ..."},
+)
 MCP(name="api", type="streamable-http", url="https://...", auth="oauth")
 ```
 
@@ -492,6 +522,7 @@ agent = Agent(model="openai/gpt-5.4-nano", skills=["./my-skills", "./examples"])
 
 # Full control
 from agentia import Skills
+
 agent = Agent(model="openai/gpt-5.4-nano", skills=Skills(search_paths=["./skills"]))
 ```
 
@@ -583,15 +614,17 @@ agent = Agent(model="openai/gpt-5.4-nano", skills=True)
 # Register a custom handler. Sync or async; receives the parsed args list.
 agent.commands.register("greet", lambda args: f"Hello, {args[0]}!")
 
+
 async def clear(args):
     agent.history.clear()
     return "history cleared"
 
+
 agent.commands.register("/clear", clear)  # leading slash is optional
 
 # Dispatch:
-result = await agent.commands.handle('/greet "Alice"')   # -> "Hello, Alice!"
-result = await agent.commands.handle("/clear")           # -> "history cleared"
+result = await agent.commands.handle('/greet "Alice"')  # -> "Hello, Alice!"
+result = await agent.commands.handle("/clear")  # -> "history cleared"
 ```
 
 Resolution order:
@@ -619,6 +652,6 @@ dispatch slash commands when `prompt` is a string starting with `/`:
 ```python
 agent.commands.register("clear", lambda args: (agent.history.clear(), None)[1])
 
-await agent.run("/clear")          # handler runs; LLM is skipped
-await agent.run("/weather Sydney") # skill markdown becomes the prompt
+await agent.run("/clear")  # handler runs; LLM is skipped
+await agent.run("/weather Sydney")  # skill markdown becomes the prompt
 ```

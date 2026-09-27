@@ -1,7 +1,8 @@
+import os
 from typing import override
+
 from ._openai_api import OpenAIAPIProvider
 from .openrouter import OpenRouter as _OpenRouter
-import os
 
 # Model list: https://developers.openai.com/api/docs/models
 

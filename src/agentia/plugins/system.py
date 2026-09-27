@@ -1,16 +1,17 @@
-from . import Plugin, tool
 import asyncio
+import base64
 import os
 import signal
 import tempfile
 import weakref
-from typing import Annotated, Any, Iterable, Literal, override
-from pathlib import Path
-from ..tools import ToolResult
-from ..models.base import File
-import base64
 from asyncio.subprocess import STDOUT
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Annotated, Any, Literal, override
 
+from ..models.base import File
+from ..tools import ToolResult
+from . import Plugin, tool
 
 _DEFAULT_MAX_LINES = 1000
 _DEFAULT_MAX_BYTES = 256 * 1024
@@ -21,7 +22,8 @@ def _terminate_background_pids(pids: set[int]) -> None:
     for pid in list(pids):
         try:
             os.kill(pid, signal.SIGTERM)
-        except Exception:
+        except OSError:
+            # Already gone, or not ours to signal.
             pass
 
 
@@ -127,7 +129,7 @@ class System(Plugin):
 
     @override
     def get_instructions(self) -> str | None:
-        return f"CURRENT WORKING DIRECTORY: `{str(Path.cwd())}`"
+        return f"CURRENT WORKING DIRECTORY: `{Path.cwd()!s}`"
 
     @tool(name="Bash")
     async def run_bash_command(
@@ -168,14 +170,13 @@ class System(Plugin):
         # Stream both stdout and stderr to a single temp log file so we can
         # both return the combined output and (in background mode) tail it.
         fd, log_path = tempfile.mkstemp(prefix="agentia-bash-", suffix=".log")
-        os.close(fd)
         env = os.environ.copy()
         # Pass session-local environment variables to the subprocess
         env.update(self.agent.env)
-        with open(log_path, "wb") as log_write:
+        try:
             proc = await asyncio.create_subprocess_shell(
                 command,
-                stdout=log_write,
+                stdout=fd,
                 stderr=STDOUT,
                 cwd=cwd,
                 env=env,
@@ -183,6 +184,8 @@ class System(Plugin):
                 # the process alive without us having to babysit its tty.
                 start_new_session=True,
             )
+        finally:
+            os.close(fd)
 
         if background:
             # Hand monitoring off to a fire-and-forget task and return now.

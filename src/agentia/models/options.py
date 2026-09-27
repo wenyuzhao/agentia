@@ -16,8 +16,9 @@ Agentia extensions
 - `ResponseFormat`      -- the union of the two.
 """
 
+import builtins
 import inspect
-from typing import Annotated, Any, Literal, Type
+from typing import Annotated, Any, Literal
 
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 from pydantic import BaseModel, Field, JsonValue
@@ -39,7 +40,9 @@ class ResponseFormatJson(BaseModel):
     description: str | None = None
 
     @staticmethod
-    def from_model[T: ObjectType](return_type: Type[T]) -> "ResponseFormatJson":
+    def from_model[T: ObjectType](
+        return_type: builtins.type[T],
+    ) -> "ResponseFormatJson":
         class Result(_Result[return_type]): ...
 
         if inspect.isclass(return_type) and issubclass(return_type, BaseModel):
@@ -72,7 +75,7 @@ type ResponseFormat = Annotated[
 
 
 __all__ = [
-    "ResponseFormatText",
-    "ResponseFormatJson",
     "ResponseFormat",
+    "ResponseFormatJson",
+    "ResponseFormatText",
 ]

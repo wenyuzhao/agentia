@@ -43,8 +43,9 @@ Agentia extensions
 
 import inspect
 import json
+from collections.abc import Sequence
 from enum import Enum
-from typing import Annotated, Any, Literal, Self, Sequence
+from typing import Annotated, Any, Literal, Self
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, JsonValue
@@ -203,7 +204,7 @@ class FunctionCall(BaseModel):
             return {}
         parsed = json.loads(self.arguments)
         if not isinstance(parsed, dict):
-            raise ValueError(f"tool call arguments are not an object: {self.arguments}")
+            raise TypeError(f"tool call arguments are not an object: {self.arguments}")
         return parsed
 
     def to_responses_item(self) -> dict[str, Any]:
@@ -425,16 +426,16 @@ def to_responses_input(items: Sequence[Item]) -> list[dict[str, Any]]:
 
 
 __all__ = [
-    "ItemStatus",
-    "MessageRole",
-    "ObjectType",
-    "MessageInput",
-    "Message",
+    "Compaction",
     "FunctionCall",
     "FunctionCallOutput",
-    "Reasoning",
-    "Compaction",
-    "Item",
     "InputItem",
+    "Item",
+    "ItemStatus",
+    "Message",
+    "MessageInput",
+    "MessageRole",
+    "ObjectType",
+    "Reasoning",
     "to_responses_input",
 ]

@@ -1,8 +1,10 @@
+from typing import Annotated, Literal
+
+import dotenv
+import pytest
+
 from agentia import Agent, tool
 from agentia.plugins import Plugin
-from typing import Literal, Annotated
-import pytest
-import dotenv
 
 dotenv.load_dotenv()
 

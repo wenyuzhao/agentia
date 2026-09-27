@@ -1,12 +1,15 @@
-from collections.abc import AsyncGenerator
 import os
-from typing import Any, Sequence, override
+from collections.abc import AsyncGenerator, Sequence
+from typing import Any, override
+
 import httpx
-from agentia.tools.tools import ToolSet
-from . import LLMOptions, GenerationResult, Provider
-from ...models import *
 import openai
 from openai.types.responses import Response, ResponseUsage
+
+from agentia.tools.tools import ToolSet
+
+from ...models import *
+from . import GenerationResult, LLMOptions, Provider
 
 
 class OpenAIAPIProvider(Provider):
@@ -42,9 +45,8 @@ class OpenAIAPIProvider(Provider):
         )
 
     def reasoning_enabled(self, options: LLMOptions) -> bool:
-        if r := options.reasoning:
-            if r.enabled is not None:
-                return r.enabled
+        if (r := options.reasoning) and r.enabled is not None:
+            return r.enabled
         if self.__think_in_model_string:
             return True
         return os.environ.get("AGENTIA_REASONING_ENABLED", "").lower() in {

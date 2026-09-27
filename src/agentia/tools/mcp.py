@@ -1,21 +1,21 @@
+from collections.abc import Sequence
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Literal, Optional, overload
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Literal, overload
+
 from fastmcp import Client
 from fastmcp.mcp_config import (
-    MCPConfig,
     CanonicalMCPServerTypes,
-    StdioMCPServer,
+    MCPConfig,
     RemoteMCPServer,
+    StdioMCPServer,
 )
-from httpx import Auth
+from httpx2 import Auth
 from mcp.types import Tool as FastMCPTool
 
-
 if TYPE_CHECKING:
-    from agentia.tools.tools import _MCPTool
     from agentia.agent import Agent
+    from agentia.tools.tools import _MCPTool
 
 
 class MCPContext:
@@ -45,7 +45,7 @@ def _convert_tool_format(tool: FastMCPTool) -> Any:
     converted_tool = {
         "name": tool.name,
         "description": tool.description,
-        "parameters": tool.inputSchema,
+        "parameters": tool.input_schema,
     }
     return converted_tool
 
@@ -62,7 +62,7 @@ class MCP:
         cwd: str | Path | None = None,
         timeout: int | None = None,
         type: Literal["local"] = "local",
-        context: Optional[MCPContext] = None,
+        context: MCPContext | None = None,
     ): ...
 
     @overload
@@ -75,7 +75,7 @@ class MCP:
         headers: dict[str, str] | None = None,
         auth: str | Literal["oauth"] | Auth | None = None,
         timeout: int | None = None,
-        context: Optional[MCPContext] = None,
+        context: MCPContext | None = None,
     ): ...
 
     def __init__(
@@ -91,7 +91,7 @@ class MCP:
         auth: str | Literal["oauth"] | Auth | None = None,
         timeout: int | None = None,
         type: Literal["sse", "http", "streamable-http", "local"] = "local",
-        context: Optional[MCPContext] = None,
+        context: MCPContext | None = None,
     ):
 
         self.cmd = None
@@ -107,7 +107,7 @@ class MCP:
         self.name = name
         self.initialized = False
         self.context_available = False
-        self.__tools: list["_MCPTool"] = []
+        self.__tools: list[_MCPTool] = []
         self.session: Client | None = None
         self.timeout: int | None = timeout  # Maximum response time in milliseconds
 

@@ -1,12 +1,17 @@
+import logging
 import os
-from . import Plugin, tool
+from dataclasses import dataclass
 from typing import Annotated, Literal, override
+
 import httpx
 from markdownify import markdownify
 from tavily import AsyncTavilyClient
-from ..tools import ToolResult
+
 from ..models import File
-from dataclasses import dataclass
+from ..tools import ToolResult
+from . import Plugin, tool
+
+_LOGGER = logging.getLogger("agentia.plugins.web")
 
 
 @dataclass
@@ -111,16 +116,15 @@ class Web(Plugin):
             r = await Web.http_get(url)
             if not self.api_key or isinstance(r, ToolResult):
                 return r
-        except Exception as e:
+        except Exception:
             if not self.api_key:
-                raise e
-            pass
+                raise
 
         result = await self.__tavily.extract(urls=url, include_images=True)
         failed_results = result.get("failed_results", [])
         if len(failed_results) > 0:
             try:
                 return await Web.http_get(url)
-            except Exception:
-                pass
+            except (httpx.HTTPError, ValueError) as e:
+                _LOGGER.debug("direct fetch of %s failed: %s", url, e)
         return result

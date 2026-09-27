@@ -1,6 +1,7 @@
 import inspect
 import shlex
-from typing import TYPE_CHECKING, Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING
 
 from agentia.models import InputItem, InputText, Item, Message
 
@@ -113,4 +114,4 @@ class Commands:
 
 
 def _strip_slash(name: str) -> str:
-    return name[1:] if name.startswith("/") else name
+    return name.removeprefix("/")

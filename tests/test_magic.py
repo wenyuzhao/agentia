@@ -1,10 +1,11 @@
-from typing import Literal
-import dotenv
-from pydantic import BaseModel
-from agentia import magic
 from enum import StrEnum
-import pytest
+from typing import Literal
 
+import dotenv
+import pytest
+from pydantic import BaseModel
+
+from agentia import magic
 
 dotenv.load_dotenv()
 
@@ -14,7 +15,7 @@ async def get_content_type(extension: str) -> str:
     """
     Get the http content type for a given file extension. Just return the content type, nothing else.
     """
-    ...
+    raise NotImplementedError
 
 
 class DayParts(StrEnum):
@@ -28,7 +29,7 @@ async def get_day_parts(time: str) -> DayParts:
     """
     Get day part based on the time of day.
     """
-    ...
+    raise NotImplementedError
 
 
 class Weather(BaseModel):
@@ -50,7 +51,7 @@ async def convert_to_fahrenheit(weather: Weather) -> Weather:
     Update the weather object: convert the temperature to Fahrenheit.
     Use the calculator tool to evaluate math expressions if needed.
     """
-    ...
+    raise NotImplementedError
 
 
 @pytest.mark.asyncio

@@ -37,9 +37,13 @@ def test_load_markdown_resolves_at_path_attachments(workspace: Path):
     doc = load_markdown(str(main), substitutions=["file"])
     assert "@child.md" in doc.content
     assert "@img/pic.png" in doc.content
-    assert isinstance(doc.attachments["child.md"], MarkdownDoc)
-    assert doc.attachments["child.md"].content.strip() == "child content"
-    assert doc.attachments["img/pic.png"] == (workspace / "img" / "pic.png")
+    child = doc.attachments["child.md"]
+    assert isinstance(child.content, MarkdownDoc)
+    assert child.content.content.strip() == "child content"
+    assert child.path == workspace / "child.md"
+    picture = doc.attachments["img/pic.png"]
+    assert picture.path == workspace / "img" / "pic.png"
+    assert picture.content == workspace / "img" / "pic.png"
 
 
 def test_load_markdown_ignores_email_like_at_tokens(workspace: Path):
@@ -115,5 +119,5 @@ def test_load_markdown_recursive_attachments_inherit_arguments(workspace: Path):
     md = write(workspace / "main.md", "see @child.md")
     doc = load_markdown(str(md), args=["alice"], substitutions=["args", "file"])
     child = doc.attachments["child.md"]
-    assert isinstance(child, MarkdownDoc)
-    assert "I am alice" in child.content
+    assert isinstance(child.content, MarkdownDoc)
+    assert "I am alice" in child.content.content

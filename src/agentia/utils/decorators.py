@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass, is_dataclass
+import base64
 import enum
 import inspect
 import json
@@ -7,25 +7,25 @@ import logging
 import os
 import textwrap
 import types
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, is_dataclass
+from io import BytesIO
 from typing import (
+    TYPE_CHECKING,
+    Annotated,
     Any,
-    Callable,
-    TypeVar,
-    Coroutine,
     Optional,
     Union,
     cast,
-    overload,
     get_args,
     get_origin,
-    Annotated,
-    TYPE_CHECKING,
+    overload,
 )
-from pydantic import BaseModel, TypeAdapter
+
 from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
-import base64
-from io import BytesIO
+from pydantic import BaseModel, TypeAdapter
+
 from agentia.models import File, Item, Message
 
 if TYPE_CHECKING:
@@ -81,9 +81,10 @@ class ToolFuncParam:
     def __get_desc(self) -> str | None:
         # if type has a docstring, add to description
         type_desc = None
-        if is_dataclass(self.type) or isinstance(self.type, BaseModel):
-            if desc := self.type.__doc__:
-                type_desc = textwrap.dedent(desc)
+        if (is_dataclass(self.type) or isinstance(self.type, BaseModel)) and (
+            desc := self.type.__doc__
+        ):
+            type_desc = textwrap.dedent(desc)
         meta = (
             get_args(self.param.annotation)[1]
             if get_origin(self.param.annotation) == Annotated
@@ -128,19 +129,17 @@ class ToolFuncParam:
         return t, required
 
 
-R = TypeVar("R", Coroutine[Any, Any, Any], Any)
-
-
 @overload
-def tool(func: Callable[..., R], /) -> Callable[..., R]:
+def tool[R: (Coroutine[Any, Any, Any], Any)](
+    func: Callable[..., R], /
+) -> Callable[..., R]:
     """
     Decorator to mark a function as a tool for the agent.
     """
-    ...
 
 
 @overload
-def tool(
+def tool[R: (Coroutine[Any, Any, Any], Any)](
     *,
     name: str | None = None,
     display_name: str | None = None,
@@ -150,10 +149,9 @@ def tool(
     """
     Decorator to mark a function as a tool for the agent.
     """
-    ...
 
 
-def tool(
+def tool[R: (Coroutine[Any, Any, Any], Any)](
     func: Callable[..., R] | None = None,
     /,
     *,
@@ -168,11 +166,11 @@ def tool(
 
     def __tool_impl(callable: Callable[..., R]) -> Callable[..., R]:
         from agentia.tools.tools import (
-            NAME_TAG,
-            DISPLAY_NAME_TAG,
             DESCRIPTION_TAG,
-            METADATA_TAG,
+            DISPLAY_NAME_TAG,
             IS_TOOL_TAG,
+            METADATA_TAG,
+            NAME_TAG,
         )
 
         # store gpt function metadata to the callable object
@@ -191,9 +189,6 @@ def tool(
         return __tool_impl(func)
 
     return __tool_impl
-
-
-F = TypeVar("F", bound=Callable)
 
 
 def _gen_prompt(
@@ -286,11 +281,11 @@ def _gen_prompt(
 
 
 @overload
-def magic(func: F, /) -> F: ...
+def magic[F: Callable](func: F, /) -> F: ...
 
 
 @overload
-def magic(
+def magic[F: Callable](
     *,
     model: str | None = None,
     instructions: str | None = None,
@@ -322,7 +317,7 @@ def _is_supported_magic_return_type(t: type) -> bool:
     return False
 
 
-def magic(
+def magic[F: Callable](
     func: F | None = None,
     /,
     *,

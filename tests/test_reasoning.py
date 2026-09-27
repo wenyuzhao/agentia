@@ -1,9 +1,10 @@
-from agentia import Agent
-from typing import Literal, Annotated
-import pytest
-import dotenv
 import os
+from typing import Annotated, Literal
 
+import dotenv
+import pytest
+
+from agentia import Agent
 from agentia.llm.stream import ReasoningStream
 
 dotenv.load_dotenv()

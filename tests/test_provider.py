@@ -1,13 +1,13 @@
 import os
 
-import pytest
 import dotenv
+import pytest
 
 dotenv.load_dotenv()
 
-from agentia import Agent  # noqa: E402
-from agentia.llm import get_provider  # noqa: E402
-from agentia.llm.providers.openai import OpenAI  # noqa: E402
+from agentia import Agent
+from agentia.llm import get_provider
+from agentia.llm.providers.openai import OpenAI
 
 
 class TestModelImmutability:

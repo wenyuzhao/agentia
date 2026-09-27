@@ -1,5 +1,7 @@
 import asyncio
-from typing import AsyncGenerator, Generator, TYPE_CHECKING
+from collections.abc import AsyncGenerator, AsyncIterator, Generator
+from typing import TYPE_CHECKING
+
 from agentia.models.base import FinishReason, Usage
 from agentia.models.items import Item, Message
 
@@ -36,7 +38,7 @@ class Run:
     def _add_new_item(self, item: Item):
         self.new_items.append(item)
 
-    def __aiter__(self) -> AsyncGenerator[Item, None]:
+    def __aiter__(self) -> AsyncIterator[Item]:
         return self.__gen
 
     async def __wait_for_completion(self) -> Message:

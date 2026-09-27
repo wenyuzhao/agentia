@@ -1,13 +1,15 @@
 import abc
 import re
+from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass
-from typing import AsyncGenerator, Sequence
+
 import httpx
+
+from agentia import models
 from agentia.llm import LLMOptions
-from agentia.tools.tools import ToolSet
-import agentia.models as models
 from agentia.models.items import Item
 from agentia.models.stream import StreamEvent
+from agentia.tools.tools import ToolSet
 
 
 @dataclass

@@ -1,8 +1,10 @@
-from agentia import Agent, FunctionCall, FunctionCallOutput
-from typing import Annotated
 import json
-import pytest
+from typing import Annotated
+
 import dotenv
+import pytest
+
+from agentia import Agent, FunctionCall, FunctionCallOutput
 
 dotenv.load_dotenv()
 

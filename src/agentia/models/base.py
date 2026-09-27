@@ -26,12 +26,12 @@ Agentia extensions
 - `UserConsentRequest`  -- agentia's human-in-the-loop consent prompt.
 """
 
+import base64
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from pydantic import BaseModel, Field, JsonValue
 from uuid import uuid4
-import base64
 
+from pydantic import BaseModel, Field, JsonValue
 
 type DataContent = bytes | str
 
@@ -141,7 +141,7 @@ class File(BaseModel):
             return self.data
         elif isinstance(self.data, str):
             if self.data.startswith("data:"):
-                header, b64data = self.data.split(",", 1)
+                _header, b64data = self.data.split(",", 1)
                 return base64.b64decode(b64data)
             elif self.data.startswith(("http://", "https://")):
                 raise ValueError("Cannot convert URL data to bytes")
@@ -151,7 +151,7 @@ class File(BaseModel):
                     raise ValueError(f"File path '{self.data}' does not exist")
                 return path.read_bytes()
         else:
-            raise ValueError("Invalid data type for File")
+            raise TypeError("Invalid data type for File")
 
 
 class UrlCitation(BaseModel):
@@ -184,15 +184,15 @@ class UserConsentRequest(BaseModel):
 
 
 __all__ = [
+    "Annotation",
     "DataContent",
+    "File",
     "FinishReason",
-    "ToolChoice",
-    "Usage",
     "FunctionTool",
     "ProviderDefinedTool",
+    "ToolChoice",
     "ToolSchema",
-    "File",
     "UrlCitation",
-    "Annotation",
+    "Usage",
     "UserConsentRequest",
 ]

@@ -1,4 +1,5 @@
-from typing import AsyncGenerator, Literal, TYPE_CHECKING
+from collections.abc import AsyncGenerator, AsyncIterator
+from typing import TYPE_CHECKING, Literal
 
 from agentia.llm.completion import async_gen_to_sync, last_assistant_message
 from agentia.models import *
@@ -17,7 +18,7 @@ class TextStream:
         self.__all = ""
         self.__gen = _gen()
 
-    def __aiter__(self) -> AsyncGenerator[str, None]:
+    def __aiter__(self) -> AsyncIterator[str]:
         return self.__gen
 
     async def __wait_for_completion(self) -> str:
@@ -122,8 +123,8 @@ class RunStream(RunStreamBase):
 
     def __aiter__(
         self,
-    ) -> AsyncGenerator[
-        ReasoningStream | MessageStream | FunctionCall | FunctionCallOutput, None
+    ) -> AsyncIterator[
+        ReasoningStream | MessageStream | FunctionCall | FunctionCallOutput
     ]:
         return self.__gen
 
@@ -152,7 +153,7 @@ class RunEvents(RunStreamBase):
 
         self.__gen = __gen()
 
-    def __aiter__(self) -> AsyncGenerator[StreamEvent, None]:
+    def __aiter__(self) -> AsyncIterator[StreamEvent]:
         return self.__gen
 
     async def __wait_for_completion(self) -> Message:

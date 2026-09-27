@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Optional, Self, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Self
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -26,8 +26,7 @@ class Plugin(abc.ABC):
         if cls.NAME:
             return cls.NAME
         name = cls.__name__
-        if name.endswith("Plugin"):
-            name = name[:-6]
+        name = name.removesuffix("Plugin")
         return name
 
     @classmethod
@@ -38,7 +37,7 @@ class Plugin(abc.ABC):
 
     def __init__(self, *args: Any, **kwargs: Any):
         self.config: dict[str, Any] = {}
-        self._agent: Optional["Agent"] = None
+        self._agent: Agent | None = None
 
     @property
     def agent(self) -> "Agent":
@@ -65,7 +64,6 @@ class Plugin(abc.ABC):
             Login steps here can only access to CLI inputs.
             You may also want to override `__options__` so that user can login on the dashboard site.
         """
-        pass
 
     @classmethod
     def validate_config(cls, config: dict[str, Any]): ...

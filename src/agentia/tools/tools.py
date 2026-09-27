@@ -1,15 +1,18 @@
 import asyncio
 import inspect
+import logging
 import textwrap
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
+from collections.abc import Callable, Sequence
+from inspect import Parameter
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
+from pydantic.type_adapter import TypeAdapter
+
+from agentia import models
 from agentia.models.base import File
 from agentia.tools.mcp import MCP
-import agentia.models as models
 from agentia.utils.decorators import ToolFuncParam
-from inspect import Parameter
-from pydantic.type_adapter import TypeAdapter
 
 NAME_TAG = "agentia_tool_name"
 DISPLAY_NAME_TAG = "agentia_tool_display_name"
@@ -17,9 +20,11 @@ IS_TOOL_TAG = "agentia_tool_is_tool"
 DESCRIPTION_TAG = "agentia_tool_description"
 METADATA_TAG = "agentia_tool_metadata"
 
+_LOGGER = logging.getLogger("agentia.tools")
+
 if TYPE_CHECKING:
-    from agentia.plugins import Plugin
     from agentia.agent import Agent
+    from agentia.plugins import Plugin
 
 
 class _BaseTool:
@@ -217,7 +222,7 @@ class ToolSet:
     def __add_mcp_server(self, server: MCP):
         self.mcp_servers[server.name] = server
 
-    def get_plugin[T: "Plugin"](self, type: type[T]) -> Optional[T]:
+    def get_plugin[T: "Plugin"](self, type: type[T]) -> T | None:
         for p in self.plugins.values():
             if isinstance(p, type):
                 return p
@@ -227,9 +232,8 @@ class ToolSet:
         instructions = []
         for plugin in self.plugins.values():
             ins = plugin.get_instructions()
-            if ins:
-                if s := ins.strip():
-                    instructions.append(s)
+            if ins and (s := ins.strip()):
+                instructions.append(s)
         if not instructions:
             return None
         return "\n\n".join(instructions)
@@ -300,8 +304,11 @@ class ToolSet:
                     args=c.input,
                 )
             else:
-                raise ValueError(f"Tool {c.name} is of unknown type")
+                raise TypeError(f"Tool {c.name} is of unknown type")
         except Exception as e:
+            # Any tool failure is reported back to the model as an error output
+            # rather than aborting the run.
+            _LOGGER.exception("tool %s failed", c.name)
             return models.FunctionCallOutput.create(
                 call_id=c.call_id,
                 name=c.name,

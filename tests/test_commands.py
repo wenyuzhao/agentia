@@ -116,7 +116,6 @@ async def test_run_skips_llm_when_handler_returns_none():
 
     def handler(args):
         called["n"] += 1
-        return None
 
     agent.commands.register("clear", handler)
     msg = await agent.run("/clear")

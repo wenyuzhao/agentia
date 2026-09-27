@@ -1,7 +1,7 @@
-from agentia import Agent, MCP
-import pytest
 import dotenv
+import pytest
 
+from agentia import MCP, Agent
 
 dotenv.load_dotenv()
 

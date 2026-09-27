@@ -13,7 +13,6 @@ from agentia.models import (
     InputAudio,
     InputFile,
     InputImage,
-    InputText,
     Message,
     OutputText,
     ProviderDefinedTool,
@@ -140,8 +139,8 @@ class TestFunctionCall:
         assert FunctionCall(call_id="c", name="n", arguments="").input == {}
 
     def test_non_object_arguments_raise(self):
-        with pytest.raises(ValueError):
-            FunctionCall(call_id="c", name="n", arguments="[1]").input
+        with pytest.raises(TypeError):
+            _ = FunctionCall(call_id="c", name="n", arguments="[1]").input
 
 
 class TestFunctionCallOutput:
@@ -287,6 +286,7 @@ class TestResponseFormat:
 class TestItemRoundTrip:
     def test_items_validate_from_json(self):
         from pydantic import TypeAdapter
+
         from agentia.models import Item
 
         adapter = TypeAdapter(list[Item])

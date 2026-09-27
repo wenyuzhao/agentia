@@ -1,8 +1,12 @@
-from . import Plugin, tool
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence, override
+from typing import Any, override
+
 from pydantic import BaseModel
+
 from agentia.utils.markdown import MarkdownDoc, load_markdown
+
+from . import Plugin, tool
 
 INSTRUCTIONS_TEMPLATE = """\
 # SKILLS
@@ -74,17 +78,40 @@ class Skills(Plugin):
                 Path.home() / ".config" / "agentia" / "skills",
             ]
         self.search_paths = [Path(p) for p in search_paths]
-        self.user_invocable_skills: dict[str, Skill] = {}
-        self.agent_skills: dict[str, Skill] = {}
+        self.__loaded = False
+        self.__user_invocable_skills: dict[str, Skill] = {}
+        self.__agent_skills: dict[str, Skill] = {}
+
+    def load(self) -> None:
+        """Discover skills from the search paths. Idempotent.
+
+        Discovery is lazy so that slash commands resolve to skills even before
+        the agent's first run (which is what triggers plugin `init()`).
+        """
+        if self.__loaded:
+            return
+        self.__loaded = True
+        for skill in self.load_all_skills(self.search_paths).values():
+            if skill.user_invocable:
+                self.__user_invocable_skills[skill.name] = skill
+            if not skill.disable_model_invocation:
+                self.__agent_skills[skill.name] = skill
+
+    @property
+    def user_invocable_skills(self) -> dict[str, Skill]:
+        """Skills invocable by the user as `/<name>`, keyed by name."""
+        self.load()
+        return self.__user_invocable_skills
+
+    @property
+    def agent_skills(self) -> dict[str, Skill]:
+        """Skills invocable by the model via the `Skill` tool, keyed by name."""
+        self.load()
+        return self.__agent_skills
 
     @override
     async def init(self):
-        all_skills = self.load_all_skills(self.search_paths)
-        for skill in all_skills.values():
-            if skill.user_invocable:
-                self.user_invocable_skills[skill.name] = skill
-            if not skill.disable_model_invocation:
-                self.agent_skills[skill.name] = skill
+        self.load()
 
     def load_all_skills(self, search_paths: list[Path]) -> dict[str, Skill]:
         skills: dict[str, Skill] = {}
@@ -100,9 +127,7 @@ class Skills(Plugin):
         if path.name.startswith(".") or path.name.startswith("_"):
             return False
         # Skip directories without SKILL.md
-        if not (path / "SKILL.md").is_file():
-            return False
-        return True
+        return (path / "SKILL.md").is_file()
 
     def ignore_skill(self, skill: Skill) -> bool:
         return False
@@ -127,7 +152,7 @@ class Skills(Plugin):
         for skill in self.agent_skills.values():
             if skill.disable_model_invocation:
                 continue
-            s += f"- **{skill.name}**:\n    * path: {str(skill.path)}\n    * description: {skill.description}\n\n"
+            s += f"- **{skill.name}**:\n    * path: {skill.path!s}\n    * description: {skill.description}\n\n"
         return INSTRUCTIONS_TEMPLATE.format(skills=s)
 
     @tool(name="Skill")

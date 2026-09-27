@@ -1,22 +1,20 @@
+import logging
 import os
+import uuid
+from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
-    Callable,
-    Literal,
-    Optional,
-    Sequence,
-    overload,
     Any,
+    Literal,
+    overload,
 )
-import logging
-import uuid
+
 from agentia.history import History
 from agentia.llm import LLMOptions, get_provider
-from agentia.llm.react import run_react_loop, run_react_loop_streamed
 from agentia.llm.completion import Run
-from agentia.llm.stream import RunStream, RunEvents
-from agentia.models.options import ResponseFormatJson
-from agentia.tools.tools import Tool, ToolSet
+from agentia.llm.react import run_react_loop, run_react_loop_streamed
+from agentia.llm.stream import RunEvents, RunStream
 from agentia.models import (
     InputItem,
     Item,
@@ -24,11 +22,12 @@ from agentia.models import (
     Usage,
     UserConsentRequest,
 )
+from agentia.models.options import ResponseFormatJson
 from agentia.tools.mcp import MCPContext
+from agentia.tools.tools import Tool, ToolSet
 from agentia.utils.commands import Commands
 from agentia.utils.compact import compact_history
 from agentia.utils.event_emitter import EventEmitter
-from pathlib import Path
 
 if TYPE_CHECKING:
     from agentia.plugins.skills import Skills
@@ -52,7 +51,7 @@ class Agent:
             | None
         ) = None,
         options: LLMOptions | None = None,
-        skills: Sequence[Path | str] | "Skills" | bool = False,
+        skills: "Sequence[Path | str] | Skills | bool" = False,
     ) -> None:
         from agentia.plugins.skills import Skills
 
@@ -86,8 +85,8 @@ class Agent:
                     self.history.add_instructions(i)
         self.add_instructions(self.tools.get_instructions)
         self.log = logging.getLogger("agentia.agent")
-        self._mcp_context: Optional[MCPContext] = None
-        self._temp_mcp_context: Optional[MCPContext] = None
+        self._mcp_context: MCPContext | None = None
+        self._temp_mcp_context: MCPContext | None = None
         self.events = AgentEvents()
         self.commands = Commands(self)
         self.__deferred_items: list[Item] = []

@@ -1,7 +1,8 @@
+import dotenv
+import pytest
+
 from agentia import Agent
 from agentia.models import File, Message
-import pytest
-import dotenv
 
 dotenv.load_dotenv()
 

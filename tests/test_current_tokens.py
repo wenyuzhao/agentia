@@ -1,8 +1,10 @@
+from typing import Annotated
+
+import dotenv
+import pytest
+
 from agentia import Agent, Usage
 from agentia.llm.stream import TextStream
-from typing import Annotated
-import pytest
-import dotenv
 
 dotenv.load_dotenv()
 

@@ -1,5 +1,8 @@
-from typing import TYPE_CHECKING, AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Sequence
+from typing import TYPE_CHECKING
+
 import httpx
+
 from agentia.history import History
 from agentia.llm import LLMOptions
 from agentia.llm.completion import Run

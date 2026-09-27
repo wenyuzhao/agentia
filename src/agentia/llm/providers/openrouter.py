@@ -1,7 +1,9 @@
-from typing import Any, override
-from ._openai_api import OpenAIAPIProvider
 import os
+from typing import Any, override
+
 import httpx
+
+from ._openai_api import OpenAIAPIProvider
 
 # Model list: https://openrouter.ai/models
 

@@ -1,6 +1,7 @@
-from agentia import Agent
-import pytest
 import dotenv
+import pytest
+
+from agentia import Agent
 from agentia.plugins import System
 
 dotenv.load_dotenv()

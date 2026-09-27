@@ -1,17 +1,17 @@
-from ..utils.decorators import tool
 from agentia.tools import Plugin, PluginInitError
+
+from ..utils.decorators import tool
 
 # Plugins
 from .skills import Skills
-from .web import Web
 from .system import System
-
+from .web import Web
 
 __all__ = [
     "Plugin",
     "PluginInitError",
-    "tool",
     "Skills",
-    "Web",
     "System",
+    "Web",
+    "tool",
 ]

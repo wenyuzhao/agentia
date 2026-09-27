@@ -1,4 +1,6 @@
-from typing import Any, AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
+
 from agentia.llm.completion import async_gen_to_sync
 
 
@@ -12,6 +14,9 @@ def patch_streamlit():
     import streamlit
     from streamlit import type_util
 
+    # streamlit has no such attribute declared; we stash our own marker on it.
+    streamlit_module: Any = streamlit
+
     if not hasattr(streamlit, "_async_generator_to_sync_patched"):
 
         def async_generator_to_sync(
@@ -20,7 +25,7 @@ def patch_streamlit():
             return async_gen_to_sync(async_gen)
 
         type_util.async_generator_to_sync = async_generator_to_sync
-        setattr(streamlit, "_async_generator_to_sync_patched", True)
+        streamlit_module._async_generator_to_sync_patched = True
 
 
 def patch_all():

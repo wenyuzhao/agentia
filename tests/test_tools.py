@@ -1,9 +1,11 @@
 from enum import StrEnum
-from pydantic import BaseModel
-from agentia import Agent
-from typing import Literal, Annotated
-import pytest
+from typing import Annotated, Literal
+
 import dotenv
+import pytest
+from pydantic import BaseModel
+
+from agentia import Agent
 
 dotenv.load_dotenv()
 
@@ -56,11 +58,9 @@ async def test_list_of_models_arg():
     ):
         """Feed a list of animals."""
         print(animals)
-        if len(animals) == 0:
-            raise BaseException("Animals list cannot be empty", animals)
+        assert len(animals) > 0, "Animals list cannot be empty"
         for a in animals:
-            if not isinstance(a, Animal):
-                raise BaseException("Invalid animal", a)
+            assert isinstance(a, Animal), f"Invalid animal: {a}"
         status["called"] = True
         status["animals"] = animals
         return {
@@ -89,11 +89,9 @@ async def test_complex_arg():
     async def feed_animals(args: Args):
         """Feed a list of animals."""
         print(args.animals)
-        if len(args.animals) == 0:
-            raise BaseException("Animals list cannot be empty", args.animals)
+        assert len(args.animals) > 0, "Animals list cannot be empty"
         for a in args.animals:
-            if not isinstance(a, Animal):
-                raise BaseException("Invalid animal", a)
+            assert isinstance(a, Animal), f"Invalid animal: {a}"
         status["called"] = True
         status["animals"] = args.animals
         return {

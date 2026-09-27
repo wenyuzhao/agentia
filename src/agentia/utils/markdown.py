@@ -34,7 +34,7 @@ class MarkdownDoc(BaseModel):
 
     def flatten_attachments(self) -> dict[str, Attachment]:
         flat: dict[str, Attachment] = {}
-        for ref, attachment in self.attachments.items():
+        for attachment in self.attachments.values():
             flat[str(attachment.path)] = attachment
             if isinstance(attachment.content, MarkdownDoc):
                 flat.update(attachment.content.flatten_attachments())
@@ -89,10 +89,12 @@ def load_markdown(
     controllable via a flag:
 
     - ``@path/to/file.{md,png,pdf,...}`` (``file_refs``) references another
-      file relative to the source markdown's directory. Markdown files are
-      loaded recursively into ``attachments`` as ``MarkdownDoc``; images
-      and PDFs are stored as ``Path`` objects. Unsupported or missing
-      files are left untouched.
+      file relative to the source markdown's directory. Each reference
+      becomes an ``Attachment`` in ``attachments``, keyed by the reference
+      as written: markdown files are loaded recursively so their
+      ``content`` is a ``MarkdownDoc``, while text, image and PDF files
+      keep their ``Path`` as ``content``. Unsupported or missing files are
+      left untouched.
     - ``!`cmd``` (``bash``) runs ``cmd`` through the shell and substitutes
       the captured stdout in place.
     - String substitutions (``substitutions``): ``$ARGUMENTS``,
@@ -149,6 +151,7 @@ def _apply_bash_substitution(content: str, cwd: Path) -> str:
                 text=True,
                 cwd=str(cwd),
                 timeout=30,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return f"<error: `{cmd}` timed out>"

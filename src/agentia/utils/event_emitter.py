@@ -1,5 +1,6 @@
 import inspect
-from typing import Callable, overload
+from collections.abc import Callable
+from typing import overload
 
 
 class EventEmitter[EventHandler: Callable]:
