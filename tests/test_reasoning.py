@@ -9,6 +9,8 @@ from agentia.llm.stream import ReasoningStream
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 def get_current_weather(
     location: Annotated[str, "The city and state, e.g. San Francisco, CA"],

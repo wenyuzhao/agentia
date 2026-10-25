@@ -8,6 +8,8 @@ from agentia.llm.stream import TextStream
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 def add(a: Annotated[int, "first number"], b: Annotated[int, "second number"]):
     """Add two numbers"""

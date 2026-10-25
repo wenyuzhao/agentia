@@ -21,6 +21,8 @@ Agentia extensions
   for) to `input_file`.
 """
 
+import base64
+from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, Field
@@ -86,7 +88,16 @@ class InputAudio(BaseModel):
                 format = "mp3"
             case _:
                 raise ValueError(f"unsupported audio media type {file.media_type}")
-        data = file.data if isinstance(file.data, str) else file.data.decode()
+        # `input_audio.data` is base64 (no data: prefix). A string is a data URL, a
+        # local path, or already base64.
+        if isinstance(file.data, bytes):
+            data = base64.b64encode(file.data).decode()
+        elif file.data.startswith("data:"):
+            data = file.data.split(",", 1)[1]
+        elif Path(file.data).is_file():
+            data = base64.b64encode(Path(file.data).read_bytes()).decode()
+        else:
+            data = file.data
         return cls(input_audio=InputAudioData(data=data, format=format))
 
 

@@ -9,6 +9,8 @@ from agentia import magic
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 @magic
 async def get_content_type(extension: str) -> str:

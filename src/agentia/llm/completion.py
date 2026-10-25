@@ -1,42 +1,56 @@
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator, Generator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Generator
 from typing import TYPE_CHECKING
 
 from agentia.models.base import FinishReason, Usage
 from agentia.models.items import Item, Message
+from agentia.models.stream import StreamEvent
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
 
 
-class Run:
-    """A non-streaming `Agent.run()`.
-
-    Iterating yields each new conversation `Item` as it is produced; awaiting returns
-    the last assistant `message` item.
-    """
-
-    def __init__(self, gen: AsyncGenerator[Item, None], agent: "Agent"):
-        async def __gen() -> AsyncGenerator[Item, None]:
-            async for item in gen:
-                yield item
-            await self._on_finish()
-
-        self.__gen = __gen()
+class RunBase:
+    def __init__(self, agent: "Agent"):
         self.usage = Usage()
         self.last_usage = Usage()
         self.finish_reason: FinishReason | None = None
         self.new_items: list[Item] = []
         self.agent = agent
 
-    async def _on_finish(self):
-        if self.last_usage.total_tokens is not None:
-            self.agent.history.current_tokens = self.last_usage.total_tokens
-        self.agent.history.usage += self.usage
-        await self.agent.events.end_of_turn.emit()
+    @property
+    def suspended(self) -> bool:
+        """The run paused on a suspended tool; continue with `agent.run(None)`."""
+        return self.finish_reason == "suspended"
 
-    def _add_new_item(self, item: Item):
-        self.new_items.append(item)
+
+class Run(RunBase):
+    """A non-streaming `Agent.run()`.
+
+    Iterating yields each new conversation `Item` as it is committed to the history;
+    awaiting returns the last assistant `message` item.
+    """
+
+    def __init__(
+        self,
+        make: "Callable[[RunBase], AsyncGenerator[StreamEvent, None]]",
+        agent: "Agent",
+    ):
+        super().__init__(agent)
+        events = make(self)
+
+        async def __gen() -> AsyncGenerator[Item, None]:
+            n = 0
+            async for _ in events:
+                # Items are yielded once committed to the history (with final call ids).
+                while n < len(self.new_items):
+                    yield self.new_items[n]
+                    n += 1
+            while n < len(self.new_items):
+                yield self.new_items[n]
+                n += 1
+
+        self.__gen = __gen()
 
     def __aiter__(self) -> AsyncIterator[Item]:
         return self.__gen

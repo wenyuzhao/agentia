@@ -156,8 +156,7 @@ class System(Plugin):
             * When the command exits with a non-zero code, it is appended to the output.
 
         **Background / timeout:**
-            * If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to.
-            * While running background tasks, any new output is polled and enqueued regularly.
+            * If `background=True`, the process is started detached and the call returns immediately with its PID and the path of the log file its stdout/stderr is streaming to. Read that file (e.g. `tail -n 50 <log>`) to check on it.
             * If `timeout` fires for a foreground command, the process is left running in the background. `timeout` is set to 5 minutes by default, and has no effect if `background=True`.
                 * set timeout = 0 to disable the timeout and run indefinitely in the foreground. e.g. when running `sleep 1h`.
             * Use background tasks for long-running or daemon processes (e.g. dev servers). Only use this when necessary.
@@ -188,13 +187,11 @@ class System(Plugin):
             os.close(fd)
 
         if background:
-            # Hand monitoring off to a fire-and-forget task and return now.
-            # The task tails `log_path` and feeds output back via agent.enqueue
-            # so the model sees progress without us blocking the tool call.
+            # Return now; the model reads the log file to check on it.
             self._background_pids.add(proc.pid)
             return (
                 f"[Started background process pid={proc.pid}. Output streaming to: {log_path}. "
-                f"New output is enqueued regularly. Use the `kill` command to terminate.]"
+                f"Read that file to check on it; use the `kill` command to terminate.]"
             )
 
         try:
@@ -203,7 +200,7 @@ class System(Plugin):
             self._background_pids.add(proc.pid)
             return (
                 f"[Command timed out after {timeout}s. Process is still running in background pid={proc.pid}. "
-                f"Output streaming to: {log_path}. New output is enqueued regularly. Use the `kill` command to terminate.]"
+                f"Output streaming to: {log_path}. Read that file to check on it; use the `kill` command to terminate.]"
             )
 
         output = Path(log_path).read_text(encoding="utf-8", errors="replace")

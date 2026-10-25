@@ -22,11 +22,21 @@ from typing import (
     overload,
 )
 
-from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
-from PIL.Image import Image
 from pydantic import BaseModel, TypeAdapter
 
 from agentia.models import File, Item, Message
+from agentia.utils.schema import strict_json_schema
+
+if TYPE_CHECKING:
+    from PIL.Image import Image
+else:
+    try:
+        from PIL.Image import Image
+    except ImportError:  # pillow is optional (agentia[vision])
+
+        class Image:
+            pass
+
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools
@@ -76,7 +86,7 @@ class ToolFuncParam:
                 schema["description"] += self.description
             else:
                 schema["description"] = self.description
-        return _ensure_strict_json_schema(schema, path=(), root=schema)
+        return strict_json_schema(schema)
 
     def __get_desc(self) -> str | None:
         # if type has a docstring, add to description

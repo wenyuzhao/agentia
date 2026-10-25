@@ -8,6 +8,8 @@ from agentia.plugins import Plugin
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 class FakeWeatherPlugin(Plugin):
     @tool

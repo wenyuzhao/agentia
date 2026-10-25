@@ -1,6 +1,8 @@
 import os
 from typing import override
 
+import httpx
+
 from ._openai_api import OpenAIAPIProvider
 from .openrouter import OpenRouter as _OpenRouter
 
@@ -9,7 +11,12 @@ from .openrouter import OpenRouter as _OpenRouter
 
 class OpenAI(OpenAIAPIProvider):
     def __init__(
-        self, model: str, api_key: str | None = None, base_url: str | None = None
+        self,
+        model: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        client: httpx.AsyncClient | None = None,
+        headers: dict[str, str] | None = None,
     ):
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
@@ -17,7 +24,14 @@ class OpenAI(OpenAIAPIProvider):
         base_url = base_url or os.environ.get(
             "OPENAI_BASE_URL", "https://api.openai.com/v1"
         )
-        super().__init__(name="openai", model=model, api_key=api_key, base_url=base_url)
+        super().__init__(
+            name="openai",
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            client=client,
+            headers=headers,
+        )
 
     @override
     async def _fetch_context_length(self) -> int:

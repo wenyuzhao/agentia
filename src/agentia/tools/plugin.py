@@ -1,8 +1,10 @@
 import abc
+from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Self
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
+    from agentia.tools.tools import BaseTool
 
 
 class PluginInitError(RuntimeError):
@@ -17,9 +19,14 @@ class Plugin(abc.ABC):
     NAME: str | None = None
     _BUILTIN_ID: str | None = None
 
-    def get_instructions(self) -> str | None:
-        """Get the instructions for using this plugin. This will be included in the agent's system prompt."""
+    def get_instructions(self) -> str | None | Awaitable[str | None]:
+        """Instructions for using this plugin, added to the agent's system prompt
+        (static part). May be async."""
         return None
+
+    def tools(self) -> "list[BaseTool]":
+        """Extra tools, besides the `@tool`-decorated methods."""
+        return []
 
     @classmethod
     def name(cls) -> str:

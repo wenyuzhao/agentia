@@ -52,10 +52,13 @@ Agentia extensions
 - `RunCompletedEvent`  -- `agentia.run.completed`, carrying the run's total `usage` and
                           `finish_reason`.
 - `InputItemAddedEvent` -- `agentia.input_item.added`, for items agentia appends itself:
-                          a client-executed tool result, or an item from `Agent.defer()`.
+                          a client-executed tool result, an item from `Agent.poll_inputs()`
+                          (including `Agent.defer()`), or a `StopRun` message.
                           A `function_call_output` is an *input* to the next request, so
                           the API has no event for it and it is never a
                           `response.output_item.*`.
+- `CompactionStartedEvent` / `CompactionCompletedEvent` -- `agentia.compaction.*`,
+                          around a compaction inside a run.
 - `ResponseInfo`       -- the subset of the API's `response` object that agentia
                           surfaces, with a normalized `finish_reason` added.
 - `StreamEvent`        -- the union of every event above.
@@ -73,7 +76,7 @@ from pydantic import BaseModel, Field
 
 from .base import Annotation, FinishReason, Usage
 from .content import Content, SummaryText
-from .items import Item
+from .items import Compaction, Item
 
 type ResponseStatus = Literal[
     "queued", "in_progress", "completed", "incomplete", "failed", "cancelled"
@@ -84,10 +87,13 @@ class ResponseInfo(BaseModel):
     """The subset of a Responses API `response` object that agentia surfaces."""
 
     id: str | None = None
+    model: str | None = None
+    """The model that actually served the response (it may be a fallback)."""
     status: ResponseStatus | None = None
     usage: Usage = Usage()
     finish_reason: FinishReason = "unknown"
     output: Sequence[Item] = Field(default_factory=list)
+    """The complete output items. Set on the terminal event."""
 
 
 class _Event(BaseModel):
@@ -324,6 +330,19 @@ class InputItemAddedEvent(_Event):
     item: Item
 
 
+class CompactionStartedEvent(_Event):
+    """Agentia started compacting the history. Agentia extension."""
+
+    type: Literal["agentia.compaction.started"] = "agentia.compaction.started"
+
+
+class CompactionCompletedEvent(_Event):
+    """A compaction was committed to the history. Agentia extension."""
+
+    type: Literal["agentia.compaction.completed"] = "agentia.compaction.completed"
+    compaction: Compaction
+
+
 type StreamEvent = Annotated[
     ResponseCreatedEvent
     | ResponseInProgressEvent
@@ -350,11 +369,15 @@ type StreamEvent = Annotated[
     | ErrorEvent
     | RunStartedEvent
     | RunCompletedEvent
-    | InputItemAddedEvent,
+    | InputItemAddedEvent
+    | CompactionStartedEvent
+    | CompactionCompletedEvent,
     Field(discriminator="type"),
 ]
 
 __all__ = [
+    "CompactionCompletedEvent",
+    "CompactionStartedEvent",
     "ErrorEvent",
     "InputItemAddedEvent",
     "ResponseCompletedEvent",

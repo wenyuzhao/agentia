@@ -6,6 +6,8 @@ from agentia.models import File, Message
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 @pytest.mark.asyncio
 async def test_vision():

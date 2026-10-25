@@ -19,6 +19,7 @@ jobs:
       - name: Run PyTest
         run: uv run pytest
         env:
+          AGENTIA_LIVE_TESTS: "1"
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

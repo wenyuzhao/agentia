@@ -7,9 +7,12 @@ import dotenv
 
 from . import plugins
 from .agent import Agent
-from .history import History
-from .llm import LLMOptions, ReasoningOptions
+from .compaction import CompactionOptions
+from .history import History, normalize_tool_pairs
+from .llm import LLMOptions, ReasoningOptions, get_provider
 from .llm.completion import Run
+from .llm.loop import StepInfo, StopRun
+from .llm.providers import LLMError, ModelRequest, Provider
 from .llm.stream import (
     MessageStream,
     ReasoningStream,
@@ -17,10 +20,24 @@ from .llm.stream import (
     RunStream,
     TextStream,
 )
+from .mcp import MCPCatalog, MCPServerInfo, MCPToolInfo
 from .models import *
 from .plugins import Plugin, PluginInitError
-from .plugins.skills import Skill, Skills
-from .tools import MCP, MCPContext, ProviderTool, Tool, ToolResult, Tools
+from .plugins.skills import LocalSkillSource, Skill, Skills, SkillSource
+from .tools import (
+    MCP,
+    BaseTool,
+    MCPServers,
+    MCPTools,
+    ModelTool,
+    ProviderTool,
+    Suspend,
+    Tool,
+    ToolCall,
+    ToolProvider,
+    ToolResult,
+    Tools,
+)
 from .utils.decorators import ImageUrl, magic, tool
 
 LOGGER = logging.getLogger("agentia")
@@ -49,7 +66,11 @@ __all__ = [
     "MCP",
     "Agent",
     "Annotation",
+    "BaseTool",
     "Compaction",
+    "CompactionCompletedEvent",
+    "CompactionOptions",
+    "CompactionStartedEvent",
     "Content",
     "DataContent",
     "ErrorEvent",
@@ -68,19 +89,29 @@ __all__ = [
     "InputItem",
     "InputItemAddedEvent",
     "InputText",
+    "Instruction",
     "Item",
     "ItemStatus",
+    "LLMError",
     "LLMOptions",
-    "MCPContext",
+    "LocalSkillSource",
+    "MCPCatalog",
+    "MCPServerInfo",
+    "MCPServers",
+    "MCPToolInfo",
+    "MCPTools",
     "Message",
     "MessageInput",
     "MessageRole",
     "MessageStream",
+    "ModelRequest",
+    "ModelTool",
     "ObjectType",
     "OutputContent",
     "OutputText",
     "Plugin",
     "PluginInitError",
+    "Provider",
     "ProviderDefinedTool",
     "ProviderTool",
     "Reasoning",
@@ -122,22 +153,30 @@ __all__ = [
     "RunStartedEvent",
     "RunStream",
     "Skill",
+    "SkillSource",
     "Skills",
+    "StepInfo",
+    "StopRun",
     "StreamEvent",
     "SummaryText",
+    "Suspend",
     "TextStream",
     "Tool",
+    "ToolCall",
     "ToolChoice",
+    "ToolProvider",
     "ToolResult",
     "ToolSchema",
     "Tools",
     "UrlCitation",
     "Usage",
     "UserConsentRequest",
+    "get_provider",
     "init_logging",
     "input_content_from_file",
     "load_dotenv",
     "magic",
+    "normalize_tool_pairs",
     "plugins",
     "to_responses_input",
     "tool",

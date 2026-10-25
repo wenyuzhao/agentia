@@ -35,12 +35,12 @@ class Commands:
         """Remove a previously registered custom handler. No-op if absent."""
         self.__handlers.pop(_strip_slash(name), None)
 
-    def has(self, name: str) -> bool:
+    async def has(self, name: str) -> bool:
         """Return True if `name` resolves to a custom handler or a user-invocable skill."""
         n = _strip_slash(name)
         if n in self.__handlers:
             return True
-        return self.__find_skill(n) is not None
+        return await self.__find_skill(n) is not None
 
     @staticmethod
     def parse(input: str) -> tuple[str, list[str]] | None:
@@ -71,11 +71,10 @@ class Commands:
             result = handler(args)
             if inspect.isawaitable(result):
                 result = await result
-            if result and isinstance(result, str) and not result:
-                result = None
-            return result
-        if skill := self.__find_skill(name):
-            return skill.execute(args)
+            return result or None
+        if found := await self.__find_skill(name):
+            plugin, skill = found
+            return await plugin.execute(skill, args)
         return input  # treat as normal input if no command matched
 
     async def process_items(self, prompt: InputItem) -> list[Item]:
@@ -103,14 +102,14 @@ class Commands:
                 items.append(p)
         return items
 
-    def __find_skill(self, name: str):
-        from agentia.plugins.skills import Skill, Skills
+    async def __find_skill(self, name: str):
+        from agentia.plugins.skills import Skills
 
-        skills = self.__agent.tools.get_plugin(Skills)
-        if skills is None:
+        plugin = self.__agent.tools.get_plugin(Skills)
+        if plugin is None:
             return None
-        skill: Skill | None = skills.user_invocable_skills.get(name)
-        return skill
+        skill = (await plugin.user_invocable_skills()).get(name)
+        return (plugin, skill) if skill else None
 
 
 def _strip_slash(name: str) -> str:

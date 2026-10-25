@@ -3,8 +3,9 @@
 Responses API types
 -------------------
 - `Usage`               -- the `response.usage` object, flattened. `reasoning_tokens`
-                           comes from `output_tokens_details.reasoning_tokens` and
-                           `cached_input_tokens` from `input_tokens_details.cached_tokens`.
+                           comes from `output_tokens_details.reasoning_tokens`,
+                           `cached_input_tokens` from `input_tokens_details.cached_tokens`
+                           and `cost` from OpenRouter's `usage.cost` extension.
 - `FunctionTool`        -- a `function` tool definition (`to_responses_tool()` emits the
                            flat `{type, name, description, parameters, strict}` shape).
 - `ProviderDefinedTool` -- a built-in, provider-executed tool (`web_search`,
@@ -21,8 +22,10 @@ Agentia extensions
                            parts are built from. Not an API type.
 - `DataContent`         -- the `bytes | str` payload alias used by `File`.
 - `FinishReason`        -- a normalized reason across providers. The API instead reports
-                           `response.status` plus `incomplete_details.reason`.
+                           `response.status` plus `incomplete_details.reason`. A run adds
+                           `suspended`, `stopped` and `max-steps`.
 - `ToolSchema`          -- the union of the two tool definition types above.
+- `Instruction`         -- one block of the system prompt (static or dynamic).
 - `UserConsentRequest`  -- agentia's human-in-the-loop consent prompt.
 """
 
@@ -44,6 +47,10 @@ type FinishReason = Literal[
     "error",
     "other",
     "unknown",
+    # Run-level reasons (agentia.run.completed only):
+    "suspended",  # a tool suspended; resume with `agent.run(None)`
+    "stopped",  # a hook raised `StopRun`
+    "max-steps",  # `LLMOptions.max_steps` reached
 ]
 
 
@@ -56,19 +63,21 @@ class Usage(BaseModel):
     total_tokens: int | None = None
     reasoning_tokens: int | None = None
     cached_input_tokens: int | None = None
+    cost: float | None = None
+    """Cost in USD, when the provider reports it (OpenRouter's `usage.cost`)."""
 
     def __add__(self, y: "Usage") -> "Usage":
-        x = Usage(**self.model_dump())
-        if y.input_tokens:
-            x.input_tokens = (x.input_tokens or 0) + y.input_tokens
-        if y.output_tokens:
-            x.output_tokens = (x.output_tokens or 0) + y.output_tokens
-        if y.total_tokens:
-            x.total_tokens = (x.total_tokens or 0) + y.total_tokens
-        if y.reasoning_tokens:
-            x.reasoning_tokens = (x.reasoning_tokens or 0) + y.reasoning_tokens
-        if y.cached_input_tokens:
-            x.cached_input_tokens = (x.cached_input_tokens or 0) + y.cached_input_tokens
+        x = self.model_copy()
+        for k in (
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "reasoning_tokens",
+            "cached_input_tokens",
+            "cost",
+        ):
+            if v := getattr(y, k):
+                setattr(x, k, (getattr(x, k) or 0) + v)
         return x
 
 
@@ -173,6 +182,19 @@ class UrlCitation(BaseModel):
 type Annotation = Annotated[UrlCitation, Field(discriminator="type")]
 
 
+class Instruction(BaseModel):
+    """One block of the system prompt.
+
+    Static blocks come first, then the compaction summary (if any), then dynamic blocks,
+    so the stable prefix stays cacheable even when dynamic content (dates, todo lists)
+    changes every step. Providers that take explicit cache breakpoints get one after the
+    static blocks and one after the summary.
+    """
+
+    text: str
+    dynamic: bool = False
+
+
 class UserConsentRequest(BaseModel):
     type: Literal["user-consent-request"] = "user-consent-request"
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -189,6 +211,7 @@ __all__ = [
     "File",
     "FinishReason",
     "FunctionTool",
+    "Instruction",
     "ProviderDefinedTool",
     "ToolChoice",
     "ToolSchema",

@@ -5,6 +5,8 @@ from agentia import MCP, Agent
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 @pytest.mark.asyncio
 async def test_mcp():

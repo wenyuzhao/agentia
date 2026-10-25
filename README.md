@@ -32,6 +32,14 @@ print(response.text)
 # Output: The result of 234 raised to the power of 3 is 12,812,904.
 ```
 
+# Hosting
+
+Agents are resumable: the history is the only state of a run, and every item is appended the moment
+it exists. Persist it (subclass `History`), integrate through hooks (`before_tool_call`,
+`poll_inputs`, `on_response`, …), pause on a tool with `Suspend()` (e.g. for user approval), and
+continue with `agent.run(None)`. Long conversations compact automatically with
+`Agent(compaction=True)`. See [docs/usage.md](docs/usage.md#6-hosting-an-agent).
+
 # The Magic Decorator
 
 Create agent-powered magic functions.

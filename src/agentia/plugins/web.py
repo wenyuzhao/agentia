@@ -40,8 +40,9 @@ class Web(Plugin):
         ) as client:
             res = await client.get(url)
             res.raise_for_status()
-            content_type = res.headers.get("content-type")
-            if content_type == "text/html":
+            content_type = res.headers.get("content-type") or ""
+            # e.g. "text/html; charset=utf-8"
+            if content_type.split(";")[0].strip() == "text/html":
                 md = markdownify(res.text)
                 return HttpGetTextResponse(content=md, content_type=content_type)
             # raw text: .txt, .csv, .json, .md

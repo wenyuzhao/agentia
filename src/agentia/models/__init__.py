@@ -10,21 +10,21 @@ Responses API types
 - `content`  -- content parts: `input_text`, `input_image`, `input_file`, `input_audio`,
                 `output_text`, `refusal`, `reasoning_text`, `summary_text`
 - `items`    -- the `ItemField` union: `message`, `reasoning`, `function_call`,
-                `function_call_output`, `compaction`
+                `function_call_output`; plus `compaction` (kept beside the items)
 - `options`  -- the `text.format` shapes: `text`, `json_object`, `json_schema`
 - `stream`   -- 22 `response.*` server-sent event types, plus `error`
 
 Agentia extensions
 ------------------
-- `base`     -- `File`, `FinishReason`, `UserConsentRequest`, `ToolSchema`
+- `base`     -- `File`, `FinishReason`, `Instruction`, `UserConsentRequest`, `ToolSchema`
 - `content`  -- the `InputContent` / `OutputContent` / `Content` unions,
                 `input_content_from_file()`
 - `items`    -- `Item` / `InputItem` / `MessageInput` aliases, `Message.user()` and the
-                other role helpers, `to_responses_input()`, and client-side
-                `Compaction` semantics
+                other role helpers, `to_responses_input()`, item `meta`, and
+                client-side `Compaction` semantics
 - `options`  -- the `ResponseFormat` wrapper types themselves
 - `stream`   -- `agentia.run.started`, `agentia.run.completed`,
-                `agentia.input_item.added`, and `ResponseInfo`
+                `agentia.input_item.added`, `agentia.compaction.*`, and `ResponseInfo`
 
 See `docs/usage.md` for the full mapping.
 """

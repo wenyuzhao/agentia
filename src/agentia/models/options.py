@@ -20,9 +20,9 @@ import builtins
 import inspect
 from typing import Annotated, Any, Literal
 
-from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
 from pydantic import BaseModel, Field, JsonValue
 
+from ..utils.schema import strict_json_schema
 from .items import ObjectType, _Result
 
 
@@ -50,7 +50,7 @@ class ResponseFormatJson(BaseModel):
         else:
             response_format = Result
         return ResponseFormatJson(
-            json_schema=to_strict_json_schema(response_format),
+            json_schema=strict_json_schema(response_format.model_json_schema()),
             name=return_type.__name__,
             description=f"JSON object matching the schema of {return_type.__name__}",
         )

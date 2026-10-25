@@ -6,6 +6,8 @@ from agentia.plugins import System
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 @pytest.mark.asyncio
 async def test_skills():

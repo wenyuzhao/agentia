@@ -35,6 +35,7 @@ class TestModelImmutability:
             provider.model = "openai/gpt-5-mini"  # type: ignore[misc]
 
 
+@pytest.mark.live
 class TestGetContextLength:
     @pytest.mark.asyncio
     async def test_openrouter_context_length(self):

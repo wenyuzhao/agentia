@@ -14,10 +14,10 @@ Responses API types
                           *input* item for the next request, never model output.
 - `Reasoning`          -- `reasoning`, with `content` (`reasoning_text`), `summary`
                           (`summary_text`) and `encrypted_content`.
-- `Compaction`         -- `compaction`. See the note under extensions.
 - `ItemStatus`         -- the `status` field: in_progress / completed / incomplete.
 - `MessageRole`        -- the `role` field of a `message`.
-- `Item`               -- the `ItemField` union itself, discriminated on `type`.
+- `Item`               -- the `ItemField` union itself (minus `compaction`), discriminated
+                          on `type`.
 
 Agentia extensions
 ------------------
@@ -32,15 +32,19 @@ Agentia extensions
 - `Reasoning.signature` and `.format` -- provider extensions (OpenRouter passes these
   through for Anthropic models), not part of the OpenAI schema. `.text`,
   `.summary_text` and `.display_text` are convenience accessors.
-- `Compaction` semantics -- the API defines `compaction` as an opaque, server-held item
-  produced by its compaction endpoint. Agentia compacts client-side instead, so
-  `summary` is plain text and `original_items` keeps what was replaced; it serializes as
-  an assistant `message`, not as a `compaction` item.
+- `meta` -- on every item: host-defined metadata (sequence numbers, timestamps, ...).
+  Agentia never interprets it and never sends it to the provider.
+- `Compaction` -- the API defines `compaction` as an opaque, server-held item produced by
+  its compaction endpoint. Agentia compacts client-side instead: a `Compaction` is a
+  plain-text summary of the first `covers` items of the history. It is not part of the
+  conversation; the history keeps compactions next to the (append-only) items and the
+  summary is rendered into the system prompt.
 - `to_responses_input()` -- flatten items into the `input` array, dropping items that
   cannot be replayed (a `Reasoning` with no `id`).
 - `ObjectType`, `MessageInput`, `InputItem` -- type aliases for the helper signatures.
 """
 
+import builtins
 import inspect
 import json
 from collections.abc import Sequence
@@ -50,7 +54,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, JsonValue
 
-from .base import File
+from .base import File, Usage
 from .content import (
     Content,
     InputContent,
@@ -100,6 +104,8 @@ class Message(BaseModel):
     role: MessageRole
     content: Sequence[Content]
     status: ItemStatus | None = None
+    meta: Any = None
+    """Host-defined metadata. Never sent to the provider."""
 
     @staticmethod
     def _coerce(content: MessageInput, output: bool) -> list[Content]:
@@ -153,7 +159,7 @@ class Message(BaseModel):
         parts = [c.refusal for c in self.content if isinstance(c, Refusal)]
         return "".join(parts) if parts else None
 
-    def parse[T: ObjectType](self, return_type: type[T]) -> T:
+    def parse[T: ObjectType](self, return_type: builtins.type[T]) -> T:
         """Parse the message text as JSON matching `return_type`."""
 
         class Result(_Result[return_type]): ...
@@ -173,6 +179,11 @@ class Message(BaseModel):
             "role": self.role,
             "content": [c.model_dump(exclude_none=True) for c in self.content],
         }
+        if self.role == "assistant":
+            # An output message replayed as input carries its id and status.
+            if self.id:
+                item["id"] = self.id
+            item["status"] = self.status or "completed"
         return item
 
 
@@ -185,6 +196,8 @@ class FunctionCall(BaseModel):
     name: str
     arguments: str = "{}"
     status: ItemStatus | None = None
+    meta: Any = None
+    """Host-defined metadata. Never sent to the provider."""
 
     @classmethod
     def create(
@@ -216,6 +229,8 @@ class FunctionCall(BaseModel):
         }
         if self.id:
             item["id"] = self.id
+        if self.status:
+            item["status"] = self.status
         return item
 
 
@@ -234,6 +249,9 @@ class FunctionCallOutput(BaseModel):
     is_error: bool | None = None
     """Whether the output is an error. Not sent to the provider; kept for callers."""
 
+    meta: Any = None
+    """Host-defined metadata. Never sent to the provider."""
+
     @classmethod
     def create(
         cls,
@@ -244,6 +262,7 @@ class FunctionCallOutput(BaseModel):
         is_error: bool | None = None,
         files: Sequence[File] | None = None,
         id: str | None = None,
+        meta: Any = None,
     ) -> Self:
         """Build an output item, JSON-encoding structured output and attaching files."""
         if files:
@@ -261,7 +280,14 @@ class FunctionCallOutput(BaseModel):
             ]
         else:
             content = text
-        return cls(call_id=call_id, output=content, name=name, is_error=is_error, id=id)
+        return cls(
+            call_id=call_id,
+            output=content,
+            name=name,
+            is_error=is_error,
+            id=id,
+            meta=meta,
+        )
 
     @property
     def text(self) -> str:
@@ -303,6 +329,9 @@ class Reasoning(BaseModel):
 
     format: str | None = None
     """Provider-specific reasoning format tag, e.g. `openai-responses-v1`."""
+
+    meta: Any = None
+    """Host-defined metadata. Never sent to the provider."""
 
     @classmethod
     def create(
@@ -360,60 +389,32 @@ class Reasoning(BaseModel):
 
 
 class Compaction(BaseModel):
-    """A compacted run of earlier items.
+    """A client-side compaction: a plain-text summary of the first `covers` items.
 
-    The Responses API defines `compaction` as an opaque, server-held item. Agentia
-    compacts client-side instead, so the summary is plain text and the original items
-    are kept for inspection; it serializes as an assistant message.
+    The history is append-only; a compaction does not remove anything. The model sees
+    the latest compaction's summary (in the system prompt) followed by the items after
+    `covers`. Nothing is lost: earlier items stay in the history for inspection.
     """
 
     type: Literal["compaction"] = "compaction"
     id: str = Field(default_factory=lambda: _gen_id("cmp"))
     summary: str
-    original_items: list["Item"] = Field(default_factory=list)
-    encrypted_content: str | None = None
-    created_by: str | None = None
+    covers: int
+    """How many items of the history (from the start) this summary replaces."""
 
-    def flatten(self) -> list["Item"]:
-        """The original items, with nested compactions expanded."""
-        items: list[Item] = []
-        for item in self.original_items:
-            if isinstance(item, Compaction):
-                items.extend(item.flatten())
-            else:
-                items.append(item)
-        return items
-
-    def to_responses_item(self) -> dict[str, Any]:
-        return {
-            "type": "message",
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "output_text",
-                    "text": "[[COMPACTED CONVERSATION SUMMARY]]",
-                    "annotations": [],
-                },
-                {"type": "output_text", "text": self.summary, "annotations": []},
-                {
-                    "type": "output_text",
-                    "text": "[[END OF CONVERSATION SUMMARY]]",
-                    "annotations": [],
-                },
-            ],
-        }
+    model: str | None = None
+    usage: Usage = Field(default_factory=Usage)
+    meta: Any = None
+    """Host-defined metadata."""
 
 
 type Item = Annotated[
-    Message | FunctionCall | FunctionCallOutput | Reasoning | Compaction,
+    Message | FunctionCall | FunctionCallOutput | Reasoning,
     Field(discriminator="type"),
 ]
 
 type InputItem = str | Item | Sequence[Item]
 """Anything accepted where a prompt or list of items is expected."""
-
-
-Compaction.model_rebuild()
 
 
 def to_responses_input(items: Sequence[Item]) -> list[dict[str, Any]]:

@@ -19,30 +19,30 @@ keywords = [
     "mcp",
 ]
 dependencies = [
-    "fastmcp>=2.14.5",
-    "filelock>=3.18.0",
-    "nest-asyncio>=1.6.0",
-    "openai>=1.108.1,<2",
-    "pydantic>=2.10.4",
+    "httpx>=0.28",
+    "pydantic>=2.11",
     "python-dotenv>=1.0.0,<2",
     "python-frontmatter>=1.1.0",
-    "markdownify>=1.2.2",
-    "tavily-python>=0.7.21",
-    "pillow>=12.1.0",
 ]
 
 [project.urls]
 Repository = "https://github.com/wenyuzhao/agentia"
 
 [project.optional-dependencies]
-all = []
+# The Web plugin (WebSearch / WebFetch) and LoadFile for web URLs.
+web = ["markdownify>=1.2.2", "tavily-python>=0.7.21"]
+# PIL images as @magic arguments.
+vision = ["pillow>=12.1.0"]
+# patch_asyncio() for notebooks.
+notebook = ["nest-asyncio>=1.6.0"]
+all = ["agentia[web,vision,notebook]"]
 
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",
     "pyright>=1.1.361,<2",
-    "pytest>=7.3.2,<8",
-    "pytest-asyncio>=0.21.1,<0.22",
+    "pytest>=8.3",
+    "pytest-asyncio>=1.0",
     "pyyaml>=6.0.3",
     "ruff>=0.15.12",
     "streamlit>=1.52.2",
@@ -60,6 +60,8 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["live: calls real model APIs (needs AGENTIA_LIVE_TESTS=1 and API keys)"]
 
 [tool.ruff.lint.per-file-ignores]
 # Star imports are used intentionally to re-export model/stream symbols.

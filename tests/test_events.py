@@ -8,6 +8,8 @@ from agentia import Agent, FunctionCall, FunctionCallOutput
 
 dotenv.load_dotenv()
 
+pytestmark = pytest.mark.live
+
 
 def calc(expression: Annotated[str, "The expression to calculate"]):
     """Calculate the result of a mathematical expression"""

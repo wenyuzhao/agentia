@@ -5,7 +5,6 @@ import json
 import pytest
 
 from agentia.models import (
-    Compaction,
     File,
     FunctionCall,
     FunctionCallOutput,
@@ -40,7 +39,13 @@ class TestMessage:
             "type": "message",
             "role": "assistant",
             "content": [{"type": "output_text", "text": "hi there", "annotations": []}],
+            "status": "completed",
         }
+
+    def test_assistant_output_replays_with_its_id(self):
+        item = Message.assistant("x", id="msg_1").to_responses_item()
+        assert item["id"] == "msg_1" and item["status"] == "completed"
+        assert "id" not in Message.user("x", id="u").to_responses_item()
 
     def test_system_and_developer_roles(self):
         assert Message.system("be brief").role == "system"
@@ -208,17 +213,10 @@ class TestReasoning:
         assert Reasoning.create(summary=["a", "b"]).summary_text == "a\n\nb"
 
 
-class TestCompaction:
-    def test_serializes_as_assistant_message(self):
-        item = Compaction(summary="a summary").to_responses_item()
-        assert item["role"] == "assistant"
-        assert all(c["type"] == "output_text" for c in item["content"])
-        assert item["content"][1]["text"] == "a summary"
-
-    def test_flatten_expands_nested_compactions(self):
-        inner = Compaction(summary="inner", original_items=[Message.user("a")])
-        outer = Compaction(summary="outer", original_items=[inner, Message.user("b")])
-        assert [m.text for m in outer.flatten() if isinstance(m, Message)] == ["a", "b"]
+class TestAudioBytes:
+    def test_raw_audio_bytes_are_base64_encoded(self):
+        a = input_content_from_file(File(data=b"RIFF", media_type="audio/wav"))
+        assert isinstance(a, InputAudio) and a.input_audio.data == "UklGRg=="
 
 
 class TestItemList:
@@ -295,7 +293,6 @@ class TestItemRoundTrip:
             Reasoning.create("x", id="rs_1"),
             FunctionCall.create(call_id="c", name="t"),
             FunctionCallOutput.create(call_id="c", output="ok"),
-            Compaction(summary="s"),
         ]
         dumped = adapter.dump_json(items)
         assert [i.type for i in adapter.validate_json(dumped)] == [
@@ -303,5 +300,4 @@ class TestItemRoundTrip:
             "reasoning",
             "function_call",
             "function_call_output",
-            "compaction",
         ]

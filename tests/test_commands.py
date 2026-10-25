@@ -43,8 +43,8 @@ async def test_handle_custom_handler_sync():
 
     agent.commands.register("greet", handler)
 
-    assert agent.commands.has("greet")
-    assert agent.commands.has("/greet")
+    assert await agent.commands.has("greet")
+    assert await agent.commands.has("/greet")
     result = await agent.commands.handle("/greet alice bob")
     assert result == "ok:alice,bob"
     assert captured["args"] == ["alice", "bob"]
@@ -96,9 +96,9 @@ async def test_custom_handler_overrides_skill():
 async def test_unregister():
     agent = Agent(model="openai/gpt-5-mini")
     agent.commands.register("foo", lambda args: "x")
-    assert agent.commands.has("foo")
+    assert await agent.commands.has("foo")
     agent.commands.unregister("foo")
-    assert not agent.commands.has("foo")
+    assert not await agent.commands.has("foo")
     # After unregister, the command is unknown, so it passes through unchanged.
     assert await agent.commands.handle("/foo") == "/foo"
 
@@ -125,6 +125,7 @@ async def test_run_skips_llm_when_handler_returns_none():
     assert agent.history.get() == []
 
 
+@pytest.mark.live
 @pytest.mark.asyncio
 async def test_run_uses_handler_output_as_prompt():
     """Custom handler returning a string: that string becomes the user prompt."""

@@ -1,7 +1,7 @@
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from typing import TYPE_CHECKING, Literal
 
-from agentia.llm.completion import async_gen_to_sync, last_assistant_message
+from agentia.llm.completion import RunBase, async_gen_to_sync, last_assistant_message
 from agentia.models import *
 
 if TYPE_CHECKING:
@@ -41,24 +41,6 @@ class MessageStream(TextStream):
     type: Literal["message-stream"] = "message-stream"
 
 
-class RunStreamBase:
-    def __init__(self, agent: "Agent"):
-        self.usage = Usage()
-        self.last_usage = Usage()
-        self.finish_reason: FinishReason | None = None
-        self.new_items: list[Item] = []
-        self.agent = agent
-
-    async def _on_finish(self):
-        if self.last_usage.total_tokens is not None:
-            self.agent.history.current_tokens = self.last_usage.total_tokens
-        self.agent.history.usage += self.usage
-        await self.agent.events.end_of_turn.emit()
-
-    def _add_new_item(self, item: Item):
-        self.new_items.append(item)
-
-
 async def _text_stream(
     gen: AsyncGenerator[StreamEvent, None], first: str
 ) -> AsyncGenerator[str, None]:
@@ -92,24 +74,35 @@ async def _reasoning_stream(
                 break
 
 
-class RunStream(RunStreamBase):
-    """A streaming `Agent.run()`, yielding text/reasoning streams and finished items."""
+class RunStream(RunBase):
+    """A streaming `Agent.run()`, yielding text/reasoning streams and tool items."""
 
-    def __init__(self, gen: AsyncGenerator[StreamEvent, None], agent: "Agent"):
+    def __init__(
+        self,
+        make: Callable[[RunBase], AsyncGenerator[StreamEvent, None]],
+        agent: "Agent",
+    ):
         super().__init__(agent)
+        gen = make(self)
 
         async def __gen() -> AsyncGenerator[
             ReasoningStream | MessageStream | FunctionCall | FunctionCallOutput, None
         ]:
+            n = 0
+
+            def committed() -> list[FunctionCall | FunctionCallOutput]:
+                # Calls and results as committed to the history (with final call ids).
+                nonlocal n
+                new = self.new_items[n:]
+                n = len(self.new_items)
+                return [
+                    i for i in new if isinstance(i, (FunctionCall, FunctionCallOutput))
+                ]
+
             async for event in gen:
+                for item in committed():
+                    yield item
                 match event.type:
-                    case "response.output_item.done":
-                        # Only the model's own function calls; results come below.
-                        if isinstance(event.item, FunctionCall):
-                            yield event.item
-                    case "agentia.input_item.added":
-                        if isinstance(event.item, FunctionCallOutput):
-                            yield event.item
                     case "response.output_text.delta":
                         yield MessageStream(_text_stream(gen, event.delta))
                     case (
@@ -117,7 +110,8 @@ class RunStream(RunStreamBase):
                         | "response.reasoning_summary_text.delta"
                     ):
                         yield ReasoningStream(_reasoning_stream(gen, event.delta))
-            await self._on_finish()
+            for item in committed():
+                yield item
 
         self.__gen = __gen()
 
@@ -140,18 +134,16 @@ class RunStream(RunStreamBase):
         return async_gen_to_sync(self.__gen)
 
 
-class RunEvents(RunStreamBase):
+class RunEvents(RunBase):
     """A streaming `Agent.run()`, yielding raw Responses API stream events."""
 
-    def __init__(self, gen: AsyncGenerator[StreamEvent, None], agent: "Agent"):
+    def __init__(
+        self,
+        make: Callable[[RunBase], AsyncGenerator[StreamEvent, None]],
+        agent: "Agent",
+    ):
         super().__init__(agent)
-
-        async def __gen():
-            async for event in gen:
-                yield event
-            await self._on_finish()
-
-        self.__gen = __gen()
+        self.__gen = make(self)
 
     def __aiter__(self) -> AsyncIterator[StreamEvent]:
         return self.__gen
