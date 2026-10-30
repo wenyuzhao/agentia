@@ -82,3 +82,4 @@ Discovers SKILL.md files from `.skills/`, `.agentia/skills/`, and `~/.config/age
 * Update docs when adding new features or changing the API design.
 * Update CLAUDE.md when necessary
 * DON'T commit, push, revert, merge, rebase unless I asked you to do so.
+* Add new features directly on the current branch. Don't create a new branch unless I asked you to do so.
