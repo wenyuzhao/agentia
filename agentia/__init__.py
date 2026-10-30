@@ -12,7 +12,7 @@ from .utils.decorators import tool
 from .plugins import Plugin, PluginInitError
 from .plugins.skills import Skills, Skill
 from . import plugins
-from .tools import ProviderTool, Tool, Tools, MCP, MCPContext, ToolResult
+from .tools import Tool, Tools, MCP, MCPContext, ToolResult
 from .history import History
 from .llm import LLMOptions, ReasoningOptions
 from .llm.completion import ChatCompletion
@@ -66,13 +66,17 @@ __all__ = [
     "FinishReason",
     "ToolChoice",
     "Usage",
+    "ToolCallPart",
+    "ToolResultPart",
     "ToolCall",
     "ToolCallResponse",
     "File",
+    "UrlCitation",
     "Annotation",
     "UserConsentRequest",
     "MessageBase",
-    "MessagePartBase",
+    "TextPart",
+    "ReasoningPart",
     "MessagePartText",
     "MessagePartReasoning",
     "MessagePartFile",
@@ -86,6 +90,7 @@ __all__ = [
     "AssistantMessage",
     "ToolMessage",
     "Message",
+    "Prompt",
     "ResponseFormatText",
     "ResponseFormatJson",
     "ResponseFormat",
@@ -104,7 +109,6 @@ __all__ = [
     "magic",
     "tool",
     "ImageUrl",
-    "ProviderTool",
     "Tool",
     "Tools",
     "ToolResult",

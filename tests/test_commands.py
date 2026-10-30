@@ -104,11 +104,8 @@ async def test_unregister():
 
 
 def _user_text(msg) -> str:
-    """Extract concatenated text from a UserMessage, regardless of content shape."""
-    content = msg.content
-    if isinstance(content, str):
-        return content
-    return "".join(p.text for p in content if hasattr(p, "text"))
+    """Extract concatenated text from a UserMessage."""
+    return msg.text
 
 
 @pytest.mark.asyncio

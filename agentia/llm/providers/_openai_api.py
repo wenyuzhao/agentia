@@ -1,9 +1,10 @@
 from collections.abc import AsyncGenerator
 import json
 import os
-from typing import Any, Sequence, override
+from typing import Any, Sequence, cast, override
 from uuid import uuid4
 import httpx
+from pydantic import BaseModel, JsonValue
 from agentia.tools.tools import ToolSet
 from . import LLMOptions, GenerationResult, Provider
 from ...models import *
@@ -17,6 +18,74 @@ from openai.types import CompletionUsage
 
 def _gen_id() -> str:
     return uuid4().hex
+
+
+def _to_json(x: Any) -> Any:
+    """Convert (possibly nested) pydantic objects in a provider response to plain JSON."""
+    if isinstance(x, BaseModel):
+        return x.model_dump(exclude_none=True)
+    if isinstance(x, list):
+        return [_to_json(v) for v in x]
+    if isinstance(x, dict):
+        return {k: _to_json(v) for k, v in x.items()}
+    return x
+
+
+def _merge_reasoning_details(acc: list[dict[str, Any]], chunk: list[Any]) -> None:
+    """Merge streamed `reasoning_details` deltas into `acc`, by their `index`."""
+    for d in chunk:
+        if not isinstance(d, dict):
+            continue
+        index = d.get("index")
+        target = next((x for x in acc if x.get("index") == index), None)
+        if index is None or target is None:
+            acc.append(dict(d))
+            continue
+        for k, v in d.items():
+            if v is None:
+                continue
+            if k in ("text", "summary") and isinstance(target.get(k), str):
+                target[k] += v
+            else:
+                target[k] = v
+
+
+def _reasoning_end(reasoning_details: list[dict[str, Any]]) -> StreamPartReasoningEnd:
+    """End the reasoning block, attaching (and consuming) the accumulated details."""
+    provider_data: dict[str, JsonValue] | None = (
+        {"reasoning_details": cast(JsonValue, list(reasoning_details))}
+        if reasoning_details
+        else None
+    )
+    reasoning_details.clear()
+    return StreamPartReasoningEnd(id=_gen_id(), provider_data=provider_data)
+
+
+def _to_url_citation(a: Any) -> UrlCitation | None:
+    a = _to_json(a)
+    if not isinstance(a, dict) or a.get("type") != "url_citation":
+        return None
+    c = a.get("url_citation") or {}
+    return UrlCitation(
+        title=c.get("title") or "",
+        url=c.get("url") or "",
+        start=c.get("start_index") or 0,
+        end=c.get("end_index") or 0,
+    )
+
+
+def _to_image_file(image: Any) -> File | None:
+    """Convert an image in a response (`{"type": "image_url", ...}`) to a `File`."""
+    image = _to_json(image)
+    if not isinstance(image, dict):
+        return None
+    url = (image.get("image_url") or {}).get("url")
+    if not url:
+        return None
+    try:
+        return File(url)
+    except ValueError:
+        return File(url, media_type="image/png")
 
 
 class OpenAIAPIProvider(Provider):
@@ -138,22 +207,20 @@ class OpenAIAPIProvider(Provider):
         if not tools:
             return None, None
         for t in tools:
-            match t.type:
-                case "function":
-                    f = {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,  # type: ignore
-                    }
-                    for k in list(f.keys()):
-                        if f[k] is None:
-                            del f[k]
-                    oai_tools.append(
-                        {
-                            "type": "function",
-                            "function": f,  # type: ignore
-                        }
-                    )
+            f = {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.input_schema,  # type: ignore
+            }
+            for k in list(f.keys()):
+                if f[k] is None:
+                    del f[k]
+            oai_tools.append(
+                {
+                    "type": "function",
+                    "function": f,  # type: ignore
+                }
+            )
         if not tool_choice:
             return oai_tools, None
         match tool_choice:
@@ -267,42 +334,47 @@ class OpenAIAPIProvider(Provider):
             timeout=timeout,
         )
         choice = response.choices[0]
-        parts: Sequence[AssistantMessagePart] = []
+        parts: list[AssistantMessagePart] = []
 
-        if self.reasoning_enabled(options) and hasattr(choice.message, "reasoning"):
-            reasoning_text: str = choice.message.reasoning  # type: ignore
-            if reasoning_text and reasoning_text.strip() != "":
-                parts.append(MessagePartReasoning(text=reasoning_text))
+        if self.reasoning_enabled(options):
+            reasoning_text = getattr(choice.message, "reasoning", None) or ""
+            details = getattr(choice.message, "reasoning_details", None)
+            if reasoning_text.strip() or details:
+                parts.append(
+                    ReasoningPart(
+                        text=reasoning_text,
+                        provider_data=(
+                            {"reasoning_details": _to_json(details)}
+                            if details
+                            else None
+                        ),
+                    )
+                )
 
         text = choice.message.content
         if text:
-            parts.append(MessagePartText(text=text))
+            annotations = [
+                c
+                for a in choice.message.annotations or []
+                if (c := _to_url_citation(a))
+            ]
+            parts.append(TextPart(text, annotations=annotations))
+        for image in getattr(choice.message, "images", None) or []:
+            if f := _to_image_file(image):
+                parts.append(f)
         for tc in choice.message.tool_calls or []:
             assert tc.type == "function"
             args = json.loads(tc.function.arguments) if tc.function.arguments else {}
             parts.append(
-                MessagePartToolCall(
+                ToolCallPart(
                     tool_call_id=tc.id or _gen_id(),
                     tool_name=tc.function.name,
                     input=args,
                 )
             )
 
-        annotations: list[Annotation] | None = None
-        for a in choice.message.annotations or []:
-            if not annotations:
-                annotations = []
-            annotations.append(
-                Annotation(
-                    title=a.url_citation.title,
-                    url=a.url_citation.url,
-                    start=a.url_citation.start_index,
-                    end=a.url_citation.end_index,
-                )
-            )
-
         return GenerationResult(
-            message=AssistantMessage(content=parts, annotations=annotations),
+            message=AssistantMessage(content=parts),
             finish_reason=self._get_finish_reason(choice.finish_reason),
             usage=self._get_usage(response.usage),
         )
@@ -334,7 +406,9 @@ class OpenAIAPIProvider(Provider):
         started = False
         streaming_text = False
         streaming_reasoning = False
-        tool_calls: list[ToolCall | None] = []
+        reasoning_enabled = self.reasoning_enabled(options)
+        reasoning_details: list[dict[str, Any]] = []
+        tool_calls: list[ToolCallPart | None] = []
         tool_call_partial_inputs: list[str] = []
         finished = False
         first_chunk = True
@@ -374,16 +448,21 @@ class OpenAIAPIProvider(Provider):
                 ):
                     continue
 
-            if rd := getattr(delta, "reasoning", None):
-                if not self.reasoning_enabled(options):
-                    continue
-                if not streaming_reasoning:
-                    streaming_reasoning = True
-                    yield StreamPartReasoningStart(id=_gen_id())
-                yield StreamPartReasoningDelta(id=_gen_id(), delta=rd)
-            elif streaming_reasoning:
+            if reasoning_enabled:
+                if details := getattr(delta, "reasoning_details", None):
+                    _merge_reasoning_details(reasoning_details, _to_json(details))
+                if rd := getattr(delta, "reasoning", None):
+                    if not streaming_reasoning:
+                        streaming_reasoning = True
+                        yield StreamPartReasoningStart(id=_gen_id())
+                    yield StreamPartReasoningDelta(id=_gen_id(), delta=rd)
+
+            # Reasoning ends when the answer starts. Reasoning details (e.g. the
+            # signature) may arrive after the last reasoning delta, so don't end it
+            # on the first chunk without reasoning text.
+            if streaming_reasoning and (delta.content or delta.tool_calls):
                 streaming_reasoning = False
-                yield StreamPartReasoningEnd(id=_gen_id())
+                yield _reasoning_end(reasoning_details)
 
             if delta.content:
                 if not streaming_text:
@@ -402,7 +481,7 @@ class OpenAIAPIProvider(Provider):
                         tool_call_partial_inputs.extend(
                             [""] * (index - len(tool_call_partial_inputs) + 1)
                         )
-                        tool_calls[index] = ToolCall(
+                        tool_calls[index] = ToolCallPart(
                             tool_call_id="", tool_name="", input={}
                         )
                         tool_call_partial_inputs[index] = ""
@@ -416,7 +495,22 @@ class OpenAIAPIProvider(Provider):
                         if tc.function.arguments:
                             tool_call_partial_inputs[index] += tc.function.arguments
 
+            for a in getattr(delta, "annotations", None) or []:
+                if c := _to_url_citation(a):
+                    yield c
+
+            for image in getattr(delta, "images", None) or []:
+                if f := _to_image_file(image):
+                    yield f
+
             if choice.finish_reason:
+                if streaming_reasoning:
+                    streaming_reasoning = False
+                    yield _reasoning_end(reasoning_details)
+                elif reasoning_details:
+                    # Reasoning details without any reasoning text (e.g. encrypted reasoning)
+                    yield StreamPartReasoningStart(id=_gen_id())
+                    yield _reasoning_end(reasoning_details)
                 if streaming_text:
                     streaming_text = False
                     yield StreamPartTextEnd(id=_gen_id())

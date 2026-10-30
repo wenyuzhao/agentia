@@ -52,11 +52,10 @@ Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Pr
 - **Plain functions**: auto-converted using signatures and docstrings. Parameter descriptions via `Annotated[type, "description"]`.
 - **Plugins** (`agentia/plugins/`): classes extending `Plugin` base with `@tool`-decorated methods, lifecycle hooks (`init()`), and instruction injection (`get_instructions()`).
 - **MCP servers**: local (stdio) or remote (HTTP/SSE) via `MCP` class. `MCPContext` manages server lifecycle.
-- **Provider-defined tools**: provider-specific built-in tools.
 
 ### Message/Models System (`agentia/models/`)
 
-Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage. Multi-modal content support (text, images, audio, video, files). Structured output via pydantic BaseModel in `ResponseFormatJson`.
+Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage (discriminated by `role`), each with an auto-generated `id` and a `content` list of parts: `TextPart`, `ReasoningPart`, `File`, `ToolCallPart`, `ToolResultPart` (discriminated by `type`). `File` doubles as the file part. Content accepts plain strings and files, coerced to parts. The message list never contains system messages: instructions (plus the compaction summary, kept in `History`) form the single system prompt. `ReasoningPart.provider_data` holds opaque provider reasoning data (OpenRouter `reasoning_details`) that is replayed verbatim. Conversion to the Chat Completions format lives in the `to_openai_format()` methods. Structured output via pydantic BaseModel in `ResponseFormatJson`.
 
 ### Streaming (`agentia/llm/stream.py`)
 

@@ -1,175 +1,120 @@
 from enum import Enum
 import inspect
+import json
 from typing import Annotated, Any, Literal, Sequence, Type
 from .base import *
 from openai.lib._parsing._completions import to_strict_json_schema  # type: ignore
-from pydantic import BaseModel, Field, JsonValue
-import json
+from pydantic import BaseModel, Field, JsonValue, field_validator
+from uuid import uuid4
 
 
-class MessageBase(BaseModel):
-    def __init__(self, **data: Any) -> None:
-        super().__init__(**data)
-
-
-class MessagePartBase(BaseModel):
-    def __init__(self, **data: Any) -> None:
-        super().__init__(**data)
-
-
-class MessagePartText(MessagePartBase):
+class TextPart(BaseModel):
     type: Literal["text"] = "text"
     text: str
+    annotations: list[UrlCitation] = Field(default_factory=list)
+    """URL citations in `text`. Only set on assistant messages."""
 
-    def __init__(self, text: str, *, type: Literal["text"] = "text"):
-        super().__init__(type=type, text=text)
+    def __init__(self, text: str, **kwargs: Any):
+        super().__init__(text=text, **kwargs)
 
     def to_openai_format(self) -> dict[str, Any]:
         return {"type": self.type, "text": self.text}
 
 
-class MessagePartReasoning(MessagePartBase):
+class ReasoningPart(BaseModel):
     type: Literal["reasoning"] = "reasoning"
     text: str
 
-    def __init__(self, text: str, *, type: Literal["reasoning"] = "reasoning"):
-        super().__init__(type=type, text=text)
+    provider_data: dict[str, JsonValue] | None = None
+    """
+    Opaque, provider-specific reasoning data (e.g. OpenRouter's `reasoning_details`,
+    which carries signatures and encrypted reasoning). It is sent back to the provider
+    verbatim so that reasoning models keep their reasoning across turns.
+    """
 
-    def to_openai_format(self) -> dict[str, Any]:
-        return {"type": self.type, "text": self.text}
-
-
-class MessagePartFile(MessagePartBase):
-    type: Literal["file"] = "file"
-    data: DataContent
-    media_type: str
-    filename: str | None = None
-
-    def to_url(self) -> str:
-        return File(data=self.data, media_type=self.media_type).to_url()
-
-    def to_bytes(self) -> bytes:
-        return File(data=self.data, media_type=self.media_type).to_bytes()
-
-    def to_openai_format(self) -> dict[str, Any]:
-        if self.media_type.startswith("image/"):
-            url = self.to_url()
-            return {"type": "image_url", "image_url": {"url": url}}
-        if self.media_type.startswith("video/"):
-            url = self.to_url()
-            return {"type": "video_url", "video_url": {"url": url}}  # type: ignore
-        elif self.media_type.startswith("audio/"):
-            if isinstance(self.data, str) and (
-                self.data.startswith(("http://", "https://"))
-            ):
-                raise ValueError("audio file parts with URLs")
-            if isinstance(self.data, str):
-                data = self.data
-            else:
-                assert isinstance(self.data, bytes)
-                data = self.data.decode(encoding="utf-8")
-            format: Literal["wav", "mp3"]
-            if self.media_type == "audio/wav":
-                format = "wav"
-            elif self.media_type == "audio/mpeg" or self.media_type == "audio/mp3":
-                format = "mp3"
-            else:
-                raise ValueError(f"audio file parts with media type {self.media_type}")
-            return {
-                "type": "input_audio",
-                "input_audio": {"data": data, "format": format},
-            }
-        else:
-            if isinstance(self.data, str) and self.data.startswith("file-"):
-                # this is a file ID
-                return {"type": "file", "file": {"file_id": self.data}}
-            else:
-                url = self.to_url()
-                return {
-                    "type": "file",
-                    "file": {"filename": self.filename, "file_data": url},
-                }
-
-
-class MessagePartToolCall(MessagePartBase):
-    type: Literal["tool-call"] = "tool-call"
-    tool_call_id: str
-    tool_name: str
-    input: dict[str, JsonValue]
-    provider_executed: bool | None = None
-
-
-class MessagePartToolResult(MessagePartBase):
-    type: Literal["tool-result"] = "tool-result"
-    tool_call_id: str
-    tool_name: str
-    input: dict[str, JsonValue]
-    output: JsonValue
-    output_files: list[File] | None = None
-
-    def serialize_output(self) -> str:
-        return (
-            json.dumps(self.output)
-            if isinstance(self.output, (list, dict))
-            else str(self.output)
-        )
+    def __init__(self, text: str, **kwargs: Any):
+        super().__init__(text=text, **kwargs)
 
 
 type MessagePart = Annotated[
-    MessagePartText
-    | MessagePartReasoning
-    | MessagePartFile
-    | MessagePartToolCall
-    | MessagePartToolResult,
+    TextPart | ReasoningPart | File | ToolCallPart | ToolResultPart,
     Field(discriminator="type"),
 ]
 
-type UserMessagePart = Annotated[
-    MessagePartText | MessagePartFile, Field(discriminator="type")
-]
+type UserMessagePart = Annotated[TextPart | File, Field(discriminator="type")]
 
 type AssistantMessagePart = Annotated[
-    MessagePartText | MessagePartReasoning | MessagePartToolCall,
+    TextPart | ReasoningPart | File | ToolCallPart,
     Field(discriminator="type"),
 ]
+
+
+def _gen_id() -> str:
+    return uuid4().hex
+
+
+class MessageBase(BaseModel):
+    id: str = Field(default_factory=_gen_id)
+    """A unique ID for the message. Generated automatically."""
+
+    def __init__(self, **data: Any) -> None:
+        # Lets subclasses call `super().__init__(content=...)` under type checking.
+        super().__init__(**data)
+
+    @field_validator("content", mode="before", check_fields=False)
+    @classmethod
+    def _coerce_content(cls, content: Any) -> Any:
+        """Accept a plain string, a single part, or a list mixing strings and parts."""
+        if isinstance(content, (str, BaseModel, dict)):
+            content = [content]
+        return [TextPart(c) if isinstance(c, str) else c for c in content]
 
 
 class UserMessage(MessageBase):
+    """
+    A message from the user.
+
+    `content` accepts a string, a `File`, or a list mixing strings and files:
+
+        UserMessage("Hello")
+        UserMessage(["What is in this picture?", File("cat.png")])
+    """
+
     role: Literal["user"] = "user"
-    content: Sequence[UserMessagePart] | str
+    content: list[UserMessagePart]
 
     def __init__(
         self,
-        content: str | Sequence[UserMessagePart],
-        *,
-        role: Literal["user"] = "user",
+        content: str | File | Sequence[str | UserMessagePart],
+        **kwargs: Any,
     ):
-        super().__init__(role=role, content=content)
+        super().__init__(content=content, **kwargs)
 
     @property
     def content_list(self) -> list[UserMessagePart]:
-        if isinstance(self.content, str):
-            return [MessagePartText(text=self.content)]
-        if not isinstance(self.content, (Sequence, list)):
-            return [self.content]
+        """Deprecated: `content` is always a list now."""
         return list(self.content)
 
     @property
     def text(self) -> str:
-        text = ""
-        for part in self.content_list:
-            if isinstance(part, MessagePartText):
-                text += part.text
-        return text
+        return "".join(p.text for p in self.content if isinstance(p, TextPart))
+
+    @property
+    def files(self) -> list[File]:
+        return [p for p in self.content if isinstance(p, File)]
 
     def to_openai_format(self) -> dict[str, Any]:
-        if isinstance(self.content, str):
-            return {"role": self.role, "content": self.content}
-        else:
-            return {
-                "role": self.role,
-                "content": [part.to_openai_format() for part in self.content_list],
-            }
+        if len(self.content) == 1 and isinstance(self.content[0], TextPart):
+            return {"role": self.role, "content": self.content[0].text}
+        return {
+            "role": self.role,
+            "content": [part.to_openai_format() for part in self.content],
+        }
+
+    def __str__(self) -> str:
+        return "\n".join(
+            p.text if isinstance(p, TextPart) else str(p) for p in self.content
+        )
 
 
 type ObjectType = (
@@ -191,57 +136,48 @@ class _Result[X](BaseModel):
 
 
 class AssistantMessage(MessageBase):
+    """A message generated by the model."""
+
     role: Literal["assistant"] = "assistant"
-    content: Sequence[AssistantMessagePart] | str
-    annotations: list[Annotation] | None = None
+    content: list[AssistantMessagePart]
 
     def __init__(
         self,
-        content: str | Sequence[AssistantMessagePart],
-        *,
-        role: Literal["assistant"] = "assistant",
-        annotations: list[Annotation] | None = None,
+        content: str | AssistantMessagePart | Sequence[str | AssistantMessagePart],
+        **kwargs: Any,
     ):
-        super().__init__(role=role, content=content)
+        super().__init__(content=content, **kwargs)
 
     @property
     def content_list(self) -> list[AssistantMessagePart]:
-        if isinstance(self.content, str):
-            return [MessagePartText(text=self.content)]
-        if not isinstance(self.content, Sequence):
-            return [self.content]
+        """Deprecated: `content` is always a list now."""
         return list(self.content)
 
     @property
     def reasoning(self) -> str | None:
-        text = ""
-        for part in self.content_list:
-            if isinstance(part, MessagePartReasoning):
-                text += part.text
-        return text
+        """The reasoning text, or `None` if the message has no reasoning."""
+        parts = [p.text for p in self.content if isinstance(p, ReasoningPart)]
+        return "".join(parts) if parts else None
 
     @property
     def text(self) -> str:
-        text = ""
-        for part in self.content_list:
-            if isinstance(part, MessagePartText):
-                text += part.text
-        return text
+        return "".join(p.text for p in self.content if isinstance(p, TextPart))
 
     @property
-    def tool_calls(self) -> list[ToolCall]:
-        tool_calls = []
-        for part in self.content_list:
-            if isinstance(part, MessagePartToolCall):
-                tool_calls.append(
-                    ToolCall(
-                        tool_call_id=part.tool_call_id,
-                        tool_name=part.tool_name,
-                        input=part.input,
-                        provider_executed=part.provider_executed,
-                    )
-                )
-        return tool_calls
+    def files(self) -> list[File]:
+        """Files (e.g. generated images) in the message."""
+        return [p for p in self.content if isinstance(p, File)]
+
+    @property
+    def tool_calls(self) -> list[ToolCallPart]:
+        return [p for p in self.content if isinstance(p, ToolCallPart)]
+
+    @property
+    def annotations(self) -> list[UrlCitation]:
+        """All URL citations of the text parts."""
+        return [
+            a for p in self.content if isinstance(p, TextPart) for a in p.annotations
+        ]
 
     def parse[T: ObjectType](self, return_type: type[T]) -> T:
         class Result(_Result[return_type]): ...
@@ -251,141 +187,102 @@ class AssistantMessage(MessageBase):
         else:
             response_format = Result
 
-        json_string = ""
-        for part in self.content:
-            if isinstance(part, MessagePartText):
-                json_string += part.text
-
-        result = response_format.model_validate_json(json_string)
+        result = response_format.model_validate_json(self.text)
         if isinstance(result, _Result):
             return result.result
         else:
             return result
 
     def to_openai_format(self) -> dict[str, Any]:
-        if isinstance(self.content, str):
-            return {"role": self.role, "content": self.content}
-        else:
-            text_parts: list[str] = []
-            images: list[Any] = []
-            tool_calls: list[Any] = []
-            reasoning = ""
-            for i, p in enumerate(self.content_list):
-                if p.type == "text":
-                    text_parts.append(p.text)
-                elif p.type == "reasoning":
-                    reasoning += p.text
-                elif p.type == "file":
-                    if p.media_type.startswith("image/"):
-                        images.append(
-                            {"type": "image_url", "image_url": {"url": p.to_url()}}
-                        )
-                    else:
-                        raise ValueError(
-                            f"Only image files are supported in assistant messages, got media type {p.media_type}"
-                        )
-                elif p.type == "tool-call":
-                    tool_calls.append(
-                        {
-                            "id": p.tool_call_id,
-                            "type": "function",
-                            "function": {
-                                "name": p.tool_name,
-                                "arguments": json.dumps(p.input),
-                            },
-                        }
-                    )
-            p = {
-                "role": "assistant",
-                "content": (
-                    text_parts[0]
-                    if len(text_parts) == 1
-                    else text_parts
-                    if text_parts
-                    else None
-                ),
-                "tool_calls": tool_calls,
+        text = self.text
+        tool_calls = [
+            {
+                "id": p.tool_call_id,
+                "type": "function",
+                "function": {"name": p.tool_name, "arguments": json.dumps(p.input)},
             }
-            if reasoning:
-                p["reasoning"] = reasoning
-            if images:
-                p["images"] = images
-            return p
+            for p in self.tool_calls
+        ]
+        msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": text if text or not tool_calls else None,
+        }
+        if tool_calls:
+            msg["tool_calls"] = tool_calls
+        if reasoning := self.reasoning:
+            msg["reasoning"] = reasoning
+        for p in self.content:
+            if isinstance(p, ReasoningPart) and p.provider_data:
+                for k, v in p.provider_data.items():
+                    if isinstance(v, list) and isinstance(msg.get(k), list):
+                        msg[k] = [*msg[k], *v]
+                    else:
+                        msg[k] = v
+        images = []
+        for f in self.files:
+            if not f.media_type.startswith("image/"):
+                raise ValueError(
+                    f"Only image files are supported in assistant messages, got media type {f.media_type}"
+                )
+            images.append({"type": "image_url", "image_url": {"url": f.to_url()}})
+        if images:
+            msg["images"] = images
+        return msg
+
+    def __str__(self) -> str:
+        lines: list[str] = []
+        for p in self.content:
+            match p:
+                case TextPart():
+                    lines.append(p.text)
+                case File() | ToolCallPart():
+                    lines.append(str(p))
+        return "\n".join(lines)
 
 
 class ToolMessage(MessageBase):
+    """The results of the tool calls of the preceding assistant message."""
+
     role: Literal["tool"] = "tool"
-    content: Sequence[MessagePartToolResult]
+    content: list[ToolResultPart]
 
-    def __init__(
-        self,
-        content: Sequence[MessagePartToolResult],
-        *,
-        role: Literal["tool"] = "tool",
-    ):
-        super().__init__(role=role, content=content)
+    def __init__(self, content: Sequence[ToolResultPart], **kwargs: Any):
+        super().__init__(content=content, **kwargs)
 
-    def to_openai_format(self) -> dict[str, Any] | list[dict[str, Any]]:
-        files: list[File] = []
-        msgs = []
-        for p in self.content:
-            if p.output_files:
-                p.output = {
-                    "output": p.output,
-                    "files_hint": f"The tool output includes {len(p.output_files)} file(s).",
-                    "files": [f.id for f in p.output_files],
-                }
-                files.extend(p.output_files)
-            val = p.serialize_output()
-            msgs.append(
-                {"role": "tool", "tool_call_id": p.tool_call_id, "content": val}
-            )
-        if files:
-            user_msg = UserMessage(
-                content=[
-                    MessagePartText(text="[[TOOL_OUTPUT_FILES]]"),
-                    *[
-                        MessagePartFile(media_type=f.media_type, data=f.to_url())
-                        for f in files
-                    ],
-                ]
-            )
+    @property
+    def files(self) -> list[File]:
+        """All files generated by the tool calls."""
+        return [f for p in self.content for f in p.output_files]
+
+    def to_openai_format(self) -> list[dict[str, Any]]:
+        msgs: list[dict[str, Any]] = [
+            {
+                "role": "tool",
+                "tool_call_id": p.tool_call_id,
+                "content": p.serialize_output(),
+            }
+            for p in self.content
+        ]
+        # Tool messages cannot carry files, so they are attached in a user message.
+        if files := self.files:
+            user_msg = UserMessage(content=[TextPart("[[TOOL_OUTPUT_FILES]]"), *files])
             msgs.append(user_msg.to_openai_format())
-        return msgs if len(msgs) > 1 else msgs[0]
+        return msgs
 
-
-class CompactedMessage(MessageBase):
-    role: Literal["compacted"] = "compacted"
-    content: str
-    original_messages: list["Message"]
-
-    def to_openai_format(self) -> dict[str, Any]:
-        return {
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "[[COMPACTED CONVERSATION SUMMARY]]"},
-                {"type": "text", "text": self.content},
-                {"type": "text", "text": "[[END OF CONVERSATION SUMMARY]]"},
-            ],
-        }
-
-    def flattern(self) -> list[UserMessage | AssistantMessage | ToolMessage]:
-        messages: list[UserMessage | AssistantMessage | ToolMessage] = []
-        for msg in self.original_messages:
-            if isinstance(msg, (UserMessage, AssistantMessage, ToolMessage)):
-                messages.append(msg)
-            elif isinstance(msg, CompactedMessage):
-                messages.extend(msg.flattern())
-        return messages
+    def __str__(self) -> str:
+        return "\n".join(str(p) for p in self.content)
 
 
 type Message = Annotated[
-    UserMessage | AssistantMessage | ToolMessage | CompactedMessage,
+    UserMessage | AssistantMessage | ToolMessage,
     Field(discriminator="role"),
 ]
 
-
-CompactedMessage.model_rebuild()
+type Prompt = str | File | Message | Sequence[str | File | Message]
+"""
+The input of `Agent.run`: a string, a file, a message, or a list of them.
+Consecutive strings and files are combined into a single `UserMessage`.
+"""
 
 
 class ResponseFormatText(BaseModel):
@@ -418,9 +315,17 @@ type ResponseFormat = Annotated[
 ]
 
 
+# Aliases for the previous names
+MessagePartText = TextPart
+MessagePartReasoning = ReasoningPart
+MessagePartFile = File
+MessagePartToolCall = ToolCallPart
+MessagePartToolResult = ToolResultPart
+
+
 __all__ = [
-    "MessageBase",
-    "MessagePartBase",
+    "TextPart",
+    "ReasoningPart",
     "MessagePartText",
     "MessagePartReasoning",
     "MessagePartFile",
@@ -429,12 +334,13 @@ __all__ = [
     "MessagePart",
     "UserMessagePart",
     "AssistantMessagePart",
+    "MessageBase",
     "UserMessage",
     "ObjectType",
     "AssistantMessage",
     "ToolMessage",
-    "CompactedMessage",
     "Message",
+    "Prompt",
     "ResponseFormatText",
     "ResponseFormatJson",
     "ResponseFormat",

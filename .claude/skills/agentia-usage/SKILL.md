@@ -90,6 +90,48 @@ async for event in run:
         print(event.delta, end="")
 ```
 
+### Messages
+
+A conversation is a list of messages: `UserMessage`, `AssistantMessage` and
+`ToolMessage`. Each message has an auto-generated `id` and a `content` list of parts:
+
+| Message            | Parts                                                         |
+| ------------------ | ------------------------------------------------------------- |
+| `UserMessage`      | `TextPart`, `File`                                            |
+| `AssistantMessage` | `TextPart`, `ReasoningPart`, `File`, `ToolCallPart`           |
+| `ToolMessage`      | `ToolResultPart` (one per tool call of the previous message)  |
+
+`agent.run()` accepts a string, a `File`, a message, or a list of them. Consecutive
+strings and files are combined into a single user message:
+
+```python
+from agentia import File, UserMessage
+
+await agent.run(["What is in this picture?", File("cat.png")])
+
+# Equivalent to:
+await agent.run(UserMessage(["What is in this picture?", File("cat.png")]))
+```
+
+`File` takes bytes, a local path, a URL, a data URL or a provider file ID (`file-...`).
+The media type is inferred from the path or URL; pass `media_type=` for raw bytes.
+
+Convenience accessors:
+
+```python
+response = await agent.run("...")
+response.text         # concatenated text
+response.reasoning    # reasoning text, or None
+response.tool_calls   # list[ToolCallPart]
+response.files        # generated files (e.g. images)
+response.annotations  # URL citations
+
+async for msg in agent.run("What is the weather?"):
+    print(msg)  # human-readable: text, "→ tool(args)" calls, "← tool: output" results
+```
+
+A failed tool call produces a `ToolResultPart` with `is_error=True`.
+
 ### Structured Output
 
 ```python
@@ -161,11 +203,26 @@ agent.add_instructions("Additional context.")
 ### Conversation History
 
 ```python
-agent.history.clear()                        # Clear messages, keep instructions
-agent.history.clear(clear_instructions=True)  # Clear everything
-agent.history.add(user_message)               # Add a message
-agent.history.load(messages)                  # Replace all messages
-messages = agent.history.get()                # Get full history
+agent.history.clear()                 # Clear messages (instructions are kept)
+agent.history.add(user_message)       # Add a message
+agent.history.load(messages)          # Replace all messages
+messages = agent.history.get()        # Messages sent to the model
+```
+
+The message list never contains system messages: the agent's instructions are sent as
+the single system prompt.
+
+### Compaction
+
+`await agent.compact()` (or `LLMOptions(auto_compact=True)`) summarizes the older
+messages. The summary is appended to the system prompt and the summarized messages are
+removed from `history.get()`, but nothing is lost:
+
+```python
+await agent.compact(effort="medium")
+agent.history.summary     # the summary
+agent.history.get()       # the messages after the summary
+agent.history.get_all()   # all messages, including the summarized ones
 ```
 
 ### LLM Options

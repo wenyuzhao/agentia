@@ -18,8 +18,8 @@ from agentia.llm.stream import ChatCompletionStream, ChatCompletionEvents
 from agentia.models.chat import ResponseFormatJson
 from agentia.tools.tools import Tool, ToolSet
 from agentia.models import (
-    Message,
     ObjectType,
+    Prompt,
     Usage,
     UserConsentRequest,
     UserMessage,
@@ -145,7 +145,7 @@ class Agent:
     @overload
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: Prompt,
         *,
         stream: Literal[False] = False,
         events: Literal[False] = False,
@@ -155,7 +155,7 @@ class Agent:
     @overload
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: Prompt,
         *,
         stream: Literal[True],
         events: Literal[False] = False,
@@ -165,7 +165,7 @@ class Agent:
     @overload
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: Prompt,
         *,
         stream: Literal[True],
         events: Literal[True],
@@ -174,7 +174,7 @@ class Agent:
 
     def run(
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: Prompt,
         *,
         stream: bool = False,
         events: bool = False,
@@ -190,7 +190,7 @@ class Agent:
 
     async def generate_object[T: ObjectType](
         self,
-        prompt: str | Message | Sequence[Message],
+        prompt: Prompt,
         type: type[T],
         options: LLMOptions | None = None,
     ) -> T:

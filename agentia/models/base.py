@@ -1,8 +1,10 @@
 from pathlib import Path
-from typing import Annotated, Any, Literal
-from pydantic import BaseModel, Field, JsonValue
+from typing import Any, Literal
+from pydantic import BaseModel, Field, JsonValue, model_validator
 from uuid import uuid4
 import base64
+import json
+import mimetypes
 
 
 type DataContent = bytes | str
@@ -60,22 +62,12 @@ class FunctionTool(BaseModel):
         }
 
 
-class ProviderDefinedTool(BaseModel):
-    type: Literal["provider-defined"] = "provider-defined"
-    id: str
-    name: str
-    args: dict[str, JsonValue] = Field(default_factory=dict)
-
-    def to_openai_schema(self) -> Any:
-        return {"type": self.id, **self.args}
+type ToolSchema = FunctionTool
 
 
-type ToolSchema = Annotated[
-    FunctionTool | ProviderDefinedTool, Field(discriminator="type")
-]
+class ToolCallPart(BaseModel):
+    """A tool call requested by the model. Part of an `AssistantMessage`."""
 
-
-class ToolCall(BaseModel):
     type: Literal["tool-call"] = "tool-call"
 
     tool_call_id: str
@@ -87,17 +79,61 @@ class ToolCall(BaseModel):
     input: dict[str, JsonValue]
     """JSON object with the tool call arguments. Must match the parameters schema of the tool."""
 
-    provider_executed: bool | None = None
-    """
-    Whether the tool call will be executed by the provider.
-    If this flag is not set or is false, the tool call will be executed by the client.
-    """
+    def __str__(self) -> str:
+        args = ", ".join(f"{k}={v!r}" for k, v in self.input.items())
+        return f"→ {self.tool_name}({args})"
+
+
+def _infer_media_type(data: DataContent) -> str | None:
+    if isinstance(data, bytes):
+        return None
+    if data.startswith("data:"):
+        header = data[len("data:") :].split(",", 1)[0]
+        return header.split(";", 1)[0] or None
+    path = data.split("?", 1)[0].split("#", 1)[0]
+    media_type, _ = mimetypes.guess_type(path)
+    return media_type
 
 
 class File(BaseModel):
-    media_type: str
+    """
+    A file: an image, audio clip, video, PDF, etc.
+
+    `File` is also the file part of a message, so it can be put directly into the
+    content of a `UserMessage` or `AssistantMessage`:
+
+        UserMessage(["What is in this picture?", File("cat.png")])
+
+    `data` is raw bytes, a local path, an http(s) URL, a data URL, or a provider file
+    ID (`file-...`). `media_type` is inferred from the path, URL or data URL when
+    omitted; it is required for raw bytes.
+    """
+
+    type: Literal["file"] = "file"
     data: DataContent
+    media_type: str
+    filename: str | None = None
     id: str = Field(default_factory=lambda: str(uuid4()))
+
+    def __init__(
+        self, data: DataContent, media_type: str | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(data=data, media_type=media_type, **kwargs)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_media_type(cls, values: Any) -> Any:
+        if isinstance(values, dict) and not values.get("media_type"):
+            data = values.get("data")
+            media_type = (
+                _infer_media_type(data) if isinstance(data, (bytes, str)) else None
+            )
+            if media_type is None:
+                raise ValueError(
+                    "Cannot infer the media type of the file. Please specify `media_type`."
+                )
+            values = {**values, "media_type": media_type}
+        return values
 
     def to_url(self) -> str:
         if isinstance(self.data, bytes):
@@ -132,8 +168,56 @@ class File(BaseModel):
         else:
             raise ValueError("Invalid data type for File")
 
+    def to_base64(self) -> str:
+        """The raw file content, base64 encoded (without a `data:` prefix)."""
+        if isinstance(self.data, str) and self.data.startswith("data:"):
+            return self.data.split(",", 1)[1]
+        return base64.b64encode(self.to_bytes()).decode()
 
-class ToolCallResponse(BaseModel):
+    def to_openai_format(self) -> dict[str, Any]:
+        if self.media_type.startswith("image/"):
+            return {"type": "image_url", "image_url": {"url": self.to_url()}}
+        if self.media_type.startswith("video/"):
+            return {"type": "video_url", "video_url": {"url": self.to_url()}}
+        if self.media_type.startswith("audio/"):
+            if isinstance(self.data, str) and self.data.startswith(
+                ("http://", "https://")
+            ):
+                raise ValueError("audio files cannot be URLs")
+            format: Literal["wav", "mp3"]
+            match self.media_type:
+                case "audio/wav" | "audio/x-wav":
+                    format = "wav"
+                case "audio/mpeg" | "audio/mp3":
+                    format = "mp3"
+                case _:
+                    raise ValueError(f"unsupported audio media type {self.media_type}")
+            return {
+                "type": "input_audio",
+                "input_audio": {"data": self.to_base64(), "format": format},
+            }
+        if isinstance(self.data, str) and self.data.startswith("file-"):
+            # this is a file ID
+            return {"type": "file", "file": {"file_id": self.data}}
+        file: dict[str, Any] = {"file_data": self.to_url()}
+        if self.filename:
+            file["filename"] = self.filename
+        return {"type": "file", "file": file}
+
+    def __str__(self) -> str:
+        name = self.filename
+        if (
+            not name
+            and isinstance(self.data, str)
+            and not self.data.startswith("data:")
+        ):
+            name = self.data
+        return f"[{self.media_type}: {name}]" if name else f"[{self.media_type}]"
+
+
+class ToolResultPart(BaseModel):
+    """The result of a tool call. Part of a `ToolMessage`."""
+
     type: Literal["tool-result"] = "tool-result"
 
     tool_call_id: str
@@ -143,6 +227,7 @@ class ToolCallResponse(BaseModel):
     """Name of the tool that generated this result."""
 
     input: dict[str, JsonValue]
+    """The arguments the tool was called with."""
 
     output: JsonValue
     """Result of the tool call. This is a JSON-serializable object."""
@@ -150,36 +235,38 @@ class ToolCallResponse(BaseModel):
     output_files: list[File] = Field(default_factory=list)
     """Optional list of files generated by the tool call."""
 
-    is_error: bool | None = None
-    """Optional flag if the result is an error or an error message."""
+    is_error: bool = False
+    """Whether the tool call failed. `output` then describes the error."""
 
-    provider_executed: bool | None = None
-    """
-    Whether the tool result was generated by the provider.
-    If this flag is set to true, the tool result was generated by the provider.
-    If this flag is not set or is false, the tool result was generated by the client.
-    """
+    def serialize_output(self) -> str:
+        """The output as sent to the model: strings verbatim, anything else as JSON."""
+        output = self.output
+        if self.output_files:
+            output = {
+                "output": output,
+                "files_hint": f"The tool output includes {len(self.output_files)} file(s).",
+                "files": [f.id for f in self.output_files],
+            }
+        return output if isinstance(output, str) else json.dumps(output)
 
-    preliminary: bool | None = None
-    """
-    Whether the tool result is preliminary.
-
-    Preliminary tool results replace each other, e.g. image previews.
-    There always has to be a final, non-preliminary tool result.
-
-    If this flag is set to true, the tool result is preliminary.
-    If this flag is not set or is false, the tool result is not preliminary.
-    """
+    def __str__(self) -> str:
+        mark = "✗" if self.is_error else "←"
+        output = (
+            self.output if isinstance(self.output, str) else json.dumps(self.output)
+        )
+        return f"{mark} {self.tool_name}: {output}"
 
 
-class Annotation(BaseModel):
-    type: Literal["annotation"] = "annotation"
+class UrlCitation(BaseModel):
+    """A URL citation in the text of an assistant message."""
+
+    type: Literal["url-citation"] = "url-citation"
 
     end: int
-    """The index of the last character of the URL citation in the message."""
+    """The index of the last character of the URL citation in the text."""
 
     start: int
-    """The index of the first character of the URL citation in the message."""
+    """The index of the first character of the URL citation in the text."""
 
     title: str
     """The title of the web resource."""
@@ -198,17 +285,24 @@ class UserConsentRequest(BaseModel):
         super().__init__(message=message, details=details)
 
 
+# Aliases for the previous names
+ToolCall = ToolCallPart
+ToolCallResponse = ToolResultPart
+Annotation = UrlCitation
+
 __all__ = [
     "DataContent",
     "FinishReason",
     "ToolChoice",
     "Usage",
     "FunctionTool",
-    "ProviderDefinedTool",
     "ToolSchema",
+    "ToolCallPart",
+    "ToolResultPart",
     "ToolCall",
     "ToolCallResponse",
     "File",
+    "UrlCitation",
     "Annotation",
     "UserConsentRequest",
 ]

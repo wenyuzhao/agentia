@@ -26,7 +26,7 @@ from openai.lib._pydantic import _ensure_strict_json_schema  # type: ignore
 from PIL.Image import Image
 import base64
 from io import BytesIO
-from agentia.models import UserMessage, MessagePartText, MessagePartFile, Message
+from agentia.models import UserMessage, File, Message
 
 if TYPE_CHECKING:
     from agentia.tools.tools import Tools
@@ -392,19 +392,11 @@ def magic(
                     buffered.name = f"image.{content_type}"
                     image.save(buffered, format=image.format)
                     img_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    url = f"data:image/{content_type};base64,{img_data}"
+                    url = f"data:{content_type};base64,{img_data}"
                 s = f"Image Argument #{i}: {p.name}"
                 if p.description:
-                    s += f"\nDescription: {p.description})"
-                messages.append(
-                    UserMessage(
-                        content=[
-                            MessagePartText(text=s),
-                            MessagePartFile(data=url, media_type=content_type),
-                        ],
-                        role="user",
-                    )
-                )
+                    s += f"\nDescription: {p.description}"
+                messages.append(UserMessage([s, File(url, media_type=content_type)]))
             async with agent:
                 await agent.run(messages)
                 result = await agent.generate_object(

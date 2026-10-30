@@ -132,12 +132,7 @@ class _MCPTool(_BaseTool):
         self.server = server
 
 
-class ProviderTool(BaseModel):
-    name: str
-    args: dict[str, JsonValue] | None = None
-
-
-type Tool = Plugin | Callable[..., Any] | ProviderTool | MCP
+type Tool = Plugin | Callable[..., Any] | MCP
 type Tools = Sequence[Tool]
 
 
@@ -154,18 +149,15 @@ class ToolSet:
         self.plugins: dict[str, Plugin] = {}
         self.mcp_servers: dict[str, MCP] = {}
         self.agent = agent
-        self.provider_tools: dict[str, ProviderTool] = {}
         self.__tools: dict[str, _BaseTool] = {}
         for t in tools:
             if isinstance(t, Plugin):
                 self.__add_plugin(t)
             elif isinstance(t, MCP):
                 self.__add_mcp_server(t)
-            elif isinstance(t, ProviderTool):
-                self.provider_tools[t.name] = t
             else:
                 assert inspect.isfunction(t), (
-                    "Expected a function, MCP server object, Plugin, or ProviderTool"
+                    "Expected a function, MCP server object, or Plugin"
                 )
                 self.__add_function(t)
         self.__initialized = False
@@ -238,7 +230,7 @@ class ToolSet:
         return len(self.__tools) == 0
 
     def get_schema(self) -> Sequence[models.ToolSchema]:
-        functions = [
+        return [
             models.FunctionTool(
                 name=v.name,
                 description=v.description or "",
@@ -246,11 +238,6 @@ class ToolSet:
             )
             for (k, v) in self.__tools.items()
         ]
-        provider_tools = [
-            models.ProviderDefinedTool(id=t.name, name=t.name, args=t.args or {})
-            for t in self.provider_tools.values()
-        ]
-        return functions + provider_tools
 
     async def __run_python_tool(
         self,
@@ -258,7 +245,7 @@ class ToolSet:
         tool: _PythonFunctionTool,
         agent: "Agent",
         args: dict[str, JsonValue],
-    ) -> models.ToolCallResponse:
+    ) -> models.ToolResultPart:
         p_args, kw_args = tool.process_json_args(agent, args)
         output = tool.func(*p_args, **kw_args)  # type: ignore
         if inspect.isawaitable(output):
@@ -267,7 +254,7 @@ class ToolSet:
         if isinstance(output, ToolResult):
             files = output.files
             output = output.output
-        return models.ToolCallResponse(
+        return models.ToolResultPart(
             tool_call_id=id,
             tool_name=tool.name,
             input=args,
@@ -277,15 +264,15 @@ class ToolSet:
 
     async def __run_mcp_tool(
         self, id: str, tool: _MCPTool, args: dict[str, JsonValue]
-    ) -> models.ToolCallResponse:
+    ) -> models.ToolResultPart:
         result = await tool.server.run(tool.name, args)
-        return models.ToolCallResponse(
+        return models.ToolResultPart(
             tool_call_id=id, tool_name=tool.name, input=args, output=result
         )
 
     async def __run_one(
-        self, agent: "Agent", c: models.ToolCall
-    ) -> models.ToolCallResponse:
+        self, agent: "Agent", c: models.ToolCallPart
+    ) -> models.ToolResultPart:
         tool = self.__tools.get(c.tool_name, None)
         try:
             if not tool:
@@ -307,23 +294,24 @@ class ToolSet:
                 raise ValueError(f"Tool {c.tool_name} is of unknown type")
         except Exception as e:
             output: JsonValue = {"error": str(e)}
-            r = models.ToolCallResponse(
+            r = models.ToolResultPart(
                 tool_call_id=c.tool_call_id,
                 tool_name=c.tool_name,
                 input=c.input,
                 output=output,
+                is_error=True,
             )
             return r
 
     async def run(
-        self, agent: "Agent", tool_calls: list[models.ToolCall], parallel: bool
-    ) -> list[models.ToolCallResponse]:
+        self, agent: "Agent", tool_calls: list[models.ToolCallPart], parallel: bool
+    ) -> list[models.ToolResultPart]:
         if parallel:
             results = await asyncio.gather(
                 *[self.__run_one(agent, c) for c in tool_calls]
             )
         else:
-            results: list[models.ToolCallResponse] = []
+            results: list[models.ToolResultPart] = []
             for c in tool_calls:
                 results.append(await self.__run_one(agent, c))
         return results

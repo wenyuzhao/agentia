@@ -1,5 +1,5 @@
 from .mcp import MCP, MCPContext
-from .tools import Tool, Tools, ProviderTool, ToolResult
+from .tools import Tool, Tools, ToolResult
 from .plugin import Plugin, PluginInitError
 from ..utils.decorators import tool
 
@@ -8,7 +8,6 @@ __all__ = [
     "MCPContext",
     "Tool",
     "Tools",
-    "ProviderTool",
     "Plugin",
     "PluginInitError",
     "ToolResult",

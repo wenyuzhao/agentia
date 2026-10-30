@@ -1,5 +1,5 @@
-from typing import Annotated, Literal, Sequence
-from pydantic import BaseModel, Field
+from typing import Annotated, Literal
+from pydantic import BaseModel, Field, JsonValue
 
 from agentia.models.chat import AssistantMessage, ToolMessage
 from .base import *
@@ -35,6 +35,8 @@ class StreamPartReasoningDelta(BaseModel):
 class StreamPartReasoningEnd(BaseModel):
     type: Literal["reasoning-end"] = "reasoning-end"
     id: str
+    provider_data: dict[str, JsonValue] | None = None
+    """Opaque provider reasoning data. See `ReasoningPart.provider_data`."""
 
 
 class StreamPartTurnStart(BaseModel):
@@ -62,19 +64,6 @@ class StreamPartEnd(BaseModel):
     finish_reason: FinishReason = "stop"
 
 
-class Annotations(BaseModel):
-    type: Literal["annotations"] = "annotations"
-    annotations: Sequence[Annotation]
-
-    def __init__(
-        self,
-        annotations: Sequence[Annotation],
-        *,
-        type: Literal["annotations"] = "annotations",
-    ):
-        super().__init__(type=type, annotations=annotations)
-
-
 type StreamPart = Annotated[
     StreamPartTextStart
     | StreamPartTextDelta
@@ -82,9 +71,10 @@ type StreamPart = Annotated[
     | StreamPartReasoningStart
     | StreamPartReasoningDelta
     | StreamPartReasoningEnd
-    | ToolCall
-    | ToolCallResponse
-    | Annotation
+    | ToolCallPart
+    | ToolResultPart
+    | UrlCitation
+    | File
     | StreamPartTurnStart
     | StreamPartTurnEnd
     | StreamPartStart

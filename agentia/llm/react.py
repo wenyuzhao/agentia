@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, AsyncGenerator, Sequence
+from typing import TYPE_CHECKING, AsyncGenerator
 import httpx
 from agentia.history import History
 from agentia.llm import LLMOptions
@@ -12,27 +12,14 @@ if TYPE_CHECKING:
 
 
 async def __process_tool_calls(
-    agent: "Agent", tool_calls: list[ToolCall], tools: ToolSet, parallel: bool
-) -> tuple[ToolMessage, list[ToolCallResponse]]:
+    agent: "Agent", tool_calls: list[ToolCallPart], tools: ToolSet, parallel: bool
+) -> tuple[ToolMessage, list[ToolResultPart]]:
     assert tools is not None, "No tools provided"
     tool_responses = await tools.run(agent, tool_calls, parallel)
-    tool_msg_parts: list[MessagePartToolResult] = []
-    for tr in tool_responses:
-        mptr = MessagePartToolResult(
-            tool_call_id=tr.tool_call_id,
-            tool_name=tr.tool_name,
-            input=tr.input,
-            output=tr.output,
-            output_files=tr.output_files,
-        )
-        tool_msg_parts.append(mptr)
-    tool_msg = ToolMessage(content=tool_msg_parts)
-    return tool_msg, tool_responses
+    return ToolMessage(content=tool_responses), tool_responses
 
 
-async def __add_prompt(
-    agent: "Agent", history: History, prompt: str | Message | Sequence[Message]
-) -> bool:
+async def __add_prompt(agent: "Agent", history: History, prompt: Prompt) -> bool:
     """Add the prompt to history. Returns False if the prompt was a slash command
     that produced no output, in which case the LLM should be skipped."""
 
@@ -41,18 +28,13 @@ async def __add_prompt(
     if not prompt:
         return False
 
-    if isinstance(prompt, str):
-        history.add(UserMessage(content=[MessagePartText(text=prompt)]))
-    elif not isinstance(prompt, (list, Sequence)):
-        history.add(prompt)
-    else:
-        history.add(*prompt)
+    history.add(*prompt)
     return True
 
 
 def run_react_loop(
     agent: "Agent",
-    prompt: str | Message | Sequence[Message],
+    prompt: Prompt,
     options: LLMOptions,
 ) -> ChatCompletion:
     tools = agent.tools
@@ -119,7 +101,7 @@ def run_react_loop(
 
 def run_react_loop_streamed(
     agent: "Agent",
-    prompt: str | Message | Sequence[Message],
+    prompt: Prompt,
     events: bool,
     options: LLMOptions,
 ) -> ChatCompletionStream | ChatCompletionEvents:
@@ -135,8 +117,9 @@ def run_react_loop_streamed(
 
         async with httpx.AsyncClient() as client:
             while True:
-                tool_calls: list[ToolCall] = []
+                tool_calls: list[ToolCallPart] = []
                 parts: list[AssistantMessagePart] = []
+                annotations: list[UrlCitation] = []
                 last_msg = ""
                 last_reasoning = ""
                 async for part in agent.provider.stream(
@@ -161,24 +144,24 @@ def run_react_loop_streamed(
                         case "text-delta":
                             last_msg += part.delta
                         case "text-end":
-                            parts.append(MessagePartText(text=last_msg))
+                            parts.append(TextPart(last_msg))
                         case "reasoning-start":
                             last_reasoning = ""
                         case "reasoning-delta":
                             last_reasoning += part.delta
                         case "reasoning-end":
-                            parts.append(MessagePartReasoning(text=last_reasoning))
-                        case "tool-call":
                             parts.append(
-                                MessagePartToolCall(
-                                    tool_call_id=part.tool_call_id,
-                                    tool_name=part.tool_name,
-                                    input=part.input,
-                                    provider_executed=part.provider_executed,
+                                ReasoningPart(
+                                    last_reasoning, provider_data=part.provider_data
                                 )
                             )
-                            if not part.provider_executed:
-                                tool_calls.append(part)
+                        case "tool-call":
+                            parts.append(part)
+                            tool_calls.append(part)
+                        case "file":
+                            parts.append(part)
+                        case "url-citation":
+                            annotations.append(part)
 
                     if part.type == "turn-end":
                         s.usage += part.usage
@@ -186,6 +169,12 @@ def run_react_loop_streamed(
                         last_finish_reason = part.finish_reason
                     else:
                         yield part
+                if annotations:
+                    # The provider reports citations for the whole message, which is
+                    # normally a single text part.
+                    text_parts = [p for p in parts if isinstance(p, TextPart)]
+                    if text_parts:
+                        text_parts[-1].annotations = annotations
                 msg = AssistantMessage(content=parts)
                 yield StreamPartTurnEnd(
                     role="assistant",

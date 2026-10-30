@@ -2,7 +2,14 @@ import inspect
 import shlex
 from typing import TYPE_CHECKING, Awaitable, Callable, Sequence
 
-from agentia.models.chat import Message, MessagePartText, UserMessage
+from agentia.models import (
+    File,
+    Message,
+    Prompt,
+    TextPart,
+    UserMessage,
+    UserMessagePart,
+)
 
 if TYPE_CHECKING:
     from agentia.agent import Agent
@@ -77,34 +84,45 @@ class Commands:
             return skill.execute(args)
         return input  # treat as normal input if no command matched
 
-    async def process_messages(
-        self, prompt: str | Message | Sequence[Message]
-    ) -> list[Message]:
-        messages = []
-        for p in (
-            prompt
-            if isinstance(prompt, Sequence) and not isinstance(prompt, str)
-            else [prompt]
-        ):
+    async def process_messages(self, prompt: Prompt) -> list[Message]:
+        """
+        Normalize a prompt into a list of messages, dispatching slash commands in user
+        text. Consecutive strings and files are combined into one `UserMessage`.
+        """
+        items = (
+            [prompt]
+            if isinstance(prompt, (str, File)) or not isinstance(prompt, Sequence)
+            else list(prompt)
+        )
+        messages: list[Message] = []
+        pending: list[UserMessagePart] = []
+
+        def flush():
+            if pending:
+                messages.append(UserMessage(list(pending)))
+                pending.clear()
+
+        for p in items:
             if isinstance(p, str):
-                if p := await self.handle(p):
-                    messages.append(UserMessage(p))
+                if c := await self.handle(p):
+                    pending.append(TextPart(c))
+            elif isinstance(p, File):
+                pending.append(p)
             elif isinstance(p, UserMessage):
-                if isinstance(p.content, str):
-                    if c := await self.handle(p.content):
-                        messages.append(UserMessage(c))
-                else:
-                    parts = []
-                    for part in p.content:
-                        if isinstance(part, MessagePartText):
-                            if c := await self.handle(part.text):
-                                parts.append(MessagePartText(c))
-                        else:
-                            parts.append(part)
-                    if parts:
-                        messages.append(UserMessage(parts))
+                flush()
+                parts: list[UserMessagePart] = []
+                for part in p.content:
+                    if isinstance(part, TextPart):
+                        if c := await self.handle(part.text):
+                            parts.append(TextPart(c))
+                    else:
+                        parts.append(part)
+                if parts:
+                    messages.append(p.model_copy(update={"content": parts}))
             else:
+                flush()
                 messages.append(p)
+        flush()
         return messages
 
     def __find_skill(self, name: str):
