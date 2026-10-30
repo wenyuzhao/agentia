@@ -8,9 +8,8 @@ from pydantic import TypeAdapter
 from agentia import Agent
 from agentia.history import History
 from agentia.llm.providers._openai_api import (
-    _merge_reasoning_details,
-    _to_image_file,
-    _to_url_citation,
+    parse_output_item,
+    to_responses_input,
 )
 from agentia.models import (
     AssistantMessage,
@@ -49,7 +48,9 @@ def test_message_roundtrip():
         UserMessage(["hi", File("https://example.com/a.pdf")]),
         AssistantMessage(
             [
-                ReasoningPart("think", provider_data={"reasoning_details": [{"a": 1}]}),
+                ReasoningPart(
+                    "think", provider_data={"type": "reasoning", "id": "rs_1"}
+                ),
                 TextPart(
                     "hello",
                     annotations=[UrlCitation(start=0, end=5, title="t", url="u")],
@@ -84,41 +85,68 @@ def test_audio_file_is_base64_encoded(tmp_path):
         File(str(path)),
         File(f"data:audio/wav;base64,{expected}"),
     ]:
-        assert f.to_openai_format() == {
-            "type": "input_audio",
-            "input_audio": {"data": expected, "format": "wav"},
+        [item] = to_responses_input([UserMessage(f)])
+        assert item["content"] == [
+            {"type": "input_audio", "input_audio": {"data": expected, "format": "wav"}}
+        ]
+
+
+def test_user_message_to_responses_input():
+    m = UserMessage(
+        [
+            "look",
+            File("data:image/png;base64,AAAA"),
+            File("https://example.com/a.pdf"),
+            File(b"%PDF", media_type="application/pdf"),
+            File("file-abc", media_type="application/pdf"),
+        ]
+    )
+    assert to_responses_input([m]) == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "look"},
+                {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,AAAA",
+                    "detail": "auto",
+                },
+                {"type": "input_file", "file_url": "https://example.com/a.pdf"},
+                {
+                    "type": "input_file",
+                    "file_data": "data:application/pdf;base64,JVBERg==",
+                    "filename": "file.pdf",
+                },
+                {"type": "input_file", "file_id": "file-abc"},
+            ],
         }
+    ]
 
 
-def test_assistant_message_openai_format():
-    m = AssistantMessage([TextPart("a"), TextPart("b")])
-    assert m.to_openai_format() == {"role": "assistant", "content": "ab"}
-
-    m = AssistantMessage(
-        [ToolCallPart(tool_call_id="c", tool_name="f", input={"x": 1})]
-    )
-    assert m.to_openai_format() == {
-        "role": "assistant",
-        "content": None,
-        "tool_calls": [
-            {
-                "id": "c",
-                "type": "function",
-                "function": {"name": "f", "arguments": '{"x": 1}'},
-            }
-        ],
+def test_assistant_message_to_responses_input():
+    reasoning_item = {
+        "type": "reasoning",
+        "id": "rs_1",
+        "summary": [],
+        "encrypted_content": "enc",
     }
-
-
-def test_reasoning_provider_data_is_sent_back():
-    details = [{"type": "reasoning.text", "text": "hmm", "signature": "sig"}]
     m = AssistantMessage(
-        [ReasoningPart("hmm", provider_data={"reasoning_details": details}), "answer"]
+        [
+            ReasoningPart("hmm", provider_data=reasoning_item),
+            TextPart("a"),
+            ToolCallPart(tool_call_id="c", tool_name="f", input={"x": 1}),
+            File("data:image/png;base64,AAAA"),
+        ]
     )
+    assert to_responses_input([m]) == [
+        reasoning_item,
+        {"role": "assistant", "content": "a"},
+        {"type": "function_call", "call_id": "c", "name": "f", "arguments": '{"x": 1}'},
+    ]
+    # Reasoning without the provider's item cannot be replayed
+    m = AssistantMessage([ReasoningPart("hmm"), "answer"])
+    assert to_responses_input([m]) == [{"role": "assistant", "content": "answer"}]
     assert m.reasoning == "hmm"
-    oai = m.to_openai_format()
-    assert oai["reasoning"] == "hmm"
-    assert oai["reasoning_details"] == details
     assert AssistantMessage("x").reasoning is None
 
 
@@ -143,17 +171,36 @@ def test_tool_output_serialization():
     assert result({"a": [1]}).serialize_output() == '{"a": [1]}'
 
 
-def test_tool_message_serialization_does_not_mutate():
+def test_tool_message_to_responses_input():
     f = File("data:image/png;base64,AAAA")
+    plain = ToolResultPart(tool_call_id="1", tool_name="t", input={}, output=None)
+    with_file = ToolResultPart(
+        tool_call_id="2", tool_name="t", input={}, output="ok", output_files=[f]
+    )
+    m = ToolMessage([plain, with_file])
+    first = to_responses_input([m])
+    assert to_responses_input([m]) == first  # no mutation
+    assert with_file.output == "ok"
+    assert first[0] == {
+        "type": "function_call_output",
+        "call_id": "1",
+        "output": "null",
+    }
+    assert first[1]["call_id"] == "2"
+    text, image = first[1]["output"]
+    assert json.loads(text["text"])["output"] == "ok"
+    assert image["type"] == "input_image"
+
+
+def test_tool_audio_is_not_sent():
+    f = File(b"RIFF", media_type="audio/wav")
     part = ToolResultPart(
         tool_call_id="1", tool_name="t", input={}, output="ok", output_files=[f]
     )
-    m = ToolMessage([part])
-    first = m.to_openai_format()
-    assert m.to_openai_format() == first
-    assert part.output == "ok"
-    assert json.loads(first[0]["content"])["output"] == "ok"
-    assert first[1]["role"] == "user"
+    [item] = to_responses_input([ToolMessage([part])])
+    _, note = item["output"]
+    assert note["type"] == "input_text"
+    assert f.id in note["text"]
 
 
 def test_str():
@@ -218,33 +265,52 @@ def test_history_compaction():
     assert h.summary is None and h.get_all() == []
 
 
-def test_merge_streamed_reasoning_details():
-    acc: list[dict] = []
-    _merge_reasoning_details(acc, [{"index": 0, "type": "reasoning.text", "text": "a"}])
-    _merge_reasoning_details(acc, [{"index": 0, "type": "reasoning.text", "text": "b"}])
-    _merge_reasoning_details(
-        acc, [{"index": 0, "type": "reasoning.text", "signature": "s"}]
-    )
-    assert acc == [
-        {"index": 0, "type": "reasoning.text", "text": "ab", "signature": "s"}
+def test_parse_output_items():
+    message = {
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {
+                "type": "output_text",
+                "text": "hi",
+                "annotations": [
+                    {
+                        "type": "url_citation",
+                        "url": "u",
+                        "title": "t",
+                        "start_index": 1,
+                        "end_index": 2,
+                    },
+                    {"type": "file_citation", "file_id": "f"},
+                ],
+            },
+            {"type": "refusal", "refusal": "no"},
+        ],
+    }
+    assert parse_output_item(message, False) == [
+        TextPart("hi", annotations=[UrlCitation(start=1, end=2, title="t", url="u")]),
+        TextPart("no"),
     ]
 
+    call = {
+        "type": "function_call",
+        "call_id": "c",
+        "name": "f",
+        "arguments": '{"a": 1}',
+    }
+    assert parse_output_item(call, False) == [
+        ToolCallPart(tool_call_id="c", tool_name="f", input={"a": 1})
+    ]
 
-def test_response_parsing_helpers():
-    c = _to_url_citation(
-        {
-            "type": "url_citation",
-            "url_citation": {
-                "url": "u",
-                "title": "t",
-                "start_index": 1,
-                "end_index": 2,
-            },
-        }
-    )
-    assert c == UrlCitation(start=1, end=2, title="t", url="u")
-    assert _to_url_citation({"type": "file_citation"}) is None
-    f = _to_image_file(
-        {"type": "image_url", "image_url": {"url": "data:image/webp;base64,AA"}}
-    )
-    assert f is not None and f.media_type == "image/webp"
+    reasoning = {
+        "type": "reasoning",
+        "id": "rs",
+        "summary": [
+            {"type": "summary_text", "text": "a"},
+            {"type": "summary_text", "text": "b"},
+        ],
+        "encrypted_content": "enc",
+    }
+    assert parse_output_item(reasoning, False) == []
+    [r] = parse_output_item(reasoning, True)
+    assert r == ReasoningPart("a\n\nb", provider_data=reasoning)

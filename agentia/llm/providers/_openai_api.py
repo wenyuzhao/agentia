@@ -1,91 +1,252 @@
+"""
+A provider backed by the OpenAI Responses API (`POST /responses`), used statelessly.
+
+Nothing is stored server-side (`store: false`): every request carries the full
+conversation, converted from agentia messages to Responses API input items. Reasoning
+items are kept verbatim in `ReasoningPart.provider_data` (including the encrypted
+content or signature) so that they can be replayed in later requests.
+"""
+
 from collections.abc import AsyncGenerator
 import json
+import mimetypes
 import os
-from typing import Any, Sequence, cast, override
+from typing import Any, Sequence, override
 from uuid import uuid4
 import httpx
-from pydantic import BaseModel, JsonValue
 from agentia.tools.tools import ToolSet
 from . import LLMOptions, GenerationResult, Provider
 from ...models import *
-from openai.types.chat import (
-    ChatCompletionToolParam,
-    ChatCompletionToolChoiceOptionParam,
-)
 import openai
-from openai.types import CompletionUsage
 
 
 def _gen_id() -> str:
     return uuid4().hex
 
 
-def _to_json(x: Any) -> Any:
-    """Convert (possibly nested) pydantic objects in a provider response to plain JSON."""
-    if isinstance(x, BaseModel):
-        return x.model_dump(exclude_none=True)
-    if isinstance(x, list):
-        return [_to_json(v) for v in x]
-    if isinstance(x, dict):
-        return {k: _to_json(v) for k, v in x.items()}
-    return x
+# ---------------------------------------------------------------------------
+# agentia messages -> Responses API input items
+# ---------------------------------------------------------------------------
 
 
-def _merge_reasoning_details(acc: list[dict[str, Any]], chunk: list[Any]) -> None:
-    """Merge streamed `reasoning_details` deltas into `acc`, by their `index`."""
-    for d in chunk:
-        if not isinstance(d, dict):
-            continue
-        index = d.get("index")
-        target = next((x for x in acc if x.get("index") == index), None)
-        if index is None or target is None:
-            acc.append(dict(d))
-            continue
-        for k, v in d.items():
-            if v is None:
-                continue
-            if k in ("text", "summary") and isinstance(target.get(k), str):
-                target[k] += v
-            else:
-                target[k] = v
+def _file_to_input(f: File) -> dict[str, Any]:
+    is_file_id = isinstance(f.data, str) and f.data.startswith("file-")
+    is_url = isinstance(f.data, str) and f.data.startswith(("http://", "https://"))
+    if f.media_type.startswith("image/"):
+        if is_file_id:
+            return {"type": "input_image", "file_id": f.data, "detail": "auto"}
+        return {"type": "input_image", "image_url": f.to_url(), "detail": "auto"}
+    if f.media_type.startswith("audio/"):
+        if is_url:
+            raise ValueError("audio files cannot be URLs")
+        match f.media_type:
+            case "audio/wav" | "audio/x-wav":
+                format = "wav"
+            case "audio/mpeg" | "audio/mp3":
+                format = "mp3"
+            case _:
+                raise ValueError(f"unsupported audio media type {f.media_type}")
+        return {
+            "type": "input_audio",
+            "input_audio": {"data": f.to_base64(), "format": format},
+        }
+    if is_file_id:
+        return {"type": "input_file", "file_id": f.data}
+    if is_url:
+        return {"type": "input_file", "file_url": f.data}
+    filename = f.filename or "file" + (mimetypes.guess_extension(f.media_type) or "")
+    return {"type": "input_file", "file_data": f.to_url(), "filename": filename}
 
 
-def _reasoning_end(reasoning_details: list[dict[str, Any]]) -> StreamPartReasoningEnd:
-    """End the reasoning block, attaching (and consuming) the accumulated details."""
-    provider_data: dict[str, JsonValue] | None = (
-        {"reasoning_details": cast(JsonValue, list(reasoning_details))}
-        if reasoning_details
-        else None
-    )
-    reasoning_details.clear()
-    return StreamPartReasoningEnd(id=_gen_id(), provider_data=provider_data)
+def _tool_file_to_input(f: File) -> dict[str, Any]:
+    """Like `_file_to_input`, for a `function_call_output`."""
+    if f.media_type.startswith("audio/"):
+        # Tool outputs cannot carry audio: `input_audio` is rejected, and so is an
+        # `input_file` by most models. Sending it would fail every later request.
+        return {
+            "type": "input_text",
+            "text": f"[Audio file {f.id} ({f.media_type}) cannot be shown to you.]",
+        }
+    return _file_to_input(f)
+
+
+def _user_content(parts: Sequence[TextPart | File]) -> list[dict[str, Any]]:
+    return [
+        {"type": "input_text", "text": p.text}
+        if isinstance(p, TextPart)
+        else _file_to_input(p)
+        for p in parts
+    ]
+
+
+def to_responses_input(messages: Sequence[Message]) -> list[dict[str, Any]]:
+    """Convert agentia messages to a stateless Responses API `input` array."""
+    items: list[dict[str, Any]] = []
+    for m in messages:
+        match m:
+            case UserMessage():
+                items.append({"role": "user", "content": _user_content(m.content)})
+            case AssistantMessage():
+                for p in m.content:
+                    match p:
+                        case ReasoningPart():
+                            # Only the provider's own reasoning item can be replayed.
+                            data = p.provider_data
+                            if data and data.get("type") == "reasoning":
+                                items.append(data)
+                        case TextPart() if p.text:
+                            items.append({"role": "assistant", "content": p.text})
+                        case ToolCallPart():
+                            items.append(
+                                {
+                                    "type": "function_call",
+                                    "call_id": p.tool_call_id,
+                                    "name": p.tool_name,
+                                    "arguments": json.dumps(p.input),
+                                }
+                            )
+                        case _:
+                            # Files generated by the model cannot be sent back as
+                            # assistant input.
+                            pass
+            case ToolMessage():
+                for p in m.content:
+                    output: str | list[dict[str, Any]] = p.serialize_output()
+                    if p.output_files:
+                        output = [
+                            {"type": "input_text", "text": output},
+                            *[_tool_file_to_input(f) for f in p.output_files],
+                        ]
+                    items.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": p.tool_call_id,
+                            "output": output,
+                        }
+                    )
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Responses API output items -> agentia message parts
+# ---------------------------------------------------------------------------
 
 
 def _to_url_citation(a: Any) -> UrlCitation | None:
-    a = _to_json(a)
     if not isinstance(a, dict) or a.get("type") != "url_citation":
         return None
-    c = a.get("url_citation") or {}
     return UrlCitation(
-        title=c.get("title") or "",
-        url=c.get("url") or "",
-        start=c.get("start_index") or 0,
-        end=c.get("end_index") or 0,
+        title=a.get("title") or "",
+        url=a.get("url") or "",
+        start=a.get("start_index") or 0,
+        end=a.get("end_index") or 0,
     )
 
 
-def _to_image_file(image: Any) -> File | None:
-    """Convert an image in a response (`{"type": "image_url", ...}`) to a `File`."""
-    image = _to_json(image)
-    if not isinstance(image, dict):
-        return None
-    url = (image.get("image_url") or {}).get("url")
-    if not url:
-        return None
-    try:
-        return File(url)
-    except ValueError:
-        return File(url, media_type="image/png")
+def _reasoning_text(item: dict[str, Any]) -> str:
+    """The raw reasoning text of a reasoning item, falling back to its summary."""
+    content = [
+        c.get("text") or ""
+        for c in item.get("content") or []
+        if c.get("type") == "reasoning_text"
+    ]
+    if content:
+        return "".join(content)
+    return "\n\n".join(
+        s.get("text") or ""
+        for s in item.get("summary") or []
+        if s.get("type") == "summary_text"
+    )
+
+
+def _parse_tool_call(item: dict[str, Any]) -> ToolCallPart:
+    args = item.get("arguments")
+    return ToolCallPart(
+        tool_call_id=item.get("call_id") or _gen_id(),
+        tool_name=item.get("name") or "",
+        input=json.loads(args) if args else {},
+    )
+
+
+def _parse_image(item: dict[str, Any]) -> File | None:
+    if result := item.get("result"):
+        return File(f"data:image/{item.get('output_format') or 'png'};base64,{result}")
+    return None
+
+
+def parse_output_item(
+    item: dict[str, Any], reasoning_enabled: bool
+) -> list[AssistantMessagePart]:
+    """Convert one Responses API output item to message parts."""
+    parts: list[AssistantMessagePart] = []
+    match item.get("type"):
+        case "message":
+            for c in item.get("content") or []:
+                match c.get("type"):
+                    case "output_text":
+                        annotations = [
+                            u
+                            for a in c.get("annotations") or []
+                            if (u := _to_url_citation(a))
+                        ]
+                        parts.append(
+                            TextPart(c.get("text") or "", annotations=annotations)
+                        )
+                    case "refusal":
+                        parts.append(TextPart(c.get("refusal") or ""))
+        case "reasoning" if reasoning_enabled:
+            parts.append(ReasoningPart(_reasoning_text(item), provider_data=item))
+        case "function_call":
+            parts.append(_parse_tool_call(item))
+        case "image_generation_call":
+            if f := _parse_image(item):
+                parts.append(f)
+    return parts
+
+
+def _get_finish_reason(response: dict[str, Any], has_tool_calls: bool) -> FinishReason:
+    if has_tool_calls:
+        return "tool-calls"
+    match response.get("status"):
+        case "completed":
+            return "stop"
+        case "incomplete":
+            match (response.get("incomplete_details") or {}).get("reason"):
+                case "max_output_tokens":
+                    return "length"
+                case "content_filter":
+                    return "content-filter"
+                case _:
+                    return "other"
+        case "failed":
+            return "error"
+        case "cancelled":
+            return "interrupted"
+        case _:
+            return "unknown"
+
+
+def _get_usage(u: dict[str, Any] | None) -> Usage:
+    if not u:
+        return Usage()
+    return Usage(
+        input_tokens=u.get("input_tokens"),
+        output_tokens=u.get("output_tokens"),
+        total_tokens=u.get("total_tokens"),
+        reasoning_tokens=(u.get("output_tokens_details") or {}).get("reasoning_tokens"),
+        cached_input_tokens=(u.get("input_tokens_details") or {}).get("cached_tokens"),
+    )
+
+
+class ResponseError(RuntimeError):
+    """The provider reported an error for the response."""
+
+
+def _error_message(e: dict[str, Any]) -> str:
+    err = e.get("error") or (e.get("response") or {}).get("error") or e
+    if isinstance(err, dict):
+        return str(err.get("message") or err)
+    return str(err)
 
 
 class OpenAIAPIProvider(Provider):
@@ -137,15 +298,12 @@ class OpenAIAPIProvider(Provider):
         exclude: bool | None,
         max_tokens: int | None,
     ) -> dict[str, Any] | None:
+        """The `reasoning` request parameter."""
         if not enabled:
             return None
-        reasoning: dict[str, Any] = {"enabled": True}
+        reasoning: dict[str, Any] = {"summary": "auto"}
         if effort is not None:
             reasoning["effort"] = effort
-        if exclude is not None:
-            reasoning["exclude"] = exclude
-        if max_tokens is not None:
-            reasoning["max_tokens"] = max_tokens
         return reasoning
 
     def get_reasoning_args_from_options(
@@ -171,91 +329,28 @@ class OpenAIAPIProvider(Provider):
                 max_tokens = r.max_tokens
         return self.get_reasoning_args(enabled, effort, exclude, max_tokens)
 
-    def _to_oai_messages(self, instructions: str, messages: list[Message]) -> list[Any]:
-        r: list[Any] = []
-        if s := instructions.strip():
-            r.append({"role": "system", "content": s})
-        for m in messages:
-            oai_m = m.to_openai_format()
-            if isinstance(oai_m, list):
-                r.extend(oai_m)
-            else:
-                r.append(oai_m)
-        return r
-
-    def _get_finish_reason(self, choice: str) -> FinishReason:
-        match choice:
-            case "stop":
-                return "stop"
-            case "length":
-                return "length"
-            case "tool_calls" | "function_call":
-                return "tool-calls"
-            case "content_filter":
-                return "content-filter"
-            case _:
-                return "unknown"
-
     def _prepare_tools(
-        self,
-        tools: Sequence[ToolSchema] | None,
-        tool_choice: ToolChoice | None,
-    ) -> tuple[
-        list[ChatCompletionToolParam] | None, ChatCompletionToolChoiceOptionParam | None
-    ]:
-        oai_tools: list[ChatCompletionToolParam] = []
+        self, tools: Sequence[ToolSchema], tool_choice: ToolChoice | None
+    ) -> tuple[list[dict[str, Any]] | None, Any]:
         if not tools:
             return None, None
+        oai_tools: list[dict[str, Any]] = []
         for t in tools:
-            f = {
+            tool: dict[str, Any] = {
+                "type": "function",
                 "name": t.name,
-                "description": t.description,
-                "parameters": t.input_schema,  # type: ignore
+                "parameters": t.input_schema,
+                # Schemas derived from plain functions don't satisfy strict mode
+                "strict": False,
             }
-            for k in list(f.keys()):
-                if f[k] is None:
-                    del f[k]
-            oai_tools.append(
-                {
-                    "type": "function",
-                    "function": f,  # type: ignore
-                }
-            )
-        if not tool_choice:
-            return oai_tools, None
+            if t.description:
+                tool["description"] = t.description
+            oai_tools.append(tool)
         match tool_choice:
-            case "none":
-                return oai_tools, "none"
-            case "auto":
-                return oai_tools, "auto"
-            case "required":
-                return oai_tools, "required"
+            case None | "none" | "auto" | "required":
+                return oai_tools, tool_choice
             case _:
-                assert isinstance(tool_choice, str)
-                tc: ChatCompletionToolChoiceOptionParam = {
-                    "type": "function",
-                    "function": {"name": tool_choice},
-                }
-                return oai_tools, tc
-
-    def _get_usage(self, u: CompletionUsage | None) -> Usage:
-        if not u:
-            return Usage()
-        return Usage(
-            input_tokens=u.prompt_tokens,
-            output_tokens=u.completion_tokens,
-            total_tokens=u.total_tokens,
-            reasoning_tokens=(
-                u.completion_tokens_details.reasoning_tokens
-                if u.completion_tokens_details
-                else None
-            ),
-            cached_input_tokens=(
-                u.prompt_tokens_details.cached_tokens
-                if u.prompt_tokens_details
-                else None
-            ),
-        )
+                return oai_tools, {"type": "function", "name": tool_choice}
 
     def _prepare_args(
         self,
@@ -264,53 +359,57 @@ class OpenAIAPIProvider(Provider):
         tool_set: ToolSet,
         options: LLMOptions,
     ) -> dict[str, Any]:
-        msgs = self._to_oai_messages(instructions, messages)
         rf = options.response_format
         if rf and not isinstance(rf, (ResponseFormatJson, ResponseFormatText)):
             rf = ResponseFormatJson.from_model(rf)
+        text_format: dict[str, Any] | None
         if not rf or rf.type == "text":
-            response_format = None
+            text_format = None
         elif not rf.json_schema:
-            response_format = {"type": "json_object"}
+            text_format = {"type": "json_object"}
         else:
-            response_format = {
+            text_format = {
                 "type": "json_schema",
-                "json_schema": {
-                    "schema": rf.json_schema,
-                    "strict": True,
-                    "name": rf.name or "response",
-                    "description": rf.description,
-                },
+                "name": rf.name or "response",
+                "schema": rf.json_schema,
+                "strict": True,
             }
-        schema = tool_set.get_schema()
-        tools, tool_choice = self._prepare_tools(schema, options.tool_choice)
+            if rf.description:
+                text_format["description"] = rf.description
+        tools, tool_choice = self._prepare_tools(
+            tool_set.get_schema(), options.tool_choice
+        )
+        reasoning = self.get_reasoning_args_from_options(options)
         args: dict[str, Any] = {
             "model": self.model,
-            "messages": msgs,
+            "input": to_responses_input(messages),
+            "instructions": instructions.strip() or None,
             "temperature": options.temperature,
             "top_p": options.top_p,
-            "max_tokens": options.max_output_tokens,
-            "frequency_penalty": options.frequency_penalty,
-            "presence_penalty": options.presence_penalty,
-            "response_format": response_format,
-            "stop": options.stop_sequences,
-            "seed": options.seed,
+            "max_output_tokens": options.max_output_tokens,
+            "text": {"format": text_format} if text_format else None,
             "tools": tools,
             "tool_choice": tool_choice,
+            "reasoning": reasoning,
+            # Stateless: the conversation lives in the agent, never on the server.
+            "store": False,
+            # Without server-side storage, reasoning can only be replayed with its
+            # encrypted content.
+            "include": ["reasoning.encrypted_content"] if reasoning else None,
         }
-        for k in list(args.keys()):
-            if args[k] is None:
-                del args[k]
-        return args
+        return {k: v for k, v in args.items() if v is not None}
 
     def _get_extra_body(self, options: LLMOptions) -> dict[str, Any]:
         body: dict[str, Any] = {}
         body.update(self.extra_body)
-        if reasoning_args := self.get_reasoning_args_from_options(options):
-            body.update({"reasoning": reasoning_args})
         if options.extra_body:
             body.update(options.extra_body)
         return body
+
+    def _timeout(self) -> float | None:
+        if t := os.environ.get("AGENTIA_TIMEOUT"):
+            return float(t)
+        return None
 
     @override
     async def generate(
@@ -322,61 +421,27 @@ class OpenAIAPIProvider(Provider):
         client: httpx.AsyncClient,
     ) -> GenerationResult:
         args = self._prepare_args(instructions, messages, tools, options)
-        if t := os.environ.get("AGENTIA_TIMEOUT"):
-            timeout = float(t)
-        else:
-            timeout = None
-        response = await self.client(client).chat.completions.create(
+        response = await self.client(client).responses.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self._get_extra_body(options),
             stream=False,
-            timeout=timeout,
+            timeout=self._timeout(),
         )
-        choice = response.choices[0]
-        parts: list[AssistantMessagePart] = []
-
-        if self.reasoning_enabled(options):
-            reasoning_text = getattr(choice.message, "reasoning", None) or ""
-            details = getattr(choice.message, "reasoning_details", None)
-            if reasoning_text.strip() or details:
-                parts.append(
-                    ReasoningPart(
-                        text=reasoning_text,
-                        provider_data=(
-                            {"reasoning_details": _to_json(details)}
-                            if details
-                            else None
-                        ),
-                    )
-                )
-
-        text = choice.message.content
-        if text:
-            annotations = [
-                c
-                for a in choice.message.annotations or []
-                if (c := _to_url_citation(a))
-            ]
-            parts.append(TextPart(text, annotations=annotations))
-        for image in getattr(choice.message, "images", None) or []:
-            if f := _to_image_file(image):
-                parts.append(f)
-        for tc in choice.message.tool_calls or []:
-            assert tc.type == "function"
-            args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-            parts.append(
-                ToolCallPart(
-                    tool_call_id=tc.id or _gen_id(),
-                    tool_name=tc.function.name,
-                    input=args,
-                )
-            )
-
+        r = response.model_dump(exclude_none=True)
+        if r.get("status") == "failed":
+            raise ResponseError(_error_message(r))
+        reasoning_enabled = self.reasoning_enabled(options)
+        parts = [
+            p
+            for item in r.get("output") or []
+            for p in parse_output_item(item, reasoning_enabled)
+        ]
+        has_tool_calls = any(isinstance(p, ToolCallPart) for p in parts)
         return GenerationResult(
             message=AssistantMessage(content=parts),
-            finish_reason=self._get_finish_reason(choice.finish_reason),
-            usage=self._get_usage(response.usage),
+            finish_reason=_get_finish_reason(r, has_tool_calls),
+            usage=_get_usage(r.get("usage")),
         )
 
     @override
@@ -389,141 +454,94 @@ class OpenAIAPIProvider(Provider):
         client: httpx.AsyncClient,
     ) -> AsyncGenerator[StreamPart, None]:
         args = self._prepare_args(instructions, messages, tools, options)
-        if t := os.environ.get("AGENTIA_TIMEOUT"):
-            timeout = float(t)
-        else:
-            timeout = None
-        response = await self.client(client).chat.completions.create(
+        events = await self.client(client).responses.create(
             **args,
             extra_headers=self.extra_headers,
             extra_body=self._get_extra_body(options),
             stream=True,
-            stream_options={
-                "include_usage": True,
-            },
-            timeout=timeout,
+            timeout=self._timeout(),
         )
-        started = False
-        streaming_text = False
-        streaming_reasoning = False
         reasoning_enabled = self.reasoning_enabled(options)
-        reasoning_details: list[dict[str, Any]] = []
-        tool_calls: list[ToolCallPart | None] = []
-        tool_call_partial_inputs: list[str] = []
-        finished = False
-        first_chunk = True
-        finish_reason: str | None = None
-        usage: Usage | None = None
+        yield StreamPartTurnStart(role="assistant")
+        # The output item currently being streamed, and whether it streamed any text
+        item_type: str | None = None
+        streamed = False
+        has_tool_calls = False
+        final: dict[str, Any] = {}
 
-        async for chunk in response:
-            if chunk.usage:
-                usage = self._get_usage(chunk.usage)
-            if chunk.choices and chunk.choices[0].finish_reason:
-                finish_reason = self._get_finish_reason(chunk.choices[0].finish_reason)
-
-            if finished:
-                continue
-
-            if not started:
-                started = True
-                yield StreamPartTurnStart(role="assistant")
-
-            if not chunk.choices:
-                continue
-
-            choice = chunk.choices[0]
-            delta = choice.delta
-
-            # For anthropic/claude-opus-4.6 on openrouter, there is an extra chunk before reasoning with content == '\n'.
-            # Filter this out.
-            if first_chunk:
-                first_chunk = False
-                if (
-                    self.name == "openrouter"
-                    and self.model.startswith("anthropic/claude")
-                    and self.reasoning_enabled(options)
-                    and not hasattr(delta, "reasoning")
-                    and (not delta.content or not delta.content.strip())
-                    and not delta.tool_calls
-                ):
-                    continue
-
-            if reasoning_enabled:
-                if details := getattr(delta, "reasoning_details", None):
-                    _merge_reasoning_details(reasoning_details, _to_json(details))
-                if rd := getattr(delta, "reasoning", None):
-                    if not streaming_reasoning:
-                        streaming_reasoning = True
+        async for event in events:
+            e = event.model_dump(exclude_none=True)
+            match e.get("type"):
+                case "response.output_item.added":
+                    item_type = e["item"].get("type")
+                    streamed = False
+                    if item_type == "message":
+                        yield StreamPartTextStart(id=_gen_id())
+                    elif item_type == "reasoning" and reasoning_enabled:
                         yield StreamPartReasoningStart(id=_gen_id())
-                    yield StreamPartReasoningDelta(id=_gen_id(), delta=rd)
 
-            # Reasoning ends when the answer starts. Reasoning details (e.g. the
-            # signature) may arrive after the last reasoning delta, so don't end it
-            # on the first chunk without reasoning text.
-            if streaming_reasoning and (delta.content or delta.tool_calls):
-                streaming_reasoning = False
-                yield _reasoning_end(reasoning_details)
+                case "response.output_text.delta" | "response.refusal.delta":
+                    if item_type == "message" and e.get("delta"):
+                        streamed = True
+                        yield StreamPartTextDelta(id=_gen_id(), delta=e["delta"])
 
-            if delta.content:
-                if not streaming_text:
-                    streaming_text = True
-                    yield StreamPartTextStart(id=_gen_id())
-                yield StreamPartTextDelta(id=_gen_id(), delta=delta.content)
-            elif streaming_text:
-                streaming_text = False
-                yield StreamPartTextEnd(id=_gen_id())
+                case (
+                    "response.reasoning_text.delta"
+                    | "response.reasoning_summary_text.delta"
+                ):
+                    if (
+                        item_type == "reasoning"
+                        and reasoning_enabled
+                        and e.get("delta")
+                    ):
+                        streamed = True
+                        yield StreamPartReasoningDelta(id=_gen_id(), delta=e["delta"])
 
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    index = tc.index
-                    if index >= len(tool_calls) or tool_calls[index] is None:
-                        tool_calls.extend([None] * (index - len(tool_calls) + 1))
-                        tool_call_partial_inputs.extend(
-                            [""] * (index - len(tool_call_partial_inputs) + 1)
-                        )
-                        tool_calls[index] = ToolCallPart(
-                            tool_call_id="", tool_name="", input={}
-                        )
-                        tool_call_partial_inputs[index] = ""
-                    tc_obj = tool_calls[index]
-                    assert tc_obj is not None
-                    if tc.id:
-                        tc_obj.tool_call_id += tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            tc_obj.tool_name += tc.function.name
-                        if tc.function.arguments:
-                            tool_call_partial_inputs[index] += tc.function.arguments
+                case "response.reasoning_summary_part.added":
+                    # Separate the summary blocks
+                    if streamed and reasoning_enabled and e.get("summary_index", 0) > 0:
+                        yield StreamPartReasoningDelta(id=_gen_id(), delta="\n\n")
 
-            for a in getattr(delta, "annotations", None) or []:
-                if c := _to_url_citation(a):
-                    yield c
+                case "response.output_item.done":
+                    item = e["item"]
+                    match item.get("type"):
+                        case "message":
+                            parts = parse_output_item(item, reasoning_enabled)
+                            if not streamed:
+                                text = "".join(
+                                    p.text for p in parts if isinstance(p, TextPart)
+                                )
+                                if text:
+                                    yield StreamPartTextDelta(id=_gen_id(), delta=text)
+                            for p in parts:
+                                if isinstance(p, TextPart):
+                                    for a in p.annotations:
+                                        yield a
+                            yield StreamPartTextEnd(id=_gen_id())
+                        case "reasoning" if reasoning_enabled:
+                            # Some providers only send the summary with the full item
+                            if not streamed and (text := _reasoning_text(item)):
+                                yield StreamPartReasoningDelta(id=_gen_id(), delta=text)
+                            yield StreamPartReasoningEnd(
+                                id=_gen_id(), provider_data=item
+                            )
+                        case "function_call":
+                            has_tool_calls = True
+                            yield _parse_tool_call(item)
+                        case "image_generation_call":
+                            if f := _parse_image(item):
+                                yield f
+                    item_type = None
 
-            for image in getattr(delta, "images", None) or []:
-                if f := _to_image_file(image):
-                    yield f
+                case "response.completed" | "response.incomplete":
+                    final = e.get("response") or {}
 
-            if choice.finish_reason:
-                if streaming_reasoning:
-                    streaming_reasoning = False
-                    yield _reasoning_end(reasoning_details)
-                elif reasoning_details:
-                    # Reasoning details without any reasoning text (e.g. encrypted reasoning)
-                    yield StreamPartReasoningStart(id=_gen_id())
-                    yield _reasoning_end(reasoning_details)
-                if streaming_text:
-                    streaming_text = False
-                    yield StreamPartTextEnd(id=_gen_id())
-                for i, tc in enumerate(tool_calls):
-                    if not tc:
-                        continue
-                    tc.input = json.loads(tool_call_partial_inputs[i] or "{}")
-                    yield tc
-                finished = True
+                case "response.failed" | "error":
+                    raise ResponseError(_error_message(e))
 
         yield StreamPartTurnEnd(
-            usage=usage or Usage(),
-            finish_reason=self._get_finish_reason(finish_reason or "unknown"),
+            usage=_get_usage(final.get("usage")),
+            finish_reason=_get_finish_reason(final, has_tool_calls),
             role="assistant",
             message=None,
         )

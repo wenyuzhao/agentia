@@ -131,6 +131,8 @@ class Commands:
         skills = self.__agent.tools.get_plugin(Skills)
         if skills is None:
             return None
+        # Slash commands can be dispatched before the agent's first run
+        skills.load()
         skill: Skill | None = skills.user_invocable_skills.get(name)
         return skill
 

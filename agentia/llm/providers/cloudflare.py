@@ -26,8 +26,6 @@ class Cloudflare(OpenAIAPIProvider):
         )
         # self.extra_headers["cf-aig-authorization"] = f"Bearer {api_key}"
 
-        self.extra_body["modalities"] = ["text", "image"]
-
     @override
     async def _fetch_context_length(self) -> int:
         # Cloudflare AI Gateway doesn't expose context length directly,

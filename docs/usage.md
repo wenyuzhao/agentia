@@ -232,9 +232,6 @@ agent = Agent(
         temperature=0.7,
         max_output_tokens=2000,
         top_p=0.9,
-        presence_penalty=0.1,
-        frequency_penalty=0.1,
-        seed=42,
         parallel_tool_calls=True,
         reasoning=ReasoningOptions(enabled=True, effort="high"),
     ),
@@ -243,6 +240,10 @@ agent = Agent(
 # Override per-call
 response = await agent.run("Hello", options=LLMOptions(temperature=0))
 ```
+
+Agentia uses the OpenAI Responses API, statelessly: nothing is stored on the provider,
+and the full conversation is sent with every request. Use `extra_body` for
+provider-specific request fields.
 
 ## 2. Function Tools & Plugins
 

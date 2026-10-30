@@ -36,10 +36,12 @@ class History:
                     instructions.append(gen)
         if self.__summary:
             instructions.append(
-                "[[COMPACTED CONVERSATION SUMMARY]]\n"
-                "The earlier part of this conversation was compacted into this summary:\n\n"
-                f"{self.__summary}\n"
-                "[[END OF CONVERSATION SUMMARY]]"
+                "# Conversation so far\n\n"
+                "This conversation is ongoing. Its earlier messages are no longer shown, "
+                "but they did happen. The summary below is your memory of them: treat "
+                "everything in it as what the user told you, or what you did, in this "
+                "conversation, and rely on it when answering.\n\n"
+                f"<conversation_summary>\n{self.__summary}\n</conversation_summary>"
             )
         return "\n\n".join(instructions)
 

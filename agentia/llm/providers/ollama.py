@@ -26,12 +26,11 @@ class Ollama(OpenAIAPIProvider):
         effort: str | None,
         exclude: bool | None,
         max_tokens: int | None,
-    ) -> dict[str, Any]:
-        if not enabled:
-            return {}
-        return {
-            "think": enabled,
-        }
+    ) -> dict[str, Any] | None:
+        # Ollama only thinks when an effort is given
+        return super().get_reasoning_args(
+            enabled, effort or "medium", exclude, max_tokens
+        )
 
     @override
     async def _fetch_context_length(self) -> int:

@@ -37,7 +37,9 @@ async def test_current_tokens_increases_over_turns():
     tokens_after_first = agent.current_context_length
     assert tokens_after_first > 0
 
-    await agent.run("Say goodbye")
+    # Totals include hidden reasoning tokens, which vary between turns. Use a prompt
+    # long enough that the growth of the context outweighs them.
+    await agent.run("Say goodbye. Ignore this padding: " + "padding " * 2000)
     tokens_after_second = agent.current_context_length
     assert tokens_after_second > tokens_after_first
 

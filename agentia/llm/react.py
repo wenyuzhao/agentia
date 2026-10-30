@@ -144,7 +144,9 @@ def run_react_loop_streamed(
                         case "text-delta":
                             last_msg += part.delta
                         case "text-end":
-                            parts.append(TextPart(last_msg))
+                            # Citations of a text block arrive before its end
+                            parts.append(TextPart(last_msg, annotations=annotations))
+                            annotations = []
                         case "reasoning-start":
                             last_reasoning = ""
                         case "reasoning-delta":
@@ -169,12 +171,6 @@ def run_react_loop_streamed(
                         last_finish_reason = part.finish_reason
                     else:
                         yield part
-                if annotations:
-                    # The provider reports citations for the whole message, which is
-                    # normally a single text part.
-                    text_parts = [p for p in parts if isinstance(p, TextPart)]
-                    if text_parts:
-                        text_parts[-1].annotations = annotations
                 msg = AssistantMessage(content=parts)
                 yield StreamPartTurnEnd(
                     role="assistant",

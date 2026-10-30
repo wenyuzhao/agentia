@@ -44,7 +44,7 @@ Tests require API keys: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
 
 ### LLM Providers (`agentia/llm/`)
 
-Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
+Provider abstraction with a common base (`_openai_api.py`) that talks to the OpenAI Responses API statelessly (`store: false`; the full conversation is sent every request). It converts agentia messages to Responses input items (`to_responses_input`) and output items / stream events back to message parts (`parse_output_item`). There is no Chat Completions backend. Providers: OpenAI, OpenRouter (default), Vercel, Cloudflare, Ollama. Model selector format: `[provider:][owner/]model[:mode]` (e.g., `"openai/gpt-5-nano"`, `"claude-3.5-sonnet:think"`). Default provider overridable via `AGENTIA_DEFAULT_PROVIDER` env var. Append `:think` to enable extended reasoning.
 
 ### Tool System (`agentia/tools/`)
 
@@ -55,7 +55,7 @@ Provider abstraction with a common OpenAI-compatible base (`_openai_api.py`). Pr
 
 ### Message/Models System (`agentia/models/`)
 
-Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage (discriminated by `role`), each with an auto-generated `id` and a `content` list of parts: `TextPart`, `ReasoningPart`, `File`, `ToolCallPart`, `ToolResultPart` (discriminated by `type`). `File` doubles as the file part. Content accepts plain strings and files, coerced to parts. The message list never contains system messages: instructions (plus the compaction summary, kept in `History`) form the single system prompt. `ReasoningPart.provider_data` holds opaque provider reasoning data (OpenRouter `reasoning_details`) that is replayed verbatim. Conversion to the Chat Completions format lives in the `to_openai_format()` methods. Structured output via pydantic BaseModel in `ResponseFormatJson`.
+Pydantic-based message models. Types: UserMessage, AssistantMessage, ToolMessage (discriminated by `role`), each with an auto-generated `id` and a `content` list of parts: `TextPart`, `ReasoningPart`, `File`, `ToolCallPart`, `ToolResultPart` (discriminated by `type`). `File` doubles as the file part. Content accepts plain strings and files, coerced to parts. The message list never contains system messages: instructions (plus the compaction summary, kept in `History`) form the single system prompt. `ReasoningPart.provider_data` holds the provider's raw Responses `reasoning` item (with `encrypted_content` or a signature), replayed verbatim. The models are backend-agnostic: conversion to the wire format lives in the provider. Structured output via pydantic BaseModel in `ResponseFormatJson`.
 
 ### Streaming (`agentia/llm/stream.py`)
 

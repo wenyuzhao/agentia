@@ -56,8 +56,7 @@ class Skill(BaseModel):
         return self.metadata.get("user-invocable", True)
 
     def execute(self, args: list[str] | None = None) -> str:
-        if self.doc:
-            return self.doc.content
+        # Not cached: the content depends on `args` and on the `!`cmd`` output.
         self.doc = load_markdown(
             str(self.path / "SKILL.md"), args=args, substitutions=["args", "bash"]
         )
@@ -76,9 +75,17 @@ class Skills(Plugin):
         self.search_paths = [Path(p) for p in search_paths]
         self.user_invocable_skills: dict[str, Skill] = {}
         self.agent_skills: dict[str, Skill] = {}
+        self.__loaded = False
 
     @override
     async def init(self):
+        self.load()
+
+    def load(self) -> None:
+        """Discover the skills. Safe to call more than once."""
+        if self.__loaded:
+            return
+        self.__loaded = True
         all_skills = self.load_all_skills(self.search_paths)
         for skill in all_skills.values():
             if skill.user_invocable:

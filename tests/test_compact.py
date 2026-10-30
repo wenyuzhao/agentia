@@ -8,7 +8,7 @@ dotenv.load_dotenv()
 @pytest.mark.asyncio
 async def test_compact_basic():
     agent = Agent(
-        model="openai/gpt-5-nano", instructions="You are a helpful assistant."
+        model="openai/gpt-5-mini", instructions="You are a helpful assistant."
     )
     # Simulate a multi-turn conversation
     await agent.run("My name is Alice and I live in Paris.")

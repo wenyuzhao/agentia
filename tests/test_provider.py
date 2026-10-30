@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import dotenv
 
@@ -5,6 +7,13 @@ dotenv.load_dotenv()
 
 from agentia import Agent  # noqa: E402
 from agentia.llm import get_provider  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def openai_api_key(monkeypatch: pytest.MonkeyPatch):
+    # These tests never call the OpenAI API, but the provider requires a key.
+    if not os.environ.get("OPENAI_API_KEY"):
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
 
 class TestModelImmutability:

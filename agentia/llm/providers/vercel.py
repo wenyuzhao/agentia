@@ -21,7 +21,6 @@ class Vercel(OpenAIAPIProvider):
             )
         base_url = "https://ai-gateway.vercel.sh/v1"
         super().__init__(name="vercel", model=model, api_key=api_key, base_url=base_url)
-        self.extra_body["modalities"] = ["text", "image"]
 
     @override
     async def _fetch_context_length(self) -> int:

@@ -52,15 +52,6 @@ class FunctionTool(BaseModel):
     input_schema: JsonValue
     description: str | None = None
 
-    def to_openai_schema(self) -> Any:
-        return {
-            "type": self.type,
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.input_schema,
-            "strict": True,
-        }
-
 
 type ToolSchema = FunctionTool
 
@@ -173,36 +164,6 @@ class File(BaseModel):
         if isinstance(self.data, str) and self.data.startswith("data:"):
             return self.data.split(",", 1)[1]
         return base64.b64encode(self.to_bytes()).decode()
-
-    def to_openai_format(self) -> dict[str, Any]:
-        if self.media_type.startswith("image/"):
-            return {"type": "image_url", "image_url": {"url": self.to_url()}}
-        if self.media_type.startswith("video/"):
-            return {"type": "video_url", "video_url": {"url": self.to_url()}}
-        if self.media_type.startswith("audio/"):
-            if isinstance(self.data, str) and self.data.startswith(
-                ("http://", "https://")
-            ):
-                raise ValueError("audio files cannot be URLs")
-            format: Literal["wav", "mp3"]
-            match self.media_type:
-                case "audio/wav" | "audio/x-wav":
-                    format = "wav"
-                case "audio/mpeg" | "audio/mp3":
-                    format = "mp3"
-                case _:
-                    raise ValueError(f"unsupported audio media type {self.media_type}")
-            return {
-                "type": "input_audio",
-                "input_audio": {"data": self.to_base64(), "format": format},
-            }
-        if isinstance(self.data, str) and self.data.startswith("file-"):
-            # this is a file ID
-            return {"type": "file", "file": {"file_id": self.data}}
-        file: dict[str, Any] = {"file_data": self.to_url()}
-        if self.filename:
-            file["filename"] = self.filename
-        return {"type": "file", "file": file}
 
     def __str__(self) -> str:
         name = self.filename

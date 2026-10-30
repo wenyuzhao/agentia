@@ -1,6 +1,6 @@
 import os
 import re
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal
 from openai import BaseModel
 from pydantic import AnyUrl
 from agentia import models
@@ -19,12 +19,7 @@ class ReasoningOptions(BaseModel):
 class LLMOptions(BaseModel):
     max_output_tokens: int | None = None
     temperature: float | None = None
-    stop_sequences: Sequence[str] | None = None
     top_p: float | None = None
-    top_k: int | None = None
-    presence_penalty: float | None = None
-    frequency_penalty: float | None = None
-    seed: int | None = None
     tool_choice: models.ToolChoice | None = None
     extra_body: dict[str, Any] | None = None
     response_format: models.ResponseFormat | type[BaseModel] | None = None
